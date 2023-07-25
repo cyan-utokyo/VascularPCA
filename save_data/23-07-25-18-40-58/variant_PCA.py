@@ -519,6 +519,8 @@ for loop in range(1):
 
         loop_log.write("## "+data_key+"\n")
         train_data_pre, test_data_pre = data_values  # 取出列表中的两个值
+        plt.plot(train_data_pre[0,:,0],color=cmap(0.2))
+        plt.show()
         train_warping_functions= []
         mean_shape = np.mean(train_data_pre, axis=0)
         for j in range(len(train_data_pre)):
@@ -531,7 +533,7 @@ for loop in range(1):
 
         train_data = np.array(train_warping_functions)
         test_data = np.array(test_warping_functions)
-        train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=1)
+        train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=0)
         savepath = save_new_shuffle+"warping_variance_{}.png".format(data_key)
         plot_variance(pca, train_res, test_res, savepath)
         # # plot_components(components, 5, save_new_shuffle+"warping_components_{}.png".format(data_key))
