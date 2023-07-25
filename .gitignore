@@ -1,0 +1,10 @@
+# Ignore all
+*
+
+# But not these files
+!.gitignore
+!*.py
+!*.ipynb
+
+# Include folder structure
+!*/
