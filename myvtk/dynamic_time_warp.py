@@ -21,7 +21,7 @@ from myvtk.centerline_preprocessing import *
 from scipy import interpolate
 import matplotlib
 from fastdtw import fastdtw
-from scipy.spatial.distance import euclidean
+from scipy.spatial.distance import euclidean, chebyshev, cityblock, cosine, correlation, sqeuclidean
 
 def compute_dtw(srvf_curves, curves, Q2):
     warp_function_list = []
@@ -31,7 +31,7 @@ def compute_dtw(srvf_curves, curves, Q2):
         # 假设Q1和Q2是两个已经计算好的SRVF，shape都为（64,3）
         Q1 = srvf_curves[idx]
         # Step 1: 对SRVF进行动态时间规整
-        distance, path = fastdtw(Q1, Q2, dist=euclidean)
+        distance, path = fastdtw(Q1, Q2, dist=cosine)
 
         # Step 2: 计算最优变换
         # path是一个包含配对索引的列表，我们可以使用它来创建变换后的曲线

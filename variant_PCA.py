@@ -523,11 +523,13 @@ for loop in range(1):
         mean_shape = np.mean(train_data_pre, axis=0)
         for j in range(len(train_data_pre)):
             distance, path = calculate_dtw(train_data_pre[j], mean_shape)
-            train_warping_functions.append(get_warping_function(path, train_data_pre[j], mean_shape))
+            train_warping_functions.append(get_warping_function(path, train_data_pre[j], mean_shape)*distance)
+            # train_data, _, _=compute_dtw(train_data_pre, train_data_pre, np.mean(Procs_srvf_curves,axis=0))
         test_warping_functions = []
         for j in range(len(test_data_pre)):
             distance, path = calculate_dtw(test_data_pre[j], mean_shape)
-            test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape))
+            test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape)*distance)
+            # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
 
         train_data = np.array(train_warping_functions)
         test_data = np.array(test_warping_functions)
