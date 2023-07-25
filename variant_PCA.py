@@ -47,8 +47,6 @@ bkup_dir = mkdir(bkup_dir, dir_formatted_time)
 current_file_path = os.path.abspath(__file__)
 current_file_name = os.path.basename(__file__)
 backup_file_path = os.path.join(bkup_dir, current_file_name)
-myvtk_source_dir = os.path.join(os.getcwd(), "myvtk")
-# shutil.copy2(myvtk_source_dir, bkup_dir)
 shutil.copy2(current_file_path, backup_file_path)
 
 print ("backup dir: ", bkup_dir)
