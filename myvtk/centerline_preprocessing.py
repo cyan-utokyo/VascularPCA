@@ -72,9 +72,10 @@ def calculate_srvf(curve):
     return srvf
 
 def inverse_srvf(srvf, initial_point):
+    # print ("calling inverse_srvf, magnitude = np.linalg.norm(srvf, axis=1)")
     # 计算速度
     # magnitude = np.linalg.norm(srvf, axis=1)
-    magnitude = np.abs(derivative)
+    magnitude = np.linalg.norm(srvf, axis=1)
     velocity = srvf / np.sqrt(magnitude[:, np.newaxis])
 
     # 对速度进行积分
@@ -150,3 +151,6 @@ def compute_geodesic_dist(curves):
         geodesic_distance = discrete_curves_space.metric.dist(curve_A, curve_B)
         geodesic_d.append(geodesic_distance)
     return np.array(geodesic_d)
+
+
+

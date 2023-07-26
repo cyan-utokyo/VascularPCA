@@ -238,6 +238,9 @@ scores.write(titles)
 scores.write("\n")
 
 
+pca_standardization = 1
+log.write("PCA standardization: {}\n".format(pca_standardization))
+print ("所有PCA的标准化状态：", pca_standardization)
 
 for loop in range(1):
     aligned_curves = Aligned_curves
@@ -294,7 +297,7 @@ for loop in range(1):
     np.save(save_new_shuffle + "torsions.npy",torsions, allow_pickle=True)
     # np.save(save_new_shuffle + "procrustes_geodesic_d.npy",procrustes_geodesic_d, allow_pickle=True)
     # np.save(save_new_shuffle + "aligned_geodesic_d.npy",aligned_geodesic_d, allow_pickle=True)
-
+    inverse_data_dir = mkdir(save_new_shuffle, "inverse_data")
     train_num = int(len(files)*0.75)
     test_num = int(len(files)-train_num)
     loop_log.write("# Train and test dataset split\n")
@@ -308,6 +311,8 @@ for loop in range(1):
     train_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[:train_num])
     test_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[train_num:])
     test_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[train_num:])
+    train_files = files[:train_num]
+    test_files = files[train_num:]
 
     # To-Do:Standardization
     data_dict = {
@@ -329,6 +334,7 @@ for loop in range(1):
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
 
+
     loop_log.write("***\n")
 
     ###############################################
@@ -343,7 +349,7 @@ for loop in range(1):
         train_data, test_data = data_values  # 取出列表中的两个值
         train_data=train_data.reshape(train_num,-1)
         test_data=test_data.reshape(test_num,-1)
-        coord_PCAs.append(PCAHandler(train_data, test_data))
+        coord_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
         coord_PCAs[-1].compute_pca()
         components_figname = save_new_shuffle+"coord_componentse_{}.png".format(data_key)
         coord_PCAs[-1].visualize_results(components_figname)
@@ -361,6 +367,30 @@ for loop in range(1):
             for key in test_scores:
                 loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
                 Score.append(test_scores[key])
+        train_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].train_res).reshape(train_num, -1, 3)
+        test_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].test_res).reshape(test_num, -1, 3)
+        plt.plot(train_inverse[0,:,0],label="inverse")
+        plt.plot(data_values[0][0,:,0],label="original")
+        plt.legend()
+        plt.savefig(bkup_dir+"inverse_{}.png".format(data_key))
+        plt.close()
+        if "SRVF" in data_key:
+            # print ("!!!", data_key)
+            train_recovered_curves = []
+            test_recovered_curves = []
+            for cv in train_inverse:
+                train_recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
+            train_inverse = np.array(train_recovered_curves)
+            for cv in test_inverse:
+                test_recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
+            test_inverse = np.array(test_recovered_curves)
+            
+        inverse_dir = mkdir(inverse_data_dir, data_key)
+        for i in range(len(train_inverse)):
+            makeVtkFile(inverse_dir+"train_{}.vtk".format(train_files[i].split("\\")[-1].split(".")[0]), train_inverse[i], [],[])
+        for i in range(len(test_inverse)):
+            makeVtkFile(inverse_dir+"test_{}.vtk".format(test_files[i].split("\\")[-1].split(".")[0]), test_inverse[i], [],[])
+        # print (train_inverse.shape, test_inverse.shape)
 
     loop_log.write("***\n")
 
@@ -378,14 +408,14 @@ for loop in range(1):
         united_internal_PCAs = []
         for i in range(3):
             # train_res, test_res = PCA_training_and_test(train_data[:,:,i], test_data[:,:,i], 16)
-            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i]))
+            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=pca_standardization))
             united_internal_PCAs[-1].compute_pca()
             train_res_temp, test_res_temp = united_internal_PCAs[-1].train_res, united_internal_PCAs[-1].test_res
             train_res.append(train_res_temp)
             test_res.append(test_res_temp)
         train_data = np.array(train_res).transpose(1,0,2).reshape(train_num, -1)
         test_data = np.array(test_res).transpose(1,0,2).reshape(test_num, -1)
-        united_PCAs.append(PCAHandler(train_data, test_data))
+        united_PCAs.append(PCAHandler(train_data, test_data, standardization=pca_standardization))
         united_PCAs[-1].compute_pca()
         components_figname = save_new_shuffle+"united_componentse_{}.png".format(data_key)
         united_PCAs[-1].visualize_results(components_figname)
@@ -401,7 +431,6 @@ for loop in range(1):
             for key in test_scores:
                 loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
                 Score.append(test_scores[key])
-        
 
     ###############################################
     loop_log.write("# Geometric param PCA\n")
@@ -410,7 +439,7 @@ for loop in range(1):
         loop_log.write("## "+data_key+"\n")
         train_data, test_data = data_values  # 取出列表中的两个值
         # train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=1)
-        param_PCAs.append(PCAHandler(train_data, test_data))
+        param_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
         param_PCAs[-1].compute_pca()
         components_figname = save_new_shuffle+"param_componentse_{}.png".format(data_key)
         param_PCAs[-1].visualize_results(components_figname)
@@ -452,7 +481,7 @@ for loop in range(1):
             # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
         train_data = np.array(train_warping_functions)
         test_data = np.array(test_warping_functions)
-        warp_PCAs.append(PCAHandler(train_data, test_data))
+        warp_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
         warp_PCAs[-1].compute_pca()
         components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
         warp_PCAs[-1].visualize_results(components_figname)
