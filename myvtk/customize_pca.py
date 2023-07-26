@@ -104,28 +104,6 @@ def plot_variance(pca, train_res, test_res, savepath):
     plt.close()
     
 
-    # train_data, test_data = data_dict["Procrustes_aligned_SRVF"]
-    # train_data=train_data.reshape(train_num,-1)
-    # test_data=test_data.reshape(test_num,-1)
-    # train_data_std = np.std(train_data, axis=0)
-    # train_data_mean = np.mean(train_data, axis=0)
-    # test_data_std = np.std(test_data, axis=0)
-    # test_data_mean = np.mean(test_data, axis=0)
-    # pca = PCA(n_components=16)
-    # train_data = zscore(train_data)
-    # test_data = zscore(test_data)
-    # pca.fit(train_data)
-    # fig = plt.figure(dpi=300)
-    # ax = fig.add_subplot(111)
-    # ax.set_xlabel("Abscissas")
-    # ax.set_ylabel("X component height")
-    # ax.grid(linestyle=":", alpha=0.4)
-    # for i in range(5):
-    #     pca.components_[i] = pca.components_[i] * train_data_std[i] / test_data_std[i]
-    #     ax.plot(pca.components_[i][::3], label="PC_{}".format(i+1))
-    # plt.legend()
-    # plt.savefig(bkup_dir+"ProcrustesSRVF_components.png")
-
 class PCAHandler:
     def __init__(self, train_data, test_data):
         self.train_data = train_data
