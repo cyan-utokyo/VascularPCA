@@ -23,11 +23,13 @@ import matplotlib
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from myvtk.dynamic_time_warp import *
+from myvtk.General import *
 import matplotlib.gridspec as gridspec
 from scipy import stats
 from sklearn.decomposition import PCA
 
 def PCA_training_and_test(train_curves, test_curves, n_components, standardization=1):
+    print ("standarize training data and test data!!")
     pca = PCA(n_components=n_components)
     if standardization ==1:
         means = np.mean(train_curves, axis=0)
@@ -102,35 +104,6 @@ def plot_variance(pca, train_res, test_res, savepath):
     plt.close()
     
 
-
-def draw_pca_in_2d(train_res, test_res, train_scalar, test_scalar, cmapname=None, save_path = None):
-    cmap = matplotlib.cm.get_cmap(cmapname)
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.set_xlabel("PC1")
-    ax.set_ylabel("PC2")
-    sc = ax.scatter(train_res[:, 0], train_res[:, 1], marker='+',cmap=cmap, c=train_scalar)
-    ax.grid(linestyle="--", alpha=0.5)
-    cbar = plt.colorbar(sc)
-    if len(test_res) > 0:
-        ax.scatter(test_res[:, 0], test_res[:, 1], marker='o',cmap=cmap, c=test_scalar)
-    if save_path is not None:
-        plt.savefig(save_path)
-        plt.close()
-    else:
-        plt.show()
-
-def plot_components(components, n_components, savepath,length=64):
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    for i in range(n_components):
-        ax.plot(components[i][:length], label="PC{}".format(i+1))
-    ax.set_xlabel("Abscissas(mm)")
-    #ax.set_ylabel("Length(mm)")
-    ax.grid(linestyle="--", alpha=0.5)
-    # plt.show(save_new_shuffle)
-    plt.savefig(savepath)
-
     # train_data, test_data = data_dict["Procrustes_aligned_SRVF"]
     # train_data=train_data.reshape(train_num,-1)
     # test_data=test_data.reshape(test_num,-1)
@@ -152,3 +125,54 @@ def plot_components(components, n_components, savepath,length=64):
     #     ax.plot(pca.components_[i][::3], label="PC_{}".format(i+1))
     # plt.legend()
     # plt.savefig(bkup_dir+"ProcrustesSRVF_components.png")
+
+class PCAHandler:
+    def __init__(self, train_data, test_data):
+        self.train_data = train_data
+        self.test_data = test_data
+        self.train_res = None
+        self.test_res = None
+        self.pca = None
+
+    def compute_pca(self, n_components=16):
+        # PCA computation
+        self.train_res, self.test_res, self.pca = PCA_training_and_test(self.train_data, self.test_data, n_components)
+
+    def visualize_results(self, save_path):
+        # Visualization
+        plot_variance(self.pca, self.train_res, self.test_res, save_path)
+
+    def compute_scores(self, train_dist, test_dist):
+        # Score computation
+        return get_train_test_score(self.train_res, self.test_res, train_dist, test_dist)
+    
+    def visualize_loadings(self, dist_dict, save_path):
+        fig, ax = plt.subplots(2, 2, figsize=(14, 10), dpi=300)
+        fig_count = 0
+        for dist_key, dist_values in dist_dict.items():
+            train_dist, test_dist = dist_values  # 取出列表中的两个值
+            sc = ax[fig_count//2,fig_count%2].scatter(self.train_res[:,0],self.train_res[:,1],
+                                                    c=train_dist,
+                                                    cmap="turbo",
+                                                    alpha=0.99,
+                                                    marker="$T$")
+            ax[fig_count//2,fig_count%2].scatter(self.test_res[:,0],self.test_res[:,1],
+                                                c=test_dist,
+                                                cmap="turbo",
+                                                alpha=0.99,
+                                                marker="$V$")
+            # 设置子图标题的字体大小
+            ax[fig_count//2,fig_count%2].set_title(dist_key, fontsize=14)
+            ax[fig_count//2,fig_count%2].grid(linestyle=":", alpha=0.4)
+            ax[fig_count//2,fig_count%2].set_xlabel("PC1")
+            ax[fig_count//2,fig_count%2].set_ylabel("PC2")
+            fig_count += 1
+
+        fig.subplots_adjust(wspace=0.3, hspace=0.3, right=0.85)  # 修改边距
+        # 在figure的右侧添加一个colorbar
+        cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+        cbar = fig.colorbar(sc, cax=cbar_ax)
+        # 设置colorbar的标签的字体大小
+        cbar.set_label('Geodesic distance', fontsize=14)
+        plt.savefig(save_path)
+        plt.close()

@@ -69,7 +69,6 @@ def calculate_srvf(curve):
     magnitude = np.linalg.norm(derivative, axis=1)
     eps = 1e-8  # add a small positive number to avoid division by zero
     srvf = np.sqrt(magnitude + eps)[:, np.newaxis] * derivative / (magnitude[:, np.newaxis] + eps)
-
     return srvf
 
 def inverse_srvf(srvf, initial_point):

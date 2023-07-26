@@ -37,10 +37,10 @@ import matplotlib.gridspec as gridspec
 
 log = open("./log.txt", "w")
 # 获取当前时间
-start_time = datetime.now()
+now = datetime.now()
 
 # 将时间格式化为 'yymmddhhmmss' 格式
-dir_formatted_time = start_time.strftime('%y-%m-%d-%H-%M-%S')
+dir_formatted_time = now.strftime('%y-%m-%d-%H-%M-%S')
 log.write("Start at: {}\n".format(dir_formatted_time))
 bkup_dir = mkdir("./", "save_data")
 bkup_dir = mkdir(bkup_dir, dir_formatted_time)
@@ -239,7 +239,7 @@ scores.write("\n")
 
 
 
-for loop in range(1):
+for loop in range(10):
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
     pcalign_srvf_curves = Pcalign_srvf_curves
@@ -462,7 +462,6 @@ for loop in range(1):
     loop_log.write("- Cosine similarity is used to compute warping function.\n")
     loop_log.write("- ")
     log.write("- only use the last two data (SRVF) to compute warping function, but use another two data (Coords) to compute geodesic distance.\n")
-    warp_PCAs = []
     for data_key, data_values in list(data_dict.items())[-2:]:
         loop_log.write("## "+data_key+"\n")
         train_data_pre, test_data_pre = data_values  # 取出列表中的两个值
@@ -477,18 +476,36 @@ for loop in range(1):
             distance, path = calculate_dtw(test_data_pre[j], mean_shape)
             test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape)*distance)
             # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
+
         train_data = np.array(train_warping_functions)
         test_data = np.array(test_warping_functions)
-        warp_PCAs.append(PCAHandler(train_data, test_data))
-        warp_PCAs[-1].compute_pca()
-        components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
-        warp_PCAs[-1].visualize_results(components_figname)
-        loading_figname = "warp_{}.png".format(data_key)
-        loop_log.write("![warp_{}]({})\n".format(data_key,"./"+loading_figname))
-        loop_log.write("![warp_{}]({})\n".format(data_key,"./"+components_figname))
-        warp_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
+        train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=1)
+        savepath = save_new_shuffle+"warping_variance_{}.png".format(data_key)
+        plot_variance(pca, train_res, test_res, savepath)
+        # # plot_components(components, 5, save_new_shuffle+"warping_components_{}.png".format(data_key))
+        fig, ax = plt.subplots(2, 2, figsize=(14, 10), dpi=300)
+        figname = "Warp_{}.png".format(data_key)
+        loop_log.write("![Warp_{}]({})\n".format(data_key,"./"+figname))
+        fig_count = 0
         for dist_key, dist_values in dist_dict.items():
             train_dist, test_dist = dist_values  # 取出列表中的两个值
+            loop_log.write("### {}\n".format(dist_key))
+            sc = ax[fig_count//2,fig_count%2].scatter(train_res[:,0],train_res[:,1],
+                                                    c=train_dist,
+                                                    cmap="turbo",
+                                                    alpha=0.99,
+                                                    marker="$T$")
+            ax[fig_count//2,fig_count%2].scatter(test_res[:,0],test_res[:,1],
+                                                c=test_dist,
+                                                cmap="turbo",
+                                                alpha=0.99,
+                                                marker="$V$")
+            # 设置子图标题的字体大小
+            ax[fig_count//2,fig_count%2].set_title(dist_key, fontsize=14)
+            ax[fig_count//2,fig_count%2].grid(linestyle=":", alpha=0.4)
+            ax[fig_count//2,fig_count%2].set_xlabel("PC1")
+            ax[fig_count//2,fig_count%2].set_ylabel("PC2")
+            fig_count += 1
             loop_log.write("- train scores:\n")
             for key in train_scores:
                 loop_log.write("    - {}: {}\n".format(key, train_scores[key]))
@@ -497,15 +514,25 @@ for loop in range(1):
             for key in test_scores:
                 loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
                 Score.append(test_scores[key])
+        fig.subplots_adjust(wspace=0.3, hspace=0.3, right=0.85)  # 修改边距
+        # 在figure的右侧添加一个colorbar
+        cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
+        cbar = fig.colorbar(sc, cax=cbar_ax)
+        # 设置colorbar的标签的字体大小
+        cbar.set_label('Geodesic distance', fontsize=14)
+        plt.savefig(save_new_shuffle+figname)
+        plt.close()
     loop_log.write("***\n")
-
-
+    
     for i in range(len(Score)):
         scores.write(str(Score[i])+",")
     scores.write("\n")
+
+
+
+
     loop_log.close()
+
 log.close()
 scores.close()
-end_time = datetime.now()
-total_time = end_time - start_time
-print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")
+print (dir_formatted_time, "done")
