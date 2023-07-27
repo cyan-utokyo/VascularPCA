@@ -38,7 +38,7 @@ import matplotlib.gridspec as gridspec
 log = open("./log.txt", "w")
 # 获取当前时间
 start_time = datetime.now()
-smooth_scale = 0.01
+
 # 将时间格式化为 'yymmddhhmmss' 格式
 dir_formatted_time = start_time.strftime('%y-%m-%d-%H-%M-%S')
 log.write("Start at: {}\n".format(dir_formatted_time))
@@ -438,8 +438,8 @@ for loop in range(1):
     for data_key, data_values in param_dict.items():
         loop_log.write("## "+data_key+"\n")
         train_data, test_data = data_values  # 取出列表中的两个值
-        train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
-        test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
+        train_data = train_data + np.random.normal(0, 0.01, train_data.shape)
+        test_data = test_data + np.random.normal(0, 0.01, test_data.shape)
         loop_log.write("- PCA_training_and_test will standardize data automatically.\n")
         loop_log.write("- PCA_training_and_test will add a small amount of noise to the data.\n")
         # train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=1)
