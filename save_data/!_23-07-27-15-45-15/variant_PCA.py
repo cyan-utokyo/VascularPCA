@@ -38,7 +38,7 @@ import matplotlib.gridspec as gridspec
 log = open("./log.txt", "w")
 # 获取当前时间
 start_time = datetime.now()
-
+smooth_scale = 0.01
 # 将时间格式化为 'yymmddhhmmss' 格式
 dir_formatted_time = start_time.strftime('%y-%m-%d-%H-%M-%S')
 log.write("Start at: {}\n".format(dir_formatted_time))
@@ -242,7 +242,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(1):
+for loop in range(10):
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
     pcalign_srvf_curves = Pcalign_srvf_curves
@@ -374,26 +374,9 @@ for loop in range(1):
         plt.legend()
         plt.savefig(bkup_dir+"inverse_{}.png".format(data_key))
         plt.close()
-        if "SRVF" in data_key:
-            # print ("!!!", data_key)
-            train_recovered_curves = []
-            test_recovered_curves = []
-            for cv in train_inverse:
-                train_recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
-            train_inverse = np.array(train_recovered_curves)
-            for cv in test_inverse:
-                test_recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
-            test_inverse = np.array(test_recovered_curves)
-            
-        inverse_dir = mkdir(inverse_data_dir, data_key)
-        for i in range(len(train_inverse)):
-            makeVtkFile(inverse_dir+"train_{}.vtk".format(train_files[i].split("\\")[-1].split(".")[0]), train_inverse[i], [],[])
-        for i in range(len(test_inverse)):
-            makeVtkFile(inverse_dir+"test_{}.vtk".format(test_files[i].split("\\")[-1].split(".")[0]), test_inverse[i], [],[])
-        # print (train_inverse.shape, test_inverse.shape)
+        process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
 
     loop_log.write("***\n")
-    print ("debug done.")
 
     ###############################################
     # separate x, y, z coordinates
@@ -417,7 +400,7 @@ for loop in range(1):
         train_data = np.array(train_res).transpose(1,0,2).reshape(train_num, -1)
         test_data = np.array(test_res).transpose(1,0,2).reshape(test_num, -1)
         united_PCAs.append(PCAHandler(train_data, test_data, standardization=pca_standardization))
-        united_PCAs[-1].compute_pca()
+        united_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"united_componentse_{}.png".format(data_key)
         united_PCAs[-1].visualize_results(components_figname)
         loading_figname = "united_{}.png".format(data_key)
@@ -439,9 +422,13 @@ for loop in range(1):
     for data_key, data_values in param_dict.items():
         loop_log.write("## "+data_key+"\n")
         train_data, test_data = data_values  # 取出列表中的两个值
+        train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
+        test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
+        loop_log.write("- PCA_training_and_test will standardize data automatically.\n")
+        loop_log.write("- PCA_training_and_test will add a small amount of noise to the data.\n")
         # train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=1)
         param_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
-        param_PCAs[-1].compute_pca()
+        param_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"param_componentse_{}.png".format(data_key)
         param_PCAs[-1].visualize_results(components_figname)
         loading_figname = "param_{}.png".format(data_key)
@@ -483,7 +470,7 @@ for loop in range(1):
         train_data = np.array(train_warping_functions)
         test_data = np.array(test_warping_functions)
         warp_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
-        warp_PCAs[-1].compute_pca()
+        warp_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
         warp_PCAs[-1].visualize_results(components_figname)
         loading_figname = "warp_{}.png".format(data_key)

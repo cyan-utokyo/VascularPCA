@@ -374,23 +374,7 @@ for loop in range(1):
         plt.legend()
         plt.savefig(bkup_dir+"inverse_{}.png".format(data_key))
         plt.close()
-        if "SRVF" in data_key:
-            # print ("!!!", data_key)
-            train_recovered_curves = []
-            test_recovered_curves = []
-            for cv in train_inverse:
-                train_recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
-            train_inverse = np.array(train_recovered_curves)
-            for cv in test_inverse:
-                test_recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
-            test_inverse = np.array(test_recovered_curves)
-            
-        inverse_dir = mkdir(inverse_data_dir, data_key)
-        for i in range(len(train_inverse)):
-            makeVtkFile(inverse_dir+"train_{}.vtk".format(train_files[i].split("\\")[-1].split(".")[0]), train_inverse[i], [],[])
-        for i in range(len(test_inverse)):
-            makeVtkFile(inverse_dir+"test_{}.vtk".format(test_files[i].split("\\")[-1].split(".")[0]), test_inverse[i], [],[])
-        # print (train_inverse.shape, test_inverse.shape)
+        process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
 
     loop_log.write("***\n")
 
@@ -431,6 +415,27 @@ for loop in range(1):
             for key in test_scores:
                 loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
                 Score.append(test_scores[key])
+        train_inverse_large = united_PCAs[-1].inverse_transform_from_loadings(united_PCAs[-1].train_res)
+        test_inverse_large = united_PCAs[-1].inverse_transform_from_loadings(united_PCAs[-1].test_res)
+
+        train_inverse_parts = np.split(train_inverse_large, 3, axis=1)  # 分解为三个部分
+        test_inverse_parts = np.split(test_inverse_large, 3, axis=1)  # 分解为三个部分
+
+        train_inverse = []
+        test_inverse = []
+        for i in range(3):
+            train_inverse_temp = united_internal_PCAs[i].inverse_transform_from_loadings(train_inverse_parts[i])
+            test_inverse_temp = united_internal_PCAs[i].inverse_transform_from_loadings(test_inverse_parts[i])
+            train_inverse.append(train_inverse_temp)
+            test_inverse.append(test_inverse_temp)
+
+        train_data_inverse = np.array(train_inverse).transpose(1,2,0)
+        test_data_inverse = np.array(test_inverse).transpose(1,2,0)
+        train_data_inverse = recovered_curves(train_data_inverse,"SRVF" in data_key)
+        test_data_inverse = recovered_curves(test_data_inverse,"SRVF" in data_key) 
+        inverse_dir = mkdir(inverse_data_dir, "united_"+data_key)
+        write_curves_to_vtk(train_data_inverse, train_files, inverse_dir+"train_inverse_{}.vtk".format(data_key))
+        write_curves_to_vtk(test_data_inverse, test_files, inverse_dir+"test_inverse_{}.vtk".format(data_key))
 
     ###############################################
     loop_log.write("# Geometric param PCA\n")

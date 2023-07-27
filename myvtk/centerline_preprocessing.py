@@ -152,5 +152,30 @@ def compute_geodesic_dist(curves):
         geodesic_d.append(geodesic_distance)
     return np.array(geodesic_d)
 
+def recovered_curves(inverse_data, is_srvf):
+    recovered_curves = []
+    if is_srvf:
+        for cv in inverse_data:
+            recovered_curves.append(inverse_srvf(cv, np.zeros(3)))
+    else:
+        recovered_curves = inverse_data
+    return np.array(recovered_curves)
+
+def write_curves_to_vtk(curves, files, dir):
+    for i in range(len(curves)):
+        filename = files[i].split("\\")[-1].split(".")[0]
+        makeVtkFile(dir+"{}.vtk".format(filename), curves[i], [],[])
+
+def process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir):
+    is_srvf = "SRVF" in data_key
+    train_inverse = recovered_curves(train_inverse, is_srvf)
+    test_inverse = recovered_curves(test_inverse, is_srvf)
+
+    inverse_dir = mkdir(inverse_data_dir, "coords_" + data_key)
+    write_curves_to_vtk(train_inverse, train_files, inverse_dir + "train_")
+    write_curves_to_vtk(test_inverse, test_files, inverse_dir + "test_")
+
+    # print (train_inverse.shape, test_inverse.shape)
+
 
 
