@@ -75,7 +75,7 @@ def inverse_srvf(srvf, initial_point):
     # print ("calling inverse_srvf, magnitude = np.linalg.norm(srvf, axis=1)")
     # 计算速度
     # magnitude = np.linalg.norm(srvf, axis=1)
-    magnitude = np.linalg.norm(srvf, axis=1)
+    magnitude = np.linalg.norm(srvf, axis=1) ** 2
     velocity = srvf / np.sqrt(magnitude[:, np.newaxis])
 
     # 对速度进行积分

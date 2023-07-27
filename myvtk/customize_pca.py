@@ -136,21 +136,23 @@ def plot_scatter_loadings(train_res, test_res, dist_dict, save_path):
     plt.close()
 
 class PCAHandler:
-    def __init__(self, train_data, test_data, standardization=1):
+    def __init__(self, train_data, test_data, n_components=16,standardization=1):
         self.train_data = train_data
         self.test_data = test_data
-        self.train_mean = np.mean(train_data)
-        self.train_std = np.std(train_data)
-        self.test_mean = np.mean(test_data)
-        self.test_std = np.std(test_data)
+        self.train_mean = np.mean(train_data,axis=0)
+        self.train_std = np.std(train_data,axis=0)
+        self.test_mean = np.mean(test_data,axis=0)
+        self.test_std = np.std(test_data, axis=0)
         self.train_res = None
         self.test_res = None
         self.pca = None
         self.standardization = standardization
+        self.n_components = n_components
+        self.zero_stds_original = None
 
-    def compute_pca(self, n_components=32):
-        # PCA computation
-        self.train_res, self.test_res, self.pca = PCA_training_and_test(self.train_data, self.test_data, n_components, standardization=self.standardization)
+    # def compute_pca(self):
+    #     # PCA computation
+    #     self.train_res, self.test_res, self.pca = PCA_training_and_test(self.train_data, self.test_data, self.n_components, standardization=self.standardization)
 
     def visualize_results(self, save_path):
         # Visualization pca的各种性质，如主成分的形状，贡献度，train和test的分布情况
@@ -164,24 +166,40 @@ class PCAHandler:
         # Visualization results中的第一第二主成分的散点图
         plot_scatter_loadings(self.train_res, self.test_res, dist_dict, save_path)
 
-    # def inverse_transform_from_loadings(self, loadings):
-    #     # 从loadings反推出原始数据
-    #     standardized_data = self.pca.inverse_transform(loadings)
-    #     if self.standardization == 0:
-    #         return standardized_data
-    #     else:
-    #         return standardized_data * self.train_std + self.train_mean
-
     def inverse_transform_from_loadings(self, loadings):
         # 从loadings反推出原始数据
         standardized_data = self.pca.inverse_transform(loadings)
         if self.standardization == 0:
             return standardized_data
         else:
-            recovered_data = standardized_data * self.train_std + self.train_mean
-            zero_stds = self.train_std == 0
+            return standardized_data * self.train_std + self.train_mean
 
-            # 对于标准差为零的特征，恢复原始值
-            recovered_data[:, zero_stds] = self.zero_stds_original
+    def PCA_training_and_test(self):
+        pca = PCA(n_components=self.n_components)
+        if self.standardization ==1:
+            self.train_data = zscore(self.train_data)
+            self.test_data = zscore(self.test_data)
+            self.train_res = pca.fit_transform(self.train_data)
+            self.test_res = pca.transform(self.test_data)
+            self.pca = pca
+        else:
+            self.train_res = pca.fit_transform(self.train_data)
+            self.test_res = pca.transform(self.test_data)
+            self.pca = pca
+        
+        return self.train_res, self.test_res, self.pca
 
-            return recovered_data
+
+    # def inverse_transform_from_loadings(self, loadings):
+    #     # 从loadings反推出原始数据
+    #     standardized_data = self.pca.inverse_transform(loadings)
+    #     if self.standardization == 0:
+    #         return standardized_data
+    #     else:
+    #         recovered_data = standardized_data * self.train_std + self.train_mean
+    #         zero_stds = self.train_std == 0
+
+    #         # 对于标准差为零的特征，恢复原始值
+    #         recovered_data[:, zero_stds] = self.zero_stds_original
+
+    #         return recovered_data
