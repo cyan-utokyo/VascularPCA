@@ -38,27 +38,7 @@ def calculate_dtw(x, y):
 # distance, path = calculate_dtw(line_a, line_b)
 
 def get_warping_function(path, x, y):
-    # test_warp_function_list = []
-    # test_transformed_Q1_list = []
-
-    # Step 1: 对SRVF进行动态时间规整
-    # distance, path = fastdtw(Q1, Q2, dist=euclidean)
-
-    # Step 2: 计算最优变换
-    # path是一个包含配对索引的列表，我们可以使用它来创建变换后的曲线
-    # 我们假设Q1是我们想要对齐的曲线，Q2是参考曲线
-    # test_transformed_Q1 = np.zeros(Q1.shape)
-    # test_transformed_L1 = np.zeros(Q1.shape)
-        
-    # for pair in path:
-    #     test_transformed_Q1[pair[0]] = Q2[pair[1]] # 原本是Q1[pair[1]]
-    #     test_transformed_L1[pair[0]] = train_mean_curve[pair[1]] # 原本是Q1[pair[1]]
-
-    # 这个transformed_Q1现在是变换后的SRVF，你可以将其转换回原始曲线空间
-    # 将path转化为numpy array，以便于处理
     path_array = np.array(path)
-
-    # 初始化warp function为一个与Q1同样长度的零向量
     warp_function = np.zeros(len(x))
 
     # 根据path定义warp function

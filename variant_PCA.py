@@ -31,6 +31,7 @@ from myvtk.dtw import *
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
+from myvtk.scores import *
 
 
 
@@ -230,12 +231,31 @@ plt.close()
 cmap = matplotlib.cm.get_cmap('turbo')
 
 
-titlesfile = open("./save_data/"+"titles.csv", "r")
-titles = titlesfile.read()
-titlesfile.close()
-scores = open(bkup_dir+"scores.csv", "w")
-scores.write(titles)
-scores.write("\n")
+#titlesfile = open("./save_data/"+"titles.csv", "r")
+#titles = titlesfile.read()
+#titlesfile.close()
+data_item = ['Variance_aligned',
+             'Procrustes_aligned',
+             'Variance_aligned_SRVF',
+                'Procrustes_aligned_SRVF']
+param_item = ['Curvature',
+                'Torsion',
+                'Curvature_change',
+                'Torsion_change']
+
+dist_item = ['Vatiance_geodesic_dist',
+                'Procrustes_geodesic_dist',
+                'SRVF_Variance_geodesic_dist',
+                'SRVF_Procrustes_geodesic_dist']
+pca_types = ["Coords", "United" ,"Params", "Warping"]
+titles = []
+total_score = []
+#cores.write(titles)
+for k in range(len(pca_types)):
+    for i in range(len(data_item)):
+        for j in range(len(dist_item)):
+            titles.append(pca_types[k]+","+data_item[i]+","+dist_item[j]+",")
+
 
 
 pca_standardization = 1
@@ -243,6 +263,7 @@ log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
 for loop in range(1):
+
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
     pcalign_srvf_curves = Pcalign_srvf_curves
@@ -254,8 +275,6 @@ for loop in range(1):
     torsions_changes = Torsion_changes
     # procrustes_geodesic_d = Procrustes_geodesic_d
     # aligned_geodesic_d = Aligned_geodesic_d
-
-    Score = []
     # 创建一个随机排列的索引
     indices = np.random.permutation(len(files))
     # 使用这个索引来重新排列 srvf_curves 和 files
@@ -280,6 +299,8 @@ for loop in range(1):
     plt.savefig(bkup_dir+"mean_curves_{}.png".format(loop))
     plt.close()
     
+    Scores = []
+
     # 获取当前时间
     now = datetime.now()
 
@@ -341,7 +362,6 @@ for loop in range(1):
     # PCA
     loop_log.write("np.corrcoef is Pearson Correlation Coefficient which measures linear correlation.\n")
     loop_log.write("# coord PCA\n")
-    # for i in range(len(train_datas)):
     coord_PCAs = []
     for data_key, data_values in data_dict.items():
         loop_log.write("## "+data_key+"\n")
@@ -357,25 +377,12 @@ for loop in range(1):
         loop_log.write("![coord_{}]({})\n".format(data_key,"./"+loading_figname))
         loop_log.write("![coord_{}]({})\n".format(data_key,"./"+components_figname))
         coord_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-        for dist_key, dist_values in dist_dict.items():
-            train_scores, test_scores =  coord_PCAs[-1].compute_scores(dist_values[0], dist_values[1])
-            loop_log.write("- train scores:\n")
-            for key in train_scores:
-                loop_log.write("    - {}: {}\n".format(key, train_scores[key]))
-                Score.append(train_scores[key])
-            loop_log.write("- test scores:\n")
-            for key in test_scores:
-                loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
-                Score.append(test_scores[key])
         train_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].train_res).reshape(train_num, -1, 3)
         test_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].test_res).reshape(test_num, -1, 3)
-        plt.plot(train_inverse[0,:,0],label="inverse")
-        plt.plot(data_values[0][0,:,0],label="original")
-        plt.legend()
-        plt.savefig(bkup_dir+"inverse_{}.png".format(data_key))
-        plt.close()
         process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
-
+        for dist_key, dist_values in dist_dict.items():
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
 
     ###############################################
@@ -391,7 +398,6 @@ for loop in range(1):
         test_res = []
         united_internal_PCAs = []
         for i in range(3):
-            # train_res, test_res = PCA_training_and_test(train_data[:,:,i], test_data[:,:,i], 16)
             united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=pca_standardization))
             united_internal_PCAs[-1].PCA_training_and_test()
             train_res_temp, test_res_temp = united_internal_PCAs[-1].train_res, united_internal_PCAs[-1].test_res
@@ -407,20 +413,10 @@ for loop in range(1):
         loop_log.write("![united_{}]({})\n".format(data_key,"./"+loading_figname))
         loop_log.write("![united_{}]({})\n".format(data_key,"./"+components_figname))
         united_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-        for dist_key, dist_values in dist_dict.items():
-            for key in train_scores:
-                loop_log.write("    - {}: {}\n".format(key, train_scores[key]))
-                Score.append(train_scores[key])
-            loop_log.write("- test scores:\n")
-            for key in test_scores:
-                loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
-                Score.append(test_scores[key])
         train_inverse_large = united_PCAs[-1].inverse_transform_from_loadings(united_PCAs[-1].train_res)
         test_inverse_large = united_PCAs[-1].inverse_transform_from_loadings(united_PCAs[-1].test_res)
-
         train_inverse_parts = np.split(train_inverse_large, 3, axis=1)  # 分解为三个部分
         test_inverse_parts = np.split(test_inverse_large, 3, axis=1)  # 分解为三个部分
-
         train_inverse = []
         test_inverse = []
         for i in range(3):
@@ -428,14 +424,15 @@ for loop in range(1):
             test_inverse_temp = united_internal_PCAs[i].inverse_transform_from_loadings(test_inverse_parts[i])
             train_inverse.append(train_inverse_temp)
             test_inverse.append(test_inverse_temp)
-
         train_data_inverse = np.array(train_inverse).transpose(1,2,0)
         test_data_inverse = np.array(test_inverse).transpose(1,2,0)
         train_data_inverse = recovered_curves(train_data_inverse,"SRVF" in data_key)
-        test_data_inverse = recovered_curves(test_data_inverse,"SRVF" in data_key) 
         inverse_dir = mkdir(inverse_data_dir, "united_"+data_key)
         write_curves_to_vtk(train_data_inverse, train_files, inverse_dir+"train_inverse_{}.vtk".format(data_key))
         write_curves_to_vtk(test_data_inverse, test_files, inverse_dir+"test_inverse_{}.vtk".format(data_key))
+        for dist_key, dist_values in dist_dict.items():
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=united_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=united_PCAs[-1].test_res, train=0))
 
     ###############################################
     loop_log.write("# Geometric param PCA\n")
@@ -447,7 +444,6 @@ for loop in range(1):
         test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
         loop_log.write("- PCA_training_and_test will standardize data automatically.\n")
         loop_log.write("- PCA_training_and_test will add a small amount of noise to the data.\n")
-        # train_res, test_res, pca = PCA_training_and_test(train_data, test_data, 16, standardization=1)
         param_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
         param_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"param_componentse_{}.png".format(data_key)
@@ -457,14 +453,8 @@ for loop in range(1):
         loop_log.write("![param_{}]({})\n".format(data_key,"./"+components_figname))
         param_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
         for dist_key, dist_values in dist_dict.items():
-            loop_log.write("- train scores:\n")
-            for key in train_scores:
-                loop_log.write("    - {}: {}\n".format(key, train_scores[key]))
-                Score.append(train_scores[key])
-            loop_log.write("- test scores:\n")
-            for key in test_scores:
-                loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
-                Score.append(test_scores[key])
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=param_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=param_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
 
     ###############################################
@@ -489,7 +479,9 @@ for loop in range(1):
             test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape)*distance)
             # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
         train_data = np.array(train_warping_functions)
+        train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
         test_data = np.array(test_warping_functions)
+        test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
         warp_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
         warp_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
@@ -499,24 +491,15 @@ for loop in range(1):
         loop_log.write("![warp_{}]({})\n".format(data_key,"./"+components_figname))
         warp_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
         for dist_key, dist_values in dist_dict.items():
-            train_dist, test_dist = dist_values  # 取出列表中的两个值
-            loop_log.write("- train scores:\n")
-            for key in train_scores:
-                loop_log.write("    - {}: {}\n".format(key, train_scores[key]))
-                Score.append(train_scores[key])
-            loop_log.write("- test scores:\n")
-            for key in test_scores:
-                loop_log.write("    - {}: {}\n".format(key, test_scores[key]))
-                Score.append(test_scores[key])
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=warp_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=warp_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
-
-
-    for i in range(len(Score)):
-        scores.write(str(Score[i])+",")
-    scores.write("\n")
     loop_log.close()
+
 log.close()
-scores.close()
+
+for i in range(len(Scores)):
+    print (Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
 end_time = datetime.now()
 total_time = end_time - start_time
 print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")
