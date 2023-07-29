@@ -32,6 +32,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
 from myvtk.scores import *
+import pandas as pd
 
 
 
@@ -262,7 +263,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(1):
+for loop in range(2):
 
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
@@ -498,8 +499,43 @@ for loop in range(1):
 
 log.close()
 
-for i in range(len(Scores)):
-    print (Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
+score_file = open(save_new_shuffle+"scores.csv", "w")
+for i in range(0, len(Scores), 2):
+    # print ("Train:",Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
+    # print ("Test:", Scores[i+1].data_name, Scores[i+1].dist_name,Scores[i+1].score)
+    score_file.write("Train,{},{},{},{}\n".format(Scores[i].data_name, 
+                                               Scores[i].dist_name,
+                                               Scores[i].score["correlation"],
+                                               Scores[i].score["similarity"]))
+    score_file.write("Test,{},{},{},{}\n".format(Scores[i+1].data_name,
+                                                Scores[i+1].dist_name,
+                                                Scores[i+1].score["correlation"],
+                                                Scores[i+1].score["similarity"]))
+    
+
+score_file.close()
+
+
+
+# 列出你的文件名，假设它们都在同一个文件夹中，并且都是 CSV 文件
+score_files = glob.glob(bkup_dir+"shuffled_srvf_curves/*/scores.csv")
+print (score_files)
+
+# 创建一个空的 DataFrame，用于存储所有的数据
+all_data = pd.DataFrame()
+column_names = ['Dataset_Type', 'PCA_Data_Type', 'Geodesic_Dist_Type', 'Correlation', 'Similarity']
+# 逐个读取并合并其余文件
+for i in range(1, len(files)):
+    # 读取文件
+    df = pd.read_csv(files[i], header=None, names=column_names)
+    # 重命名第四列和第五列的列名
+    df = df.rename(columns={'Correlation': f'Correlation_{i}', 'Similarity': f'Similarity_{i}'})
+    # 使用前三列作为键，将数据合并到 all_data DataFrame 中
+    all_data = pd.merge(all_data, df, on=['Dataset_Type', 'PCA_Data_Type', 'Geodesic_Dist_Type'])
+
+# 将合并后的数据输出为 CSV 文件
+all_data.to_csv('merged.csv', index=False)
+
 end_time = datetime.now()
 total_time = end_time - start_time
 print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")

@@ -32,6 +32,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
 from myvtk.scores import *
+import csv
 
 
 
@@ -262,7 +263,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(1):
+for loop in range(2):
 
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
@@ -496,10 +497,43 @@ for loop in range(1):
     loop_log.write("***\n")
     loop_log.close()
 
-log.close()
 
-for i in range(len(Scores)):
-    print (Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
+
+    score_file = open(save_new_shuffle+"scores.csv", "w")
+    for i in range(0, len(Scores), 2):
+        # print ("Train:",Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
+        # print ("Test:", Scores[i+1].data_name, Scores[i+1].dist_name,Scores[i+1].score)
+        score_file.write("Train,{},{},{},{}\n".format(Scores[i].data_name, 
+                                                Scores[i].dist_name,
+                                                Scores[i].score["correlation"],
+                                                Scores[i].score["similarity"]))
+        score_file.write("Test,{},{},{},{}\n".format(Scores[i+1].data_name,
+                                                    Scores[i+1].dist_name,
+                                                    Scores[i+1].score["correlation"],
+                                                    Scores[i+1].score["similarity"]))
+    score_file.close()
+
+# 列出你的文件名，假设它们都在同一个文件夹中，并且都是 CSV 文件
+
+score_files = glob.glob(bkup_dir+"shuffled_srvf_curves/*/scores.csv")
+# 新的文件，用来保存合并后的数据
+output_file = bkup_dir+ 'merged.csv'
+# 先读取所有文件的数据
+all_data = []
+for filename in score_files:
+    with open(filename, 'r') as f_input:
+        reader = csv.reader(f_input)
+        if filename == score_files[0]:  # 对于第一个文件，读取所有列
+            all_data = list(reader)
+        else:  # 对于其他文件，只读取最后两列，并附加到对应的行
+            next(reader)  # 跳过标题行
+            for i, row in enumerate(reader):
+                all_data[i].extend(row[-2:])  # 附加最后两列
+with open(output_file, 'w', newline='') as f_output:
+    writer = csv.writer(f_output)
+    writer.writerows(all_data)
+
 end_time = datetime.now()
 total_time = end_time - start_time
 print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")
+log.close()
