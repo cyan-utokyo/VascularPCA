@@ -33,9 +33,6 @@ from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
 from myvtk.scores import *
 import csv
-from sklearn.manifold import TSNE
-from scipy.interpolate import griddata
-from scipy.stats import multivariate_normal
 
 
 
@@ -266,7 +263,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(1):
+for loop in range(10):
 
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
@@ -358,8 +355,6 @@ for loop in range(1):
     'SRVF_Variance_geodesic_dist': [train_srvf_aligned_geo_d, test_srvf_aligned_geo_d],
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
-    
-
 
 
     loop_log.write("***\n")

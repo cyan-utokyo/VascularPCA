@@ -32,7 +32,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
 from myvtk.scores import *
-import pandas as pd
+import csv
+from sklearn.manifold import TSNE
+from scipy.interpolate import griddata
+from scipy.stats import multivariate_normal
 
 
 
@@ -263,7 +266,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(2):
+for loop in range(1):
 
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
@@ -355,6 +358,8 @@ for loop in range(2):
     'SRVF_Variance_geodesic_dist': [train_srvf_aligned_geo_d, test_srvf_aligned_geo_d],
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
+    
+
 
 
     loop_log.write("***\n")
@@ -382,8 +387,8 @@ for loop in range(2):
         test_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].test_res).reshape(test_num, -1, 3)
         process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
         for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
+            Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
 
     ###############################################
@@ -432,8 +437,8 @@ for loop in range(2):
         write_curves_to_vtk(train_data_inverse, train_files, inverse_dir+"train_inverse_{}.vtk".format(data_key))
         write_curves_to_vtk(test_data_inverse, test_files, inverse_dir+"test_inverse_{}.vtk".format(data_key))
         for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=united_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=united_PCAs[-1].test_res, train=0))
+            Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=united_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=united_PCAs[-1].test_res, train=0))
 
     ###############################################
     loop_log.write("# Geometric param PCA\n")
@@ -454,8 +459,8 @@ for loop in range(2):
         loop_log.write("![param_{}]({})\n".format(data_key,"./"+components_figname))
         param_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
         for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=param_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=param_PCAs[-1].test_res, train=0))
+            Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=param_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=param_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
 
     ###############################################
@@ -492,50 +497,57 @@ for loop in range(2):
         loop_log.write("![warp_{}]({})\n".format(data_key,"./"+components_figname))
         warp_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
         for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[0], pca_result=warp_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name=data_key, dist_name=dist_key, dist=dist_values[1], pca_result=warp_PCAs[-1].test_res, train=0))
+            Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=warp_PCAs[-1].train_res, train=1))
+            Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=warp_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
     loop_log.close()
 
-log.close()
-
-score_file = open(save_new_shuffle+"scores.csv", "w")
-for i in range(0, len(Scores), 2):
-    # print ("Train:",Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
-    # print ("Test:", Scores[i+1].data_name, Scores[i+1].dist_name,Scores[i+1].score)
-    score_file.write("Train,{},{},{},{}\n".format(Scores[i].data_name, 
-                                               Scores[i].dist_name,
-                                               Scores[i].score["correlation"],
-                                               Scores[i].score["similarity"]))
-    score_file.write("Test,{},{},{},{}\n".format(Scores[i+1].data_name,
-                                                Scores[i+1].dist_name,
-                                                Scores[i+1].score["correlation"],
-                                                Scores[i+1].score["similarity"]))
-    
-
-score_file.close()
 
 
+    score_file = open(save_new_shuffle+"scores.csv", "w")
+    for i in range(0, len(Scores), 2): # 2是为了区别test和train
+        # print ("Train:",Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
+        # print ("Test:", Scores[i+1].data_name, Scores[i+1].dist_name,Scores[i+1].score)
+        score_file.write("Train,{},{},{},{},{},\n".format(Scores[i].data_name, 
+                                                Scores[i].dist_name,
+                                                Scores[i].score["correlation"],
+                                                Scores[i].score["similarity"],
+                                                Scores[i].score["distance_correlation"]))
+        score_file.write("Test,{},{},{},{},{},\n".format(Scores[i+1].data_name,
+                                                    Scores[i+1].dist_name,
+                                                    Scores[i+1].score["correlation"],
+                                                    Scores[i+1].score["similarity"],
+                                                    Scores[i+1].score["distance_correlation"]))
+    score_file.close()
 
 # 列出你的文件名，假设它们都在同一个文件夹中，并且都是 CSV 文件
+
 score_files = glob.glob(bkup_dir+"shuffled_srvf_curves/*/scores.csv")
-print (score_files)
+# 定义一个列表来存储每个文件的内容
+all_lines = []
 
-# 创建一个空的 DataFrame，用于存储所有的数据
-all_data = pd.DataFrame()
-column_names = ['Dataset_Type', 'PCA_Data_Type', 'Geodesic_Dist_Type', 'Correlation', 'Similarity']
-# 逐个读取并合并其余文件
-for i in range(1, len(files)):
-    # 读取文件
-    df = pd.read_csv(files[i], header=None, names=column_names)
-    # 重命名第四列和第五列的列名
-    df = df.rename(columns={'Correlation': f'Correlation_{i}', 'Similarity': f'Similarity_{i}'})
-    # 使用前三列作为键，将数据合并到 all_data DataFrame 中
-    all_data = pd.merge(all_data, df, on=['Dataset_Type', 'PCA_Data_Type', 'Geodesic_Dist_Type'])
+# 遍历score_files中的每个文件路径
+for file_path in score_files:
+    # 打开文件，读取每一行的内容并将其存储在列表中
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+        all_lines.append(lines)
 
-# 将合并后的数据输出为 CSV 文件
-all_data.to_csv('merged.csv', index=False)
+# 检查所有文件的行数是否相等
+if len(set(len(lines) for lines in all_lines)) > 1:
+    print('所有文件的行数不等，不能合并。')
+    exit()
+
+# 创建一个新的文件来存储合并后的内容
+with open(bkup_dir+'merged_file.csv', 'w', encoding='utf-8') as mf:
+    # 获取all_lines的转置，这样我们可以每次迭代一行，而不是一个文件
+    for lines in zip(*all_lines):
+        # 删除每一行末尾的换行符，然后将所有行内容合并，并在其后添加一个换行符
+        merged_line = ''.join(line.rstrip('\n') for line in lines) + '\n'
+        # 将合并后的行写入新的文件中
+        mf.write(merged_line)
 
 end_time = datetime.now()
 total_time = end_time - start_time
 print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")
+log.close()

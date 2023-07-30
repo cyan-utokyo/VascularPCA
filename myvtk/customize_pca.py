@@ -27,6 +27,7 @@ from myvtk.General import *
 import matplotlib.gridspec as gridspec
 from scipy import stats
 from sklearn.decomposition import PCA
+from scipy.stats import gaussian_kde
 
 
 # def PCA_training_and_test(train_curves, test_curves, n_components, standardization=1):

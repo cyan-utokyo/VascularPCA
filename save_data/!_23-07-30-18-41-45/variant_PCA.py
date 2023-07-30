@@ -33,9 +33,6 @@ from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
 from myvtk.scores import *
 import csv
-from sklearn.manifold import TSNE
-from scipy.interpolate import griddata
-from scipy.stats import multivariate_normal
 
 
 
@@ -266,7 +263,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(1):
+for loop in range(10):
 
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
@@ -358,8 +355,6 @@ for loop in range(1):
     'SRVF_Variance_geodesic_dist': [train_srvf_aligned_geo_d, test_srvf_aligned_geo_d],
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
-    
-
 
 
     loop_log.write("***\n")
@@ -505,19 +500,17 @@ for loop in range(1):
 
 
     score_file = open(save_new_shuffle+"scores.csv", "w")
-    for i in range(0, len(Scores), 2): # 2是为了区别test和train
+    for i in range(0, len(Scores), 2):
         # print ("Train:",Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
         # print ("Test:", Scores[i+1].data_name, Scores[i+1].dist_name,Scores[i+1].score)
-        score_file.write("Train,{},{},{},{},{},\n".format(Scores[i].data_name, 
+        score_file.write("Train,{},{},{},{},\n".format(Scores[i].data_name, 
                                                 Scores[i].dist_name,
                                                 Scores[i].score["correlation"],
-                                                Scores[i].score["similarity"],
-                                                Scores[i].score["distance_correlation"]))
-        score_file.write("Test,{},{},{},{},{},\n".format(Scores[i+1].data_name,
+                                                Scores[i].score["similarity"]))
+        score_file.write("Test,{},{},{},{},\n".format(Scores[i+1].data_name,
                                                     Scores[i+1].dist_name,
                                                     Scores[i+1].score["correlation"],
-                                                    Scores[i+1].score["similarity"],
-                                                    Scores[i+1].score["distance_correlation"]))
+                                                    Scores[i+1].score["similarity"]))
     score_file.close()
 
 # 列出你的文件名，假设它们都在同一个文件夹中，并且都是 CSV 文件
@@ -539,7 +532,7 @@ if len(set(len(lines) for lines in all_lines)) > 1:
     exit()
 
 # 创建一个新的文件来存储合并后的内容
-with open(bkup_dir+'merged_file.csv', 'w', encoding='utf-8') as mf:
+with open(bkup_dir+'merged_file.txt', 'w', encoding='utf-8') as mf:
     # 获取all_lines的转置，这样我们可以每次迭代一行，而不是一个文件
     for lines in zip(*all_lines):
         # 删除每一行末尾的换行符，然后将所有行内容合并，并在其后添加一个换行符
