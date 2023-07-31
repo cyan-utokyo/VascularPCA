@@ -267,7 +267,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(6):
+for loop in range(3):
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
     pcalign_srvf_curves = Pcalign_srvf_curves
@@ -323,7 +323,7 @@ for loop in range(6):
     # np.save(save_new_shuffle + "procrustes_geodesic_d.npy",procrustes_geodesic_d, allow_pickle=True)
     # np.save(save_new_shuffle + "aligned_geodesic_d.npy",aligned_geodesic_d, allow_pickle=True)
     inverse_data_dir = mkdir(save_new_shuffle, "inverse_data")
-    train_num = int(len(files)*0.5)
+    train_num = int(len(files)*0.75)
     test_num = int(len(files)-train_num)
     loop_log.write("# Train and test dataset split\n")
     loop_log.write("- train_num: {}\n".format(train_num))

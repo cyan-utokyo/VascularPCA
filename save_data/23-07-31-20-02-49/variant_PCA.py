@@ -267,7 +267,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(6):
+for loop in range(1):
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
     pcalign_srvf_curves = Pcalign_srvf_curves
@@ -323,7 +323,7 @@ for loop in range(6):
     # np.save(save_new_shuffle + "procrustes_geodesic_d.npy",procrustes_geodesic_d, allow_pickle=True)
     # np.save(save_new_shuffle + "aligned_geodesic_d.npy",aligned_geodesic_d, allow_pickle=True)
     inverse_data_dir = mkdir(save_new_shuffle, "inverse_data")
-    train_num = int(len(files)*0.5)
+    train_num = int(len(files)*0.75)
     test_num = int(len(files)-train_num)
     loop_log.write("# Train and test dataset split\n")
     loop_log.write("- train_num: {}\n".format(train_num))
@@ -363,6 +363,7 @@ for loop in range(6):
 
 
     loop_log.write("***\n")
+
     ###############################################
     # PCA
     loop_log.write("np.corrcoef is Pearson Correlation Coefficient which measures linear correlation.\n")
@@ -387,7 +388,7 @@ for loop in range(6):
         process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
         coord_PCAs[-1].plot_scatter_kde(save_new_shuffle+"coord_scatter_kde_{}.png".format(data_key))
         coord_PCAs[-1].compute_kde()
-        print ("Coords,", data_key, "JS divergence:", coord_PCAs[-1].compute_train_test_js_divergence())
+        print (data_key, "JS divergence:", coord_PCAs[-1].compute_train_test_js_divergence())
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
@@ -440,8 +441,6 @@ for loop in range(6):
         write_curves_to_vtk(train_data_inverse, train_files, inverse_dir+"train_inverse_{}.vtk".format(data_key))
         write_curves_to_vtk(test_data_inverse, test_files, inverse_dir+"test_inverse_{}.vtk".format(data_key))
         united_PCAs[-1].plot_scatter_kde(save_new_shuffle+"united_scatter_kde_{}.png".format(data_key))
-        united_PCAs[-1].compute_kde()
-        print ("United,",data_key, "JS divergence:", united_PCAs[-1].compute_train_test_js_divergence())
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=united_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=united_PCAs[-1].test_res, train=0))
@@ -465,8 +464,6 @@ for loop in range(6):
         loop_log.write("![param_{}]({})\n".format(data_key,"./"+components_figname))
         param_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
         param_PCAs[-1].plot_scatter_kde(save_new_shuffle+"param_scatter_kde_{}.png".format(data_key))
-        param_PCAs[-1].compute_kde()
-        print ("Param,",data_key, "JS divergence:", param_PCAs[-1].compute_train_test_js_divergence())
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=param_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=param_PCAs[-1].test_res, train=0))

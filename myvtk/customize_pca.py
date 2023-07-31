@@ -27,27 +27,10 @@ from myvtk.General import *
 import matplotlib.gridspec as gridspec
 from scipy import stats
 from sklearn.decomposition import PCA
-from scipy.stats import gaussian_kde, multivariate_normal, kde
+from scipy.stats import gaussian_kde, multivariate_normal, kde, entropy
+from scipy.spatial.distance import jensenshannon
 import seaborn as sns
 
-
-
-# def PCA_training_and_test(train_curves, test_curves, n_components, standardization=1):
-#     # print ("standarize training data and test data!!")
-#     pca = PCA(n_components=n_components)
-#     if standardization ==1:
-#         means = np.mean(train_curves, axis=0)
-#         stds = np.std(train_curves, axis=0)
-#         # 只对标准差非零的特征进行标准化
-#         non_zero_stds = stds != 0
-#         train_curves[:, non_zero_stds] = (train_curves[:, non_zero_stds] - means[non_zero_stds]) / stds[non_zero_stds]
-#         test_curves[:, non_zero_stds] = (test_curves[:, non_zero_stds] - means[non_zero_stds]) / stds[non_zero_stds]
-#         train_res = pca.fit_transform(train_curves)
-#         test_res = pca.transform(test_curves)
-#     else:
-#         train_res = pca.fit_transform(train_curves)
-#         test_res = pca.transform(test_curves)
-#     return train_res, test_res, pca
 
 def plot_variance(pca, train_res, test_res, savepath):
     styles = [{'linestyle': '-', 'linewidth': 2},  # 实线，线宽1
@@ -69,10 +52,6 @@ def plot_variance(pca, train_res, test_res, savepath):
 
     # 子图2：主成分的 loading pattern
     ax1 = fig.add_subplot(gs[1])
-    # for i in range(5):
-    #     #ax1.plot(pca.components_[i], label="PC{}".format(i+1), linestyle='-', linewidth=2)
-    #     components_to_plot = pca.components_[i] if len(pca.components_[0]) <= 64 else pca.components_[i][::3]
-    #     ax1.plot(components_to_plot, label="PC{}".format(i+1))
     for i, style in enumerate(styles):
         components_to_plot = pca.components_[i] if len(pca.components_[0]) <= 64 else pca.components_[i][::3]
         ax1.plot(components_to_plot, label="PC{}".format(i+1),c="k", **style)
@@ -152,18 +131,31 @@ class PCAHandler:
         self.standardization = standardization
         self.n_components = n_components
         self.zero_stds_original = None
+        self.train_kde = None
+        self.test_kde = None
 
-    # def compute_pca(self):
-    #     # PCA computation
-    #     self.train_res, self.test_res, self.pca = PCA_training_and_test(self.train_data, self.test_data, self.n_components, standardization=self.standardization)
+    def compute_kde(self):
+        train_kde = gaussian_kde(self.train_res.T)
+        test_kde = gaussian_kde(self.test_res.T)
+        self.train_kde = train_kde
+        self.test_kde = test_kde
+    
+    def compute_train_test_js_divergence(self): 
+        # 计算train和test的Jensen-Shannon散度
+        train_kde = self.train_kde
+        test_kde = self.test_kde
+        # 注意，需要将概率密度函数的结果转换为概率分布
+        train_prob = train_kde.pdf(self.train_res.T)
+        train_prob /= train_prob.sum()
+        test_prob = test_kde.pdf(self.train_res.T)
+        test_prob /= test_prob.sum()
+        # 计算并返回JS散度
+        train_test_js_divergence = jensenshannon(train_prob, test_prob)**2  # Square the result to get the divergence
+        return train_test_js_divergence
 
     def visualize_results(self, save_path):
         # Visualization pca的各种性质，如主成分的形状，贡献度，train和test的分布情况
         plot_variance(self.pca, self.train_res, self.test_res, save_path)
-
-    def compute_scores(self, train_dist, test_dist):
-        # Score computation
-        return get_train_test_score(self.train_res, self.test_res, train_dist, test_dist)
     
     def visualize_loadings(self, dist_dict, save_path):
         # Visualization results中的第一第二主成分的散点图
@@ -217,40 +209,3 @@ class PCAHandler:
         plt.savefig(savepath, dpi=300)
         plt.close()
     
-    def plot_scatter_kde2(self, dist, savepath):
-        contour_color_map = {'Train': 'dimgray', 'Test': 'lightgray'}
-        dist_train = dist[0]
-        dist_test = dist[1]
-
-        # Create a DataFrame from the PCA results for easier plotting
-        df_train = pd.DataFrame(self.train_res[:, :2], columns=["PC1", "PC2"])
-        df_train['Type'] = 'Train'
-
-        df_test = pd.DataFrame(self.test_res[:, :2], columns=["PC1", "PC2"])
-        df_test['Type'] = 'Test'
-
-        # Merge the two dataframes
-        df = pd.concat([df_train, df_test])
-
-        # Create a joint plot with a hue parameter based on the 'Type' column
-        g = sns.jointplot(data=df, x='PC1', y='PC2', hue='Type', palette=contour_color_map,kind='kde', fill=False,joint_kws={"zorder": 0, "alpha": 1.0})
-
-        # Create a color map
-        cmap = plt.get_cmap('Spectral')
-
-        # Create an inset legend for the scatter colorbar
-        cax = g.fig.add_axes([.15, .60, .02, .2])
-
-        # Add scatter plots
-        sc = g.ax_joint.scatter(df_train['PC1'], df_train['PC2'], c=dist_train, cmap=cmap, marker="$t$", s=60)
-        g.ax_joint.scatter(df_test['PC1'], df_test['PC2'], c=dist_test, cmap=cmap, marker="$v$", s=50)
-
-        # Add colorbar
-        g.fig.colorbar(sc, cax=cax, orientation='vertical')
-        # g.plot_marginals(sns.histplot, color='dimgray')
-        # Add grid
-        g.ax_joint.grid(True, linestyle='--', alpha=0.6)
-
-        # Save the figure
-        plt.savefig(savepath, dpi=300)
-        plt.close()
