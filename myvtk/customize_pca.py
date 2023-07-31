@@ -27,7 +27,9 @@ from myvtk.General import *
 import matplotlib.gridspec as gridspec
 from scipy import stats
 from sklearn.decomposition import PCA
-from scipy.stats import gaussian_kde
+from scipy.stats import gaussian_kde, multivariate_normal, kde
+import seaborn as sns
+
 
 
 # def PCA_training_and_test(train_curves, test_curves, n_components, standardization=1):
@@ -189,18 +191,66 @@ class PCAHandler:
             self.pca = pca
         
         return self.train_res, self.test_res, self.pca
+    
+    def plot_scatter_kde(self, savepath):
+        cmap = plt.get_cmap('RdGy')
 
+        # Create a DataFrame from the PCA results for easier plotting
+        df_train = pd.DataFrame(self.train_res[:, :2], columns=["PC1", "PC2"])
+        df_train['Type'] = 'Train'
 
-    # def inverse_transform_from_loadings(self, loadings):
-    #     # 从loadings反推出原始数据
-    #     standardized_data = self.pca.inverse_transform(loadings)
-    #     if self.standardization == 0:
-    #         return standardized_data
-    #     else:
-    #         recovered_data = standardized_data * self.train_std + self.train_mean
-    #         zero_stds = self.train_std == 0
+        df_test = pd.DataFrame(self.test_res[:, :2], columns=["PC1", "PC2"])
+        df_test['Type'] = 'Test'
 
-    #         # 对于标准差为零的特征，恢复原始值
-    #         recovered_data[:, zero_stds] = self.zero_stds_original
+        # Merge the two dataframes
+        df = pd.concat([df_train, df_test])
 
-    #         return recovered_data
+        # Create a joint plot with a hue parameter based on the 'Type' column
+        g = sns.jointplot(data=df, x='PC1', y='PC2', hue='Type', palette='RdGy',kind='kde', fill=False,joint_kws={"zorder": 0, "alpha": 1.0})
+        # Add scatter plots
+        g.ax_joint.scatter(df_train['PC1'], df_train['PC2'], marker="s", s=30,color=cmap(0.18),label='Train',edgecolors='white')
+        g.ax_joint.scatter(df_test['PC1'], df_test['PC2'],  marker="X", s=30,color=cmap(0.82),label='Test',edgecolors='white')
+
+        # g.plot_marginals(sns.histplot, color='dimgray')
+        # Add grid
+        g.ax_joint.grid(True, linestyle='--', alpha=0.6)
+        plt.savefig(savepath, dpi=300)
+        plt.close()
+    
+    def plot_scatter_kde2(self, dist, savepath):
+        contour_color_map = {'Train': 'dimgray', 'Test': 'lightgray'}
+        dist_train = dist[0]
+        dist_test = dist[1]
+
+        # Create a DataFrame from the PCA results for easier plotting
+        df_train = pd.DataFrame(self.train_res[:, :2], columns=["PC1", "PC2"])
+        df_train['Type'] = 'Train'
+
+        df_test = pd.DataFrame(self.test_res[:, :2], columns=["PC1", "PC2"])
+        df_test['Type'] = 'Test'
+
+        # Merge the two dataframes
+        df = pd.concat([df_train, df_test])
+
+        # Create a joint plot with a hue parameter based on the 'Type' column
+        g = sns.jointplot(data=df, x='PC1', y='PC2', hue='Type', palette=contour_color_map,kind='kde', fill=False,joint_kws={"zorder": 0, "alpha": 1.0})
+
+        # Create a color map
+        cmap = plt.get_cmap('Spectral')
+
+        # Create an inset legend for the scatter colorbar
+        cax = g.fig.add_axes([.15, .60, .02, .2])
+
+        # Add scatter plots
+        sc = g.ax_joint.scatter(df_train['PC1'], df_train['PC2'], c=dist_train, cmap=cmap, marker="$t$", s=60)
+        g.ax_joint.scatter(df_test['PC1'], df_test['PC2'], c=dist_test, cmap=cmap, marker="$v$", s=50)
+
+        # Add colorbar
+        g.fig.colorbar(sc, cax=cax, orientation='vertical')
+        # g.plot_marginals(sns.histplot, color='dimgray')
+        # Add grid
+        g.ax_joint.grid(True, linestyle='--', alpha=0.6)
+
+        # Save the figure
+        plt.savefig(savepath, dpi=300)
+        plt.close()

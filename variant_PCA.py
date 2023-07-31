@@ -35,7 +35,8 @@ from myvtk.scores import *
 import csv
 from sklearn.manifold import TSNE
 from scipy.interpolate import griddata
-from scipy.stats import multivariate_normal
+from scipy.stats import multivariate_normal, kde
+import seaborn as sns
 
 
 
@@ -266,8 +267,7 @@ pca_standardization = 1
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
-for loop in range(1):
-
+for loop in range(10):
     aligned_curves = Aligned_curves
     procrustes_curves = Procrustes_curves
     pcalign_srvf_curves = Pcalign_srvf_curves
@@ -386,9 +386,11 @@ for loop in range(1):
         train_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].train_res).reshape(train_num, -1, 3)
         test_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].test_res).reshape(test_num, -1, 3)
         process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
+        coord_PCAs[-1].plot_scatter_kde(save_new_shuffle+"coord_scatter_kde_{}.png".format(data_key))
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
+            
     loop_log.write("***\n")
 
     ###############################################
@@ -436,6 +438,7 @@ for loop in range(1):
         inverse_dir = mkdir(inverse_data_dir, "united_"+data_key)
         write_curves_to_vtk(train_data_inverse, train_files, inverse_dir+"train_inverse_{}.vtk".format(data_key))
         write_curves_to_vtk(test_data_inverse, test_files, inverse_dir+"test_inverse_{}.vtk".format(data_key))
+        united_PCAs[-1].plot_scatter_kde(save_new_shuffle+"united_scatter_kde_{}.png".format(data_key))
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=united_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=united_PCAs[-1].test_res, train=0))
@@ -458,6 +461,7 @@ for loop in range(1):
         loop_log.write("![param_{}]({})\n".format(data_key,"./"+loading_figname))
         loop_log.write("![param_{}]({})\n".format(data_key,"./"+components_figname))
         param_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
+        param_PCAs[-1].plot_scatter_kde(save_new_shuffle+"param_scatter_kde_{}.png".format(data_key))
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=param_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=param_PCAs[-1].test_res, train=0))
@@ -469,36 +473,36 @@ for loop in range(1):
     loop_log.write("- Cosine similarity is used to compute warping function.\n")
     loop_log.write("- ")
     log.write("- only use the last two data (SRVF) to compute warping function, but use another two data (Coords) to compute geodesic distance.\n")
-    warp_PCAs = []
-    for data_key, data_values in list(data_dict.items())[-2:]:
-        loop_log.write("## "+data_key+"\n")
-        train_data_pre, test_data_pre = data_values  # 取出列表中的两个值
-        train_warping_functions= []
-        mean_shape = np.mean(train_data_pre, axis=0)
-        for j in range(len(train_data_pre)):
-            distance, path = calculate_dtw(train_data_pre[j], mean_shape)
-            train_warping_functions.append(get_warping_function(path, train_data_pre[j], mean_shape)*distance)
-            # train_data, _, _=compute_dtw(train_data_pre, train_data_pre, np.mean(Procs_srvf_curves,axis=0))
-        test_warping_functions = []
-        for j in range(len(test_data_pre)):
-            distance, path = calculate_dtw(test_data_pre[j], mean_shape)
-            test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape)*distance)
-            # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
-        train_data = np.array(train_warping_functions)
-        train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
-        test_data = np.array(test_warping_functions)
-        test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
-        warp_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
-        warp_PCAs[-1].PCA_training_and_test()
-        components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
-        warp_PCAs[-1].visualize_results(components_figname)
-        loading_figname = "warp_{}.png".format(data_key)
-        loop_log.write("![warp_{}]({})\n".format(data_key,"./"+loading_figname))
-        loop_log.write("![warp_{}]({})\n".format(data_key,"./"+components_figname))
-        warp_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-        for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=warp_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=warp_PCAs[-1].test_res, train=0))
+    # warp_PCAs = []
+    # for data_key, data_values in list(data_dict.items())[-2:]:
+    #     loop_log.write("## "+data_key+"\n")
+    #     train_data_pre, test_data_pre = data_values  # 取出列表中的两个值
+    #     train_warping_functions= []
+    #     mean_shape = np.mean(train_data_pre, axis=0)
+    #     for j in range(len(train_data_pre)):
+    #         distance, path = calculate_dtw(train_data_pre[j], mean_shape)
+    #         train_warping_functions.append(get_warping_function(path, train_data_pre[j], mean_shape)*distance)
+    #         # train_data, _, _=compute_dtw(train_data_pre, train_data_pre, np.mean(Procs_srvf_curves,axis=0))
+    #     test_warping_functions = []
+    #     for j in range(len(test_data_pre)):
+    #         distance, path = calculate_dtw(test_data_pre[j], mean_shape)
+    #         test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape)*distance)
+    #         # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
+    #     train_data = np.array(train_warping_functions)
+    #     train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
+    #     test_data = np.array(test_warping_functions)
+    #     test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
+    #     warp_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
+    #     warp_PCAs[-1].PCA_training_and_test()
+    #     components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
+    #     warp_PCAs[-1].visualize_results(components_figname)
+    #     loading_figname = "warp_{}.png".format(data_key)
+    #     loop_log.write("![warp_{}]({})\n".format(data_key,"./"+loading_figname))
+    #     loop_log.write("![warp_{}]({})\n".format(data_key,"./"+components_figname))
+    #     warp_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
+    #     for dist_key, dist_values in dist_dict.items():
+    #         Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=warp_PCAs[-1].train_res, train=1))
+    #         Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=warp_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
     loop_log.close()
 
@@ -506,18 +510,15 @@ for loop in range(1):
 
     score_file = open(save_new_shuffle+"scores.csv", "w")
     for i in range(0, len(Scores), 2): # 2是为了区别test和train
-        # print ("Train:",Scores[i].data_name, Scores[i].dist_name,Scores[i].score)
-        # print ("Test:", Scores[i+1].data_name, Scores[i+1].dist_name,Scores[i+1].score)
-        score_file.write("Train,{},{},{},{},{},\n".format(Scores[i].data_name, 
-                                                Scores[i].dist_name,
-                                                Scores[i].score["correlation"],
-                                                Scores[i].score["similarity"],
-                                                Scores[i].score["distance_correlation"]))
-        score_file.write("Test,{},{},{},{},{},\n".format(Scores[i+1].data_name,
-                                                    Scores[i+1].dist_name,
-                                                    Scores[i+1].score["correlation"],
-                                                    Scores[i+1].score["similarity"],
-                                                    Scores[i+1].score["distance_correlation"]))
+        score_file.write("Train,")
+        for score_name, score_value in Scores[i].score.items():
+            score_file.write("{},".format(score_value))
+        score_file.write("\n")
+        score_file.write("Test,")
+        for score_name, score_value in Scores[i+1].score.items():
+            score_file.write("{},".format(score_value))
+        score_file.write("\n")
+
     score_file.close()
 
 # 列出你的文件名，假设它们都在同一个文件夹中，并且都是 CSV 文件

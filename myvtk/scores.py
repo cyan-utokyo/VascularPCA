@@ -31,6 +31,7 @@ from myvtk.dtw import *
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
+from sklearn.metrics import mutual_info_score
  
 
 def distcorr(X, Y):
@@ -103,7 +104,12 @@ class ScoreHandler:
         correlation = np.corrcoef(pca_dist, self.dist)[0,1] #dists[i])
         similarity = cosine_similarity([pca_dist, self.dist])[0,1]
         distance_correlation = distcorr(pca_dist, self.dist)
-        self.score = {"correlation": correlation, "similarity": similarity, "distance_correlation": distance_correlation}
+        # mi = mutual_info_score(pca_dist, self.dist)
+        self.score = {"correlation": correlation, 
+                      "similarity": similarity, 
+                      "distance_correlation": distance_correlation,}
+                      # "mutual_info": mi}
+        # 互信息只能用来计算某个PC和距离的关系或某个PC和曲率之间的关系，但不能计算距离和距离
         
     
     
