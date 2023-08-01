@@ -102,7 +102,7 @@ def align_curve(curve):
     curve_centered_2d = curve_centered.reshape(-1, curve_centered.shape[1]*curve_centered.shape[2])
 
     # 计算PCA
-    pca = PCA(n_components=58)
+    pca = PCA(n_components=len(curve)-5)
     curve_pca = pca.fit_transform(curve_centered_2d)
     curve_pca = pca.inverse_transform(curve_pca)
     # print ("curve_pca.shape:", curve_pca.shape)
