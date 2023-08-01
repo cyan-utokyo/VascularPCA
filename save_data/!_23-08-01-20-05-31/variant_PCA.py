@@ -76,7 +76,7 @@ for idx in range(len(pre_files)):
     # print (filename)
     pt, Curv, Tors, Radius, Abscissas, ptns, ftangent, fnormal, fbinormal = GetMyVtk(pre_files[idx], frenet=1)
     Files.append(pre_files[idx])
-    unaligned_curves.append(pt-np.mean(pt, axis=0))
+    unaligned_curves.append(pt)
     radii.append(Radius)
     Curvatures.append(Curv)
     Torsions.append(Tors)
@@ -110,7 +110,7 @@ aneurisk_file = glob.glob("./aneurisk/aligned/*.vtk")
 aneurisk_curves = []
 for idx in range(len(aneurisk_file)):
     pt, Curv, Tors, Radius, Abscissas, ptns, ftangent, fnormal, fbinormal = GetMyVtk(aneurisk_file[idx], frenet=1)
-    aneurisk_curves.append(pt-np.mean(pt, axis=0))
+    aneurisk_curves.append(pt)
 aneurisk_curves = np.array(aneurisk_curves)
 
 print ("全データ（{}）を読み込みました。".format(len(pre_files)))
@@ -130,6 +130,7 @@ Procrustes_curves = align_procrustes(a_curves,base_id=base_id) # 这里要使用
 Procrustes_aneurisk_curves = align_procrustes(a_aneurisk_curves,base_id=-2, external_base_curve=Procrustes_curves[base_id]) 
 print ("procrustes alignment done.")
 
+print ("!!")
 # interpolated_curves = []
 # for i in range(len(curves)):
 #     curve = curves[i]
@@ -217,14 +218,9 @@ Pcalign_srvf_curves = np.zeros_like(Aligned_curves)
 for i in range(len(Procrustes_curves)):
     Pcalign_srvf_curves[i] = calculate_srvf(Aligned_curves[i])
     Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
-# aneurisk SRVF 计算
-Procs_aneurisk_srvf_curves = np.zeros_like(Procrustes_aneurisk_curves)
-Pcalign_aneurisk_srvf_curves = np.zeros_like(Aligned_anurisk_curves)
-for i in range(len(Procrustes_aneurisk_curves)):
-    Pcalign_aneurisk_srvf_curves[i] = calculate_srvf(Aligned_anurisk_curves[i])
-    Procs_aneurisk_srvf_curves[i] = calculate_srvf(Procrustes_aneurisk_curves[i])
 
 # Geodesic计算
+log.write("- Geodesic distance is computed by SRVR, this is the only way that makes sense.\n")
 Procrustes_geodesic_d = compute_geodesic_dist(Procrustes_curves)
 Aligned_geodesic_d = compute_geodesic_dist(Aligned_curves)
 Procrustes_srvf_geodesic = compute_geodesic_dist(Procs_srvf_curves)
@@ -376,11 +372,7 @@ for loop in range(6):
     train_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[:train_num])
     test_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[train_num:],curve_A=np.mean(procs_srvf_curves[:train_num],axis=0))
     test_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[train_num:],curve_A=np.mean(pcalign_srvf_curves[:train_num],axis=0))
-    aneurisk_procrustes_geodesic_d = compute_geodesic_dist(Procrustes_aneurisk_curves,curve_A=np.mean(procrustes_curves[:train_num],axis=0))
-    aneurisk_aligned_geodesic_d = compute_geodesic_dist(Aligned_anurisk_curves,curve_A=np.mean(procrustes_curves[:train_num],axis=0))
-    aneurisk_srvf_procrustes_geo_d = compute_geodesic_dist(Procs_aneurisk_srvf_curves,curve_A=np.mean(procs_srvf_curves[:train_num],axis=0))
-    aneurisk_srvf_aligned_geo_d = compute_geodesic_dist(Pcalign_aneurisk_srvf_curves,curve_A=np.mean(pcalign_srvf_curves[:train_num],axis=0))
-
+    aneurisk_procrustes_geodesic_d = compute_geodesic_dist(Procrustes_aneurisk_curves)
     train_files = files[:train_num]
     test_files = files[train_num:]
 
@@ -404,19 +396,6 @@ for loop in range(6):
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
     
-    aneu_dict = {
-        'Variance_aligned': Aligned_anurisk_curves,
-        'Procrustes_aligned': Procrustes_aneurisk_curves,
-        'Variance_aligned_SRVF': Pcalign_aneurisk_srvf_curves,
-        'Procrustes_aligned_SRVF': Procs_aneurisk_srvf_curves
-    }
-
-    aneu_dist_dict = {
-        'Variance_geodesic_dist': aneurisk_aligned_geodesic_d,
-        'Procrustes_geodesic_dist': aneurisk_procrustes_geodesic_d,
-        'SRVF_Variance_geodesic_dist': aneurisk_srvf_aligned_geo_d,
-        'SRVF_Procrustes_geodesic_dist': aneurisk_srvf_procrustes_geo_d
-    }
 
     loop_log.write("***\n")
     ###############################################
@@ -430,7 +409,6 @@ for loop in range(6):
         train_data, test_data = data_values  # 取出列表中的两个值
         train_data=train_data.reshape(train_num,-1)
         test_data=test_data.reshape(test_num,-1)
-
         coord_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
         coord_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"coord_componentse_{}.png".format(data_key)
@@ -445,26 +423,9 @@ for loop in range(6):
         coord_PCAs[-1].plot_scatter_kde(save_new_shuffle+"coord_scatter_kde_{}.png".format(data_key))
         coord_PCAs[-1].compute_kde()
         print ("Coords,", data_key, "JS divergence:", coord_PCAs[-1].compute_train_test_js_divergence())
-        aneurisk_value = aneu_dict[data_key]
-        aneurisk_data = (aneurisk_value.reshape(len(aneurisk_value),-1)-coord_PCAs[-1].train_mean)/coord_PCAs[-1].train_std # standardization
-        aneurisk_res = coord_PCAs[-1].pca.transform(aneurisk_data)
-        plt.scatter(coord_PCAs[-1].train_res[:,0], coord_PCAs[-1].train_res[:,1], c="r", label="train")
-        plt.scatter(coord_PCAs[-1].test_res[:,0], coord_PCAs[-1].test_res[:,1], c="b", label="test")
-        plt.scatter(aneurisk_res[:,0], aneurisk_res[:,1], c="g", label="aneurisk")
-        for q in range(len(coord_PCAs[-1].train_res)):
-            plt.text(coord_PCAs[-1].train_res[q,0], coord_PCAs[-1].train_res[q,1], train_files[q].split("\\")[-1].split(".")[0][:-8])
-        for q in range(len(coord_PCAs[-1].test_res)):
-            plt.text(coord_PCAs[-1].test_res[q,0], coord_PCAs[-1].test_res[q,1], test_files[q].split("\\")[-1].split(".")[0][:-8])
-        for q in range(len(aneurisk_res)):
-            plt.text(aneurisk_res[q,0], aneurisk_res[q,1], aneurisk_file[q].split("\\")[-1].split(".")[0])
-        plt.legend()
-        # plt.show()
-        plt.savefig(save_new_shuffle+"aneurisk_coord_scatter_{}.png".format(data_key))
-        plt.close()
         for dist_key, dist_values in dist_dict.items():
             Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
             Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
-            # coord_PCAs[-1].
             
     loop_log.write("***\n")
 

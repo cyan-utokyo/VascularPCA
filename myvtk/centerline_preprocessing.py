@@ -22,9 +22,15 @@ from geomstats.geometry.hypersphere import HypersphereMetric
 from scipy.spatial import distance
 # 创建一个新的目录来保存变换后的曲线
 
-def align_procrustes(curves,base_id=0):
+def align_procrustes(curves,base_id=0, external_base_curve=None):
     # 使用第一条曲线作为基准曲线
-    base_curve = curves[base_id]
+    if base_id > -1:
+        base_curve = curves[base_id]
+    elif base_id == -1:
+        base_curve = np.mean(curves, axis=0)
+    elif base_id == -2:
+        base_curve = external_base_curve
+
     new_curves = []
     
     for i in range(len(curves)):
@@ -96,7 +102,7 @@ def align_curve(curve):
     curve_centered_2d = curve_centered.reshape(-1, curve_centered.shape[1]*curve_centered.shape[2])
 
     # 计算PCA
-    pca = PCA(n_components=50)
+    pca = PCA(n_components=58)
     curve_pca = pca.fit_transform(curve_centered_2d)
     curve_pca = pca.inverse_transform(curve_pca)
     # print ("curve_pca.shape:", curve_pca.shape)
@@ -106,13 +112,15 @@ def align_curve(curve):
 
     return curve_pca
 
-def align_icp(curves,base_id=80):
+def align_icp(curves,base_id=80, external_std_curve=None):
     # 使用第一条曲线作为基准曲线
     new_curves = []
     if base_id > -1:
         base_curve = curves[base_id]
     elif base_id == -1:
         base_curve = np.mean(curves, axis=0)
+    elif base_id == -2:
+        base_curve = external_std_curve
     
     for i in range(len(curves)):
         curve = curves[i]
@@ -140,9 +148,10 @@ def align_icp(curves,base_id=80):
 
     return np.array(new_curves)
 
-def compute_geodesic_dist(curves):
+def compute_geodesic_dist(curves,curve_A=None):
     geodesic_d = []
-    curve_A = np.mean(curves, axis=0)
+    if curve_A is None:
+        curve_A = np.mean(curves, axis=0)
     for idx in range(len(curves)):
         curve_B = curves[idx]
         # 创建离散曲线对象
