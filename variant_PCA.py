@@ -320,12 +320,12 @@ for loop in range(1):
     loop_log.write("- test_num: {}\n".format(test_num))
     train_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[:train_num])
     train_aligned_geodesic_d = compute_geodesic_dist(aligned_curves[:train_num])
-    test_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[train_num:])
-    test_aligned_geodesic_d = compute_geodesic_dist(aligned_curves[train_num:])
+    test_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[train_num:], external=np.mean(procrustes_curves[:train_num], axis=0))
+    test_aligned_geodesic_d = compute_geodesic_dist(aligned_curves[train_num:], external=np.mean(aligned_curves[:train_num], axis=0)
     train_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[:train_num])
     train_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[:train_num])
-    test_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[train_num:])
-    test_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[train_num:])
+    test_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[train_num:],external=np.mean(procs_srvf_curves[:train_num], axis=0)
+    test_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[train_num:],external=np.mean(pcalign_srvf_curves[:train_num], axis=0)
     train_files = files[:train_num]
     test_files = files[train_num:]
 

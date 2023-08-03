@@ -140,9 +140,12 @@ def align_icp(curves,base_id=80):
 
     return np.array(new_curves)
 
-def compute_geodesic_dist(curves):
+def compute_geodesic_dist(curves, external=None):
     geodesic_d = []
-    curve_A = np.mean(curves, axis=0)
+    if external == None:
+        curve_A = np.mean(curves, axis=0)
+    else:
+        curve_A = external
     for idx in range(len(curves)):
         curve_B = curves[idx]
         # 创建离散曲线对象
