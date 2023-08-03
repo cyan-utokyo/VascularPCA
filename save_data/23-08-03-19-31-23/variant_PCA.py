@@ -121,12 +121,6 @@ for i in range(len(Files)):
 
 print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
 
-##################################################
-#  从这里开始是对齐。                             #
-#  To-Do: 需要保存Procrustes和MaxVariance对齐后的 #
-#  曲线各一条，作为后续的曲线对齐的基准。           #
-##################################################
-
 a_curves = align_icp(unaligned_curves, base_id=base_id)
 print ("First alignment done.")
 Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
