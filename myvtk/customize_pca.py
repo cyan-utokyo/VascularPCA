@@ -93,12 +93,12 @@ def plot_scatter_loadings(train_res, test_res, dist_dict, save_path):
         train_dist, test_dist = dist_values  # 取出列表中的两个值
         sc = ax[fig_count//2,fig_count%2].scatter(train_res[:,0],train_res[:,1],
                                                 c=train_dist,
-                                                cmap="turbo",
+                                                cmap="RdGy",
                                                 alpha=0.99,
                                                 marker="$T$")
         ax[fig_count//2,fig_count%2].scatter(test_res[:,0],test_res[:,1],
                                             c=test_dist,
-                                            cmap="turbo",
+                                            cmap="RdGy",
                                             alpha=0.99,
                                             marker="$V$")
         # 设置子图标题的字体大小
