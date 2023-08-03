@@ -86,25 +86,6 @@ def inverse_srvf(srvf, initial_point):
 
     return curve
 
-def align_curve(curve):
-    # 将曲线平移到原点
-    # print ("debug align_curve")
-    # print ("curve.shape:", curve.shape)
-    curve_centered = curve - np.mean(curve, axis=0)
-
-    # Reshape the centered curve into 2D array
-    curve_centered_2d = curve_centered.reshape(-1, curve_centered.shape[1]*curve_centered.shape[2])
-
-    # 计算PCA
-    pca = PCA(n_components=50)
-    curve_pca = pca.fit_transform(curve_centered_2d)
-    curve_pca = pca.inverse_transform(curve_pca)
-    # print ("curve_pca.shape:", curve_pca.shape)
-
-    # reshape back to the original shape
-    curve_pca = curve_pca.reshape(curve_centered.shape)
-
-    return curve_pca
 
 def align_icp(curves,base_id=80,external_curve=None):
     # 使用第一条曲线作为基准曲线
