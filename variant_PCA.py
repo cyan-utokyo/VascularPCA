@@ -126,16 +126,6 @@ print ("First alignment done.")
 Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
 print ("procrustes alignment done.")
 
-# interpolated_curves = []
-# for i in range(len(curves)):
-#     curve = curves[i]
-#     # max_pt_length = 64*4
-#     # x = np.linspace(0, len(curve), len(curve))
-#     # z2 = np.linspace(0,len(curve), max_pt_length)
-#     # c_interpolation = interpolate.CubicSpline(x, curve)
-#     # curve2 = c_interpolation(z2)
-#     # interpolated_curves.append(curve2)
-#     interpolated_curves.append(curve)
 
 parametrized_curves = np.zeros_like(Procrustes_curves)
 # aligned_curves = np.zeros_like(interpolated_curves)
@@ -143,8 +133,8 @@ parametrized_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
 
-Aligned_curves = align_curve(parametrized_curves)
-Procrustes_curves = np.array(Procrustes_curves)
+Aligned_curves = align_curve(parametrized_curves) # Max Variance Alignment
+Procrustes_curves = np.array(Procrustes_curves) # Procrustes Alignment
 
 # 需要把长度对齐到原始曲线
 for i in range(len(Aligned_curves)):
