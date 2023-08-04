@@ -37,10 +37,11 @@ from sklearn.manifold import TSNE
 from scipy.interpolate import griddata
 from scipy.stats import multivariate_normal, kde
 import seaborn as sns
+import copy
 
 
 
-
+SCALETO1 = True
 log = open("./log.txt", "w")
 # 获取当前时间
 start_time = datetime.now()
@@ -48,7 +49,7 @@ smooth_scale = 0.01
 # 将时间格式化为 'yymmddhhmmss' 格式
 dir_formatted_time = start_time.strftime('%y-%m-%d-%H-%M-%S')
 log.write("Start at: {}\n".format(dir_formatted_time))
-bkup_dir = mkdir("./", "save_data")
+bkup_dir = mkdir("./", "save_data_Procrustess")
 bkup_dir = mkdir(bkup_dir, dir_formatted_time)
 current_file_path = os.path.abspath(__file__)
 current_file_name = os.path.basename(__file__)
@@ -79,7 +80,11 @@ for idx in range(len(pre_files)):
     # print (filename)
     pt, Curv, Tors, Radius, Abscissas, ptns, ftangent, fnormal, fbinormal = GetMyVtk(pre_files[idx], frenet=1)
     Files.append(pre_files[idx])
-    unaligned_curves.append(pt-np.mean(pt,axis=0))
+    pt = pt-np.mean(pt,axis=0)
+    if SCALETO1:
+        pt = pt*(1.0/measure_length(pt))
+        # pt = to_unit_length(pt)
+    unaligned_curves.append(pt)
     radii.append(Radius)
     Curvatures.append(Curv)
     Torsions.append(Tors)
@@ -88,8 +93,6 @@ unaligned_curves = np.array(unaligned_curves)
 radii = np.array(radii)
 Curvatures = np.array(Curvatures)
 Torsions = np.array(Torsions)
-Curvature_changes = np.diff(Curvatures, axis=1)
-Torsion_changes = np.diff(Torsions, axis=1)
 
 fig = plt.figure(dpi=300,figsize=(10,6))
 ax1 = fig.add_subplot(221)
@@ -106,11 +109,8 @@ for i in range(len(Curvatures)):
     filtered_Torsion = np.convolve(Torsions[i], np.ones(window_size)/window_size, mode='same')
     Torsions[i] = filtered_Torsion
     ax4.plot(filtered_Torsion,color=cmap(0.2),alpha=0.1)
-    
 plt.savefig(bkup_dir+"curvature_filter.png")
 plt.close()
-
-
 
 print ("全データ（{}）を読み込みました。".format(len(pre_files)))
 print ("使用できるデータ：", len(Files))
@@ -121,177 +121,86 @@ for i in range(len(Files)):
 
 print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
 
+##################################################
+#  从这里开始是对齐。                             #
+#  To-Do: 需要保存Procrustes对齐后的              #
+#  曲线各一条，作为后续的曲线对齐的基准。           #
+##################################################
+
 a_curves = align_icp(unaligned_curves, base_id=base_id)
 print ("First alignment done.")
 Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
 print ("procrustes alignment done.")
-
-
+for i in range(len(Procrustes_curves)):
+    print ("length:", measure_length(Procrustes_curves[i]))
 parametrized_curves = np.zeros_like(Procrustes_curves)
 # aligned_curves = np.zeros_like(interpolated_curves)
-
 for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
+Procrustes_curves = np.array(Procrustes_curves)
 
-Aligned_curves = align_curve(parametrized_curves) # Max Variance Alignment
-Procrustes_curves = np.array(Procrustes_curves) # Procrustes Alignment
+# if SCALETO1:
+#     # 需要把长度还原到原始曲线或1
+#     for i in range(len(Procrustes_curves)):
+#         aligned_length = measure_length(Procrustes_curves[i])
+#         procrustes_length = measure_length(Procrustes_curves[i])
+#         Procrustes_curves[i] = Procrustes_curves[i] * (1.0/procrustes_length) # 这里是把长度还原到1
+log.write("Scaled all curves to one.\n")
 
-# 需要把长度对齐到原始曲线
-for i in range(len(Aligned_curves)):
-    aligned_length = measure_length(Aligned_curves[i])
-    procrustes_length = measure_length(Procrustes_curves[i])
-    Aligned_curves[i] = Aligned_curves[i] * (procrustes_length/aligned_length)
-
-fig = plt.figure(dpi=300)
-ax = fig.add_subplot(111)
-
-ax.hist([unaligned_curves.flatten(),Procrustes_curves.flatten(),Aligned_curves.flatten()], bins=50,
-        label=["unaligned", "Procrustes aligned", "PCA aligned"],
-        color=[cmap(0.9), cmap(0.7) ,cmap(0.2)], )
-
-ax.grid(linestyle=":", alpha=0.4)
-ax.set_xlabel("x(mm)")
-ax.set_ylabel("Frequency")
-plt.legend()
-plt.savefig(bkup_dir+"histogram_alignment.png")
-plt.close()
-
-filename_procrustes_curve = bkup_dir+"procrustes_curve.vtk"
-filename_pcaligned_curve = bkup_dir+"pcaligned_curve.vtk"
-log.write("save histogram: {}histogram_alignment.png\n".format(bkup_dir))
-log.write("save Procrustes curves: {}\n".format(filename_pcaligned_curve))
-log.write("save PCA aligned curves: {}\n".format(bkup_dir))
-makeVtkFile(bkup_dir+"procrustes_curve.vtk",Procrustes_curves[base_id], [],[])
-makeVtkFile(bkup_dir+"pcaligned_curve.vtk", Aligned_curves[base_id], [],[])
 
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
-Pcalign_srvf_curves = np.zeros_like(Aligned_curves)
 for i in range(len(Procrustes_curves)):
-    Pcalign_srvf_curves[i] = calculate_srvf(Aligned_curves[i])
     Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
 
 # Geodesic计算
 log.write("- Geodesic distance is computed by SRVR, this is the only way that makes sense.\n")
 Procrustes_geodesic_d = compute_geodesic_dist(Procrustes_curves)
-Aligned_geodesic_d = compute_geodesic_dist(Aligned_curves)
-Procrustes_srvf_geodesic = compute_geodesic_dist(Procs_srvf_curves)
-Aligned_srvf_geodesic = compute_geodesic_dist(Pcalign_srvf_curves)
 
-fig = plt.figure(dpi=300)
-ax = fig.add_subplot(111)
-ax.hist([Procrustes_geodesic_d, Aligned_geodesic_d, Procrustes_srvf_geodesic, Aligned_srvf_geodesic], bins=7,
-        label=['Procrustes',"MaxVariance", 'Procrustes_SRVF', "MaxVariance_SRVF"],
-        color=[cmap(0.2), cmap(0.4), cmap(0.6), cmap(0.8)], )
-ax.set_title("geodesic distance")
-ax.grid(linestyle=":", alpha=0.4)
-plt.legend()
-plt.savefig(bkup_dir+"histogram_geodesic.png")
-plt.close()
-
-
-# # 获取数据集大小
-# n = srvf_curves.shape[0]
-log.write("proc geodsic VS aligned geodesic correlation: {}\n".format(np.corrcoef(Procrustes_geodesic_d, Aligned_geodesic_d)[0,1]))
-
-Procs_warp_function_list, Procs_transformed_Q1_list, Procs_transformed_L1_list=compute_dtw(Procs_srvf_curves,
-                                                                                            Procrustes_curves,
-                                                                                            np.mean(Procs_srvf_curves,axis=0))
-Pcalign_warp_function_list, Pcalign_transformed_Q1_list, Pcalign_transformed_L1_list=compute_dtw(Pcalign_srvf_curves,
-                                                                                                Aligned_curves,
-                                                                                                np.mean(Pcalign_srvf_curves,axis=0))
-H=4
-W=2
-fig, ax = plt.subplots(H, W, figsize=(14, 6),dpi=200)
-for i in range(len(Files)):
-    ax[0,0].plot(Procrustes_curves[i,:,0],c=cmap((Procrustes_geodesic_d[i]-np.min(Procrustes_geodesic_d))/(np.max(Procrustes_geodesic_d)-np.min(Procrustes_geodesic_d))),linestyle=":")
-    ax[1,0].plot(Aligned_curves[i,:,0],c=cmap((Aligned_geodesic_d[i]-np.min(Aligned_geodesic_d))/(np.max(Aligned_geodesic_d)-np.min(Aligned_geodesic_d))),linestyle=":")
-
-    ax[0,1].plot(Procs_transformed_Q1_list[i,:,0],c=cmap((Procrustes_geodesic_d[i]-np.min(Procrustes_geodesic_d))/(np.max(Procrustes_geodesic_d)-np.min(Procrustes_geodesic_d))),linestyle=":")
-    ax[1,1].plot(Pcalign_transformed_Q1_list[i,:,0],c=cmap((Aligned_geodesic_d[i]-np.min(Aligned_geodesic_d))/(np.max(Aligned_geodesic_d)-np.min(Aligned_geodesic_d))),linestyle=":")
-    ax[2,0].plot(Procs_transformed_L1_list[i,:,0],c=cmap((Procrustes_geodesic_d[i]-np.min(Procrustes_geodesic_d))/(np.max(Procrustes_geodesic_d)-np.min(Procrustes_geodesic_d))),linestyle=":")
-    ax[2,1].plot(Pcalign_transformed_L1_list[i,:,0],c=cmap((Aligned_geodesic_d[i]-np.min(Aligned_geodesic_d))/(np.max(Aligned_geodesic_d)-np.min(Aligned_geodesic_d))),linestyle=":")
-    ax[3,0].plot(Procs_warp_function_list[i],c=cmap((Procrustes_geodesic_d[i]-np.min(Procrustes_geodesic_d))/(np.max(Procrustes_geodesic_d)-np.min(Procrustes_geodesic_d))))
-    ax[3,1].plot(Pcalign_warp_function_list[i],c=cmap((Aligned_geodesic_d[i]-np.min(Aligned_geodesic_d))/(np.max(Aligned_geodesic_d)-np.min(Aligned_geodesic_d))))
-for i in range(H*W):
-    ax[i//2,i%2].set_title("({})".format(i+1))
-for i in range(6):
-    ax[i//2,i%2].set_xlabel("x(mm)",fontsize=5)
-    ax[i//2,i%2].set_ylabel("y(mm)",fontsize=5)
-
-plt.tight_layout()
-plt.savefig(bkup_dir+"/x.png")
-plt.close()
-
-cmap = matplotlib.cm.get_cmap('turbo')
-
-
-#titlesfile = open("./save_data/"+"titles.csv", "r")
-#titles = titlesfile.read()
-#titlesfile.close()
-data_item = ['Variance_aligned',
-             'Procrustes_aligned',
-             'Variance_aligned_SRVF',
+data_item = ['Procrustes_aligned',
                 'Procrustes_aligned_SRVF']
 param_item = ['Curvature',
-                'Torsion',
-                'Curvature_change',
-                'Torsion_change']
-
-dist_item = ['Vatiance_geodesic_dist',
-                'Procrustes_geodesic_dist',
-                'SRVF_Variance_geodesic_dist',
-                'SRVF_Procrustes_geodesic_dist']
-pca_types = ["Coords", "United" ,"Params", "Warping"]
-titles = []
-total_score = []
-#cores.write(titles)
-for k in range(len(pca_types)):
-    for i in range(len(data_item)):
-        for j in range(len(dist_item)):
-            titles.append(pca_types[k]+","+data_item[i]+","+dist_item[j]+",")
-
-
-
+                'Torsion']
+dist_item = ['Procrustes_geodesic_dist',
+            'SRVF_Procrustes_geodesic_dist']
 pca_standardization = 1
+
+
+frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
+frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
+
+
+train_data = Procrustes_curves.reshape(len(Procrustes_curves),-1)
+test_data = np.array([frechet_mean_srvf]).reshape(1,-1)
+all_srvf_pca = PCAHandler(train_data, None, 16, pca_standardization)
+all_srvf_pca.PCA_training_and_test()
+all_srvf_pca.plot_scatter_kde(bkup_dir+"all_srvf_pca.png")
+
+
+
+
+
+
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
 for loop in range(1):
-    aligned_curves = Aligned_curves
-    procrustes_curves = Procrustes_curves
-    pcalign_srvf_curves = Pcalign_srvf_curves
-    procs_srvf_curves = Procs_srvf_curves
-    files = Files
-    curvatures = Curvatures
-    torsions = Torsions
-    curvatures_changes = Curvature_changes
-    torsions_changes = Torsion_changes
-    # procrustes_geodesic_d = Procrustes_geodesic_d
-    # aligned_geodesic_d = Aligned_geodesic_d
+    procrustes_curves = np.copy(Procrustes_curves)
+    procs_srvf_curves = np.copy(Procs_srvf_curves)
+    files = np.copy(Files)
+    curvatures = np.copy(Curvatures)
+    torsions = np.copy(Torsions)
     # 创建一个随机排列的索引
     indices = np.random.permutation(len(files))
     # 使用这个索引来重新排列 srvf_curves 和 files
-    aligned_curves = np.take(aligned_curves, indices, axis=0)
+
     procrustes_curves = np.take(procrustes_curves, indices, axis=0)
-    pcalign_srvf_curves = np.take(pcalign_srvf_curves, indices, axis=0)
     procs_srvf_curves = np.take(procs_srvf_curves, indices, axis=0)
     files = np.take(files, indices, axis=0)
     curvatures = np.take(curvatures, indices, axis=0)
     torsions = np.take(torsions, indices, axis=0)
-    # procrustes_geodesic_d = np.take(procrustes_geodesic_d, indices, axis=0)
-    # aligned_geodesic_d = np.take(aligned_geodesic_d, indices, axis=0)
-    save_shuffled_path = mkdir(bkup_dir,"shuffled_srvf_curves")
-    fig = plt.figure(dpi=300,figsize=(10,4))
-    ax1 = fig.add_subplot(121)
-    ax2 = fig.add_subplot(122)
-    ax1.plot(np.mean(aligned_curves,axis=0)[:,0],color=cmap(0.2),alpha=0.1)
-    ax2.plot(np.mean(procrustes_curves,axis=0)[:,0],color=cmap(0.2),alpha=0.1)
-    for i in range(len(aligned_curves)):
-        ax1.plot(aligned_curves[i,:,0],color=cmap(0.2),alpha=0.1)
-        ax2.plot(procrustes_curves[i,:,0],color=cmap(0.2),alpha=0.1)
-    plt.savefig(bkup_dir+"mean_curves_{}.png".format(loop))
-    plt.close()
+    # save_shuffled_path = mkdir(bkup_dir,"shuffled_srvf_curves")
+    save_shuffled_path = np.copy(bkup_dir)
     
     Scores = []
 
@@ -300,18 +209,14 @@ for loop in range(1):
 
     # 将时间格式化为 'yymmddhhmmss' 格式
     formatted_time = now.strftime('%y%m%d%H%M%S')
-    save_new_shuffle = mkdir(save_shuffled_path,formatted_time)
+    save_new_shuffle = mkdir(bkup_dir,formatted_time)
     loop_log = open(save_new_shuffle+"log.md", "w")
 
     np.save(save_new_shuffle + "file_indice.npy",files, allow_pickle=True)
-    np.save(save_new_shuffle + "pcaligned_curves.npy",aligned_curves, allow_pickle=True)
     np.save(save_new_shuffle + "procrustes_curves.npy",procrustes_curves, allow_pickle=True)
-    np.save(save_new_shuffle + "pcalign_srvf_curves.npy",pcalign_srvf_curves, allow_pickle=True)
     np.save(save_new_shuffle + "procs_srvf_curves.npy",procs_srvf_curves, allow_pickle=True)
     np.save(save_new_shuffle + "curvatures.npy",curvatures, allow_pickle=True)
     np.save(save_new_shuffle + "torsions.npy",torsions, allow_pickle=True)
-    # np.save(save_new_shuffle + "procrustes_geodesic_d.npy",procrustes_geodesic_d, allow_pickle=True)
-    # np.save(save_new_shuffle + "aligned_geodesic_d.npy",aligned_geodesic_d, allow_pickle=True)
     inverse_data_dir = mkdir(save_new_shuffle, "inverse_data")
     train_num = int(len(files)*0.75)
     test_num = int(len(files)-train_num)
@@ -319,38 +224,26 @@ for loop in range(1):
     loop_log.write("- train_num: {}\n".format(train_num))
     loop_log.write("- test_num: {}\n".format(test_num))
     train_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[:train_num])
-    train_aligned_geodesic_d = compute_geodesic_dist(aligned_curves[:train_num])
     test_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[train_num:], True, np.mean(procrustes_curves[:train_num], axis=0))
-    test_aligned_geodesic_d = compute_geodesic_dist(aligned_curves[train_num:], True, np.mean(aligned_curves[:train_num], axis=0))
     train_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[:train_num])
-    train_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[:train_num])
     test_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[train_num:],True, np.mean(procs_srvf_curves[:train_num], axis=0))
-    test_srvf_aligned_geo_d = compute_geodesic_dist(pcalign_srvf_curves[train_num:],True, np.mean(pcalign_srvf_curves[:train_num], axis=0))
     train_files = files[:train_num]
     test_files = files[train_num:]
 
     # To-Do:Standardization
     data_dict = {
-        'Variance_aligned': [aligned_curves[:train_num], aligned_curves[train_num:]],
         'Procrustes_aligned': [procrustes_curves[:train_num], procrustes_curves[train_num:]],
-        'Variance_aligned_SRVF': [pcalign_srvf_curves[:train_num], pcalign_srvf_curves[train_num:]],
         'Procrustes_aligned_SRVF': [procs_srvf_curves[:train_num], procs_srvf_curves[train_num:]]
     }
     param_dict = {
         'Curvature': [curvatures[:train_num], curvatures[train_num:]],
         'Torsion': [torsions[:train_num], torsions[train_num:]],
-        'Curvature_change': [curvatures_changes[:train_num], curvatures_changes[train_num:]],
-        'Torsion_change': [torsions_changes[:train_num], torsions_changes[train_num:]]
     }
     dist_dict = {
-    'Variance_geodesic_dist': [train_aligned_geodesic_d, test_aligned_geodesic_d],
     'Procrustes_geodesic_dist': [train_procrustes_geodesic_d, test_procrustes_geodesic_d],
-    'SRVF_Variance_geodesic_dist': [train_srvf_aligned_geo_d, test_srvf_aligned_geo_d],
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
     
-
-
 
     loop_log.write("***\n")
     ###############################################
@@ -463,45 +356,8 @@ for loop in range(1):
     loop_log.write("***\n")
 
     ###############################################
-    loop_log.write("# Warping function PCA\n")
-    loop_log.write("- only use the last two data (SRVF) to compute warping function, but use another two data (Coords) to compute geodesic distance.\n")
-    loop_log.write("- Cosine similarity is used to compute warping function.\n")
-    loop_log.write("- ")
-    log.write("- only use the last two data (SRVF) to compute warping function, but use another two data (Coords) to compute geodesic distance.\n")
-    # warp_PCAs = []
-    # for data_key, data_values in list(data_dict.items())[-2:]:
-    #     loop_log.write("## "+data_key+"\n")
-    #     train_data_pre, test_data_pre = data_values  # 取出列表中的两个值
-    #     train_warping_functions= []
-    #     mean_shape = np.mean(train_data_pre, axis=0)
-    #     for j in range(len(train_data_pre)):
-    #         distance, path = calculate_dtw(train_data_pre[j], mean_shape)
-    #         train_warping_functions.append(get_warping_function(path, train_data_pre[j], mean_shape)*distance)
-    #         # train_data, _, _=compute_dtw(train_data_pre, train_data_pre, np.mean(Procs_srvf_curves,axis=0))
-    #     test_warping_functions = []
-    #     for j in range(len(test_data_pre)):
-    #         distance, path = calculate_dtw(test_data_pre[j], mean_shape)
-    #         test_warping_functions.append(get_warping_function(path, test_data_pre[j], mean_shape)*distance)
-    #         # test_data, _, _=compute_dtw(test_data_pre, test_data_pre, np.mean(Procs_srvf_curves,axis=0))
-    #     train_data = np.array(train_warping_functions)
-    #     train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
-    #     test_data = np.array(test_warping_functions)
-    #     test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
-    #     warp_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
-    #     warp_PCAs[-1].PCA_training_and_test()
-    #     components_figname = save_new_shuffle+"warp_componentse_{}.png".format(data_key)
-    #     warp_PCAs[-1].visualize_results(components_figname)
-    #     loading_figname = "warp_{}.png".format(data_key)
-    #     loop_log.write("![warp_{}]({})\n".format(data_key,"./"+loading_figname))
-    #     loop_log.write("![warp_{}]({})\n".format(data_key,"./"+components_figname))
-    #     warp_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-    #     for dist_key, dist_values in dist_dict.items():
-    #         Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=warp_PCAs[-1].train_res, train=1))
-    #         Scores.append(ScoreHandler(data_name="Warp_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=warp_PCAs[-1].test_res, train=0))
     loop_log.write("***\n")
     loop_log.close()
-
-
 
     score_file = open(save_new_shuffle+"scores.csv", "w")
     for i in range(0, len(Scores), 2): # 2是为了区别test和train
@@ -516,12 +372,10 @@ for loop in range(1):
 
     score_file.close()
 
-# 列出你的文件名，假设它们都在同一个文件夹中，并且都是 CSV 文件
 
 score_files = glob.glob(bkup_dir+"shuffled_srvf_curves/*/scores.csv")
 # 定义一个列表来存储每个文件的内容
 all_lines = []
-
 # 遍历score_files中的每个文件路径
 for file_path in score_files:
     # 打开文件，读取每一行的内容并将其存储在列表中

@@ -41,7 +41,7 @@ import copy
 
 
 
-
+SCALETO1 = True
 log = open("./log.txt", "w")
 # 获取当前时间
 start_time = datetime.now()
@@ -80,7 +80,11 @@ for idx in range(len(pre_files)):
     # print (filename)
     pt, Curv, Tors, Radius, Abscissas, ptns, ftangent, fnormal, fbinormal = GetMyVtk(pre_files[idx], frenet=1)
     Files.append(pre_files[idx])
-    unaligned_curves.append(pt-np.mean(pt,axis=0))
+    pt = pt-np.mean(pt,axis=0)
+    if SCALETO1:
+        pt = pt*(1.0/measure_length(pt))
+        # pt = to_unit_length(pt)
+    unaligned_curves.append(pt)
     radii.append(Radius)
     Curvatures.append(Curv)
     Torsions.append(Tors)
@@ -89,8 +93,6 @@ unaligned_curves = np.array(unaligned_curves)
 radii = np.array(radii)
 Curvatures = np.array(Curvatures)
 Torsions = np.array(Torsions)
-Curvature_changes = np.diff(Curvatures, axis=1)
-Torsion_changes = np.diff(Torsions, axis=1)
 
 fig = plt.figure(dpi=300,figsize=(10,6))
 ax1 = fig.add_subplot(221)
@@ -107,7 +109,6 @@ for i in range(len(Curvatures)):
     filtered_Torsion = np.convolve(Torsions[i], np.ones(window_size)/window_size, mode='same')
     Torsions[i] = filtered_Torsion
     ax4.plot(filtered_Torsion,color=cmap(0.2),alpha=0.1)
-    
 plt.savefig(bkup_dir+"curvature_filter.png")
 plt.close()
 
@@ -122,7 +123,7 @@ print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_
 
 ##################################################
 #  从这里开始是对齐。                             #
-#  To-Do: 需要保存Procrustes和MaxVariance对齐后的 #
+#  To-Do: 需要保存Procrustes对齐后的              #
 #  曲线各一条，作为后续的曲线对齐的基准。           #
 ##################################################
 
@@ -130,41 +131,22 @@ a_curves = align_icp(unaligned_curves, base_id=base_id)
 print ("First alignment done.")
 Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
 print ("procrustes alignment done.")
-
-
+for i in range(len(Procrustes_curves)):
+    print ("length:", measure_length(Procrustes_curves[i]))
 parametrized_curves = np.zeros_like(Procrustes_curves)
 # aligned_curves = np.zeros_like(interpolated_curves)
-
 for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
-
 Procrustes_curves = np.array(Procrustes_curves)
 
-# 需要把长度对齐到原始曲线
-for i in range(len(Procrustes_curves)):
-    aligned_length = measure_length(Procrustes_curves[i])
-    procrustes_length = measure_length(Procrustes_curves[i])
-    
-#########################log#########################
-fig = plt.figure(dpi=300)
-ax = fig.add_subplot(111)
-ax.hist([unaligned_curves.flatten(),Procrustes_curves.flatten()], bins=50,
-        label=["unaligned", "Procrustes aligned"],
-        color=[cmap(0.9), cmap(0.2)], )
+# if SCALETO1:
+#     # 需要把长度还原到原始曲线或1
+#     for i in range(len(Procrustes_curves)):
+#         aligned_length = measure_length(Procrustes_curves[i])
+#         procrustes_length = measure_length(Procrustes_curves[i])
+#         Procrustes_curves[i] = Procrustes_curves[i] * (1.0/procrustes_length) # 这里是把长度还原到1
+log.write("Scaled all curves to one.\n")
 
-ax.grid(linestyle=":", alpha=0.4)
-ax.set_xlabel("x(mm)")
-ax.set_ylabel("Frequency")
-plt.legend()
-plt.savefig(bkup_dir+"histogram_alignment.png")
-plt.close()
-#########################log#########################
-
-filename_procrustes_curve = bkup_dir+"procrustes_curve.vtk"
-filename_pcaligned_curve = bkup_dir+"pcaligned_curve.vtk"
-log.write("save histogram: {}histogram_alignment.png\n".format(bkup_dir))
-log.write("save Procrustes curves: {}\n".format(filename_pcaligned_curve))
-makeVtkFile(bkup_dir+"procrustes_curve.vtk",Procrustes_curves[base_id], [],[])
 
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
@@ -174,38 +156,31 @@ for i in range(len(Procrustes_curves)):
 # Geodesic计算
 log.write("- Geodesic distance is computed by SRVR, this is the only way that makes sense.\n")
 Procrustes_geodesic_d = compute_geodesic_dist(Procrustes_curves)
-Procrustes_srvf_geodesic = compute_geodesic_dist(Procs_srvf_curves)
-
-
-fig = plt.figure(dpi=300)
-ax = fig.add_subplot(111)
-ax.hist([Procrustes_geodesic_d, Procrustes_srvf_geodesic, ], bins=7,
-        label=['Procrustes', 'Procrustes_SRVF'],
-        color=[cmap(0.2), cmap(0.8)], )
-ax.set_title("geodesic distance")
-ax.grid(linestyle=":", alpha=0.4)
-plt.legend()
-plt.savefig(bkup_dir+"histogram_geodesic.png")
-plt.close()
-
 
 data_item = ['Procrustes_aligned',
                 'Procrustes_aligned_SRVF']
 param_item = ['Curvature',
                 'Torsion']
-
 dist_item = ['Procrustes_geodesic_dist',
             'SRVF_Procrustes_geodesic_dist']
-pca_types = ["Coords", "United" ,"Params"]
-titles = []
-total_score = []
-#cores.write(titles)
-for k in range(len(pca_types)):
-    for i in range(len(data_item)):
-        for j in range(len(dist_item)):
-            titles.append(pca_types[k]+","+data_item[i]+","+dist_item[j]+",")
-
 pca_standardization = 1
+
+
+frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
+frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
+
+
+train_data = Procrustes_curves.reshape(len(Procrustes_curves),-1)
+test_data = np.array([frechet_mean_srvf]).reshape(1,-1)
+all_srvf_pca = PCAHandler(train_data, None, 16, pca_standardization)
+all_srvf_pca.PCA_training_and_test()
+all_srvf_pca.plot_scatter_kde(bkup_dir+"all_srvf_pca.png")
+
+
+
+
+
+
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 
@@ -215,8 +190,6 @@ for loop in range(1):
     files = np.copy(Files)
     curvatures = np.copy(Curvatures)
     torsions = np.copy(Torsions)
-    curvatures_changes = np.copy(Curvature_changes)
-    torsions_changes = np.copy(Torsion_changes)
     # 创建一个随机排列的索引
     indices = np.random.permutation(len(files))
     # 使用这个索引来重新排列 srvf_curves 和 files
@@ -226,7 +199,8 @@ for loop in range(1):
     files = np.take(files, indices, axis=0)
     curvatures = np.take(curvatures, indices, axis=0)
     torsions = np.take(torsions, indices, axis=0)
-    save_shuffled_path = mkdir(bkup_dir,"shuffled_srvf_curves")
+    # save_shuffled_path = mkdir(bkup_dir,"shuffled_srvf_curves")
+    save_shuffled_path = np.copy(bkup_dir)
     
     Scores = []
 
@@ -235,7 +209,7 @@ for loop in range(1):
 
     # 将时间格式化为 'yymmddhhmmss' 格式
     formatted_time = now.strftime('%y%m%d%H%M%S')
-    save_new_shuffle = mkdir(save_shuffled_path,formatted_time)
+    save_new_shuffle = mkdir(bkup_dir,formatted_time)
     loop_log = open(save_new_shuffle+"log.md", "w")
 
     np.save(save_new_shuffle + "file_indice.npy",files, allow_pickle=True)
@@ -270,8 +244,6 @@ for loop in range(1):
     'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
     }
     
-
-
 
     loop_log.write("***\n")
     ###############################################

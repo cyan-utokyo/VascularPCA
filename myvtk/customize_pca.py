@@ -86,36 +86,41 @@ def plot_variance(pca, train_res, test_res, savepath):
     plt.savefig(savepath)
     plt.close()
     
-def plot_scatter_loadings(train_res, test_res, dist_dict, save_path):
-    fig, ax = plt.subplots(2, 2, figsize=(14, 10), dpi=300)
+def plot_single_scatter(train_res, test_res, train_dist, test_dist, dist_key, save_path):
+    fig, ax = plt.subplots(figsize=(7, 6), dpi=300)
+
+    sc = ax.scatter(train_res[:, 0], train_res[:, 1],
+                    c=train_dist, cmap="RdGy", alpha=0.99, marker="$T$")
+    ax.scatter(test_res[:, 0], test_res[:, 1],
+               c=test_dist, cmap="RdGy", alpha=0.99, marker="$V$")
+
+    ax.set_title(dist_key, fontsize=14)
+    ax.grid(linestyle=":", alpha=0.4)
+    ax.set_xlabel("PC1")
+    ax.set_ylabel("PC2")
+
+    # 获取子图的位置
+    pos = ax.get_position()
+    # 为每个子图添加colorbar，位于右上角，小型尺寸
+    cbar_ax = fig.add_axes([pos.x1 - 0.05, pos.y1 - 0.7, 0.015, 0.2])
+
+    cbar = fig.colorbar(sc, cax=cbar_ax)
+    cbar.set_label('Geodesic distance', fontsize=8)
+    cbar.ax.yaxis.set_ticks_position('left')
+
+    plt.savefig(save_path)
+    plt.close()
+
+def plot_scatter_loadings(train_res, test_res, dist_dict, save_path_prefix):
     fig_count = 0
     for dist_key, dist_values in dist_dict.items():
         train_dist, test_dist = dist_values  # 取出列表中的两个值
-        sc = ax[fig_count//2,fig_count%2].scatter(train_res[:,0],train_res[:,1],
-                                                c=train_dist,
-                                                cmap="RdGy",
-                                                alpha=0.99,
-                                                marker="$T$")
-        ax[fig_count//2,fig_count%2].scatter(test_res[:,0],test_res[:,1],
-                                            c=test_dist,
-                                            cmap="RdGy",
-                                            alpha=0.99,
-                                            marker="$V$")
-        # 设置子图标题的字体大小
-        ax[fig_count//2,fig_count%2].set_title(dist_key, fontsize=14)
-        ax[fig_count//2,fig_count%2].grid(linestyle=":", alpha=0.4)
-        ax[fig_count//2,fig_count%2].set_xlabel("PC1")
-        ax[fig_count//2,fig_count%2].set_ylabel("PC2")
+        save_path = f"{save_path_prefix}_fig{fig_count}.png"
+        plot_single_scatter(train_res, test_res, train_dist, test_dist, dist_key, save_path)
         fig_count += 1
 
-    fig.subplots_adjust(wspace=0.3, hspace=0.3, right=0.85)  # 修改边距
-    # 在figure的右侧添加一个colorbar
-    cbar_ax = fig.add_axes([0.88, 0.15, 0.03, 0.7])
-    cbar = fig.colorbar(sc, cax=cbar_ax)
-    # 设置colorbar的标签的字体大小
-    cbar.set_label('Geodesic distance', fontsize=14)
-    plt.savefig(save_path)
-    plt.close()
+
+
 
 class PCAHandler:
     def __init__(self, train_data, test_data, n_components=16,standardization=1):
@@ -123,15 +128,20 @@ class PCAHandler:
         self.test_data = test_data
         self.train_mean = np.mean(train_data,axis=0)
         self.train_std = np.std(train_data,axis=0)
-        self.test_mean = np.mean(test_data,axis=0)
-        self.test_std = np.std(test_data, axis=0)
         self.train_res = None
-        self.test_res = None
         self.pca = None
+        
         self.standardization = standardization
         self.n_components = n_components
         self.zero_stds_original = None
         self.train_kde = None
+        if test_data is not None:
+            self.test_mean = np.mean(test_data,axis=0)
+            self.test_std = np.std(test_data, axis=0)
+        else:
+            self.test_mean = None
+            self.test_std = None
+        self.test_res = None
         self.test_kde = None
 
     def compute_kde(self):
@@ -173,13 +183,15 @@ class PCAHandler:
         pca = PCA(n_components=self.n_components)
         if self.standardization ==1:
             self.train_data = zscore(self.train_data)
-            self.test_data = zscore(self.test_data)
             self.train_res = pca.fit_transform(self.train_data)
-            self.test_res = pca.transform(self.test_data)
+            if self.test_data is not None:
+                self.test_data = zscore(self.test_data)
+                self.test_res = pca.transform(self.test_data)
             self.pca = pca
         else:
             self.train_res = pca.fit_transform(self.train_data)
-            self.test_res = pca.transform(self.test_data)
+            if self.test_data is not None:
+                self.test_res = pca.transform(self.test_data)
             self.pca = pca
         
         return self.train_res, self.test_res, self.pca
@@ -190,11 +202,8 @@ class PCAHandler:
         # Create a DataFrame from the PCA results for easier plotting
         df_train = pd.DataFrame(self.train_res[:, :2], columns=["PC1", "PC2"])
         df_train['Type'] = 'Train'
-
         df_test = pd.DataFrame(self.test_res[:, :2], columns=["PC1", "PC2"])
         df_test['Type'] = 'Test'
-
-        # Merge the two dataframes
         df = pd.concat([df_train, df_test])
 
         # Create a joint plot with a hue parameter based on the 'Type' column
@@ -209,3 +218,4 @@ class PCAHandler:
         plt.savefig(savepath, dpi=300)
         plt.close()
     
+

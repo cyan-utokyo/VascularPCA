@@ -20,23 +20,52 @@ import geomstats.geometry.discrete_curves as dc
 from geomstats.geometry.euclidean import EuclideanMetric
 from geomstats.geometry.hypersphere import HypersphereMetric
 from scipy.spatial import distance
+import geomstats.backend as gs
+from geomstats.geometry.euclidean import Euclidean
+from geomstats.geometry.discrete_curves import DiscreteCurves
+from geomstats.learning.frechet_mean import FrechetMean
+import numpy as np
+from scipy.interpolate import interp1d
+
+
+
+
+def compute_frechet_mean(curves):
+    r2 = Euclidean(dim=3)
+    k_sampling_points = 64  # Assuming the sampling points match the size of your curves
+
+    curves_r2 = DiscreteCurves(ambient_manifold=r2, k_sampling_points=k_sampling_points)
+
+    # Compute the Fréchet mean
+    frechet_mean = FrechetMean(metric=curves_r2.metric, max_iter=100)
+    frechet_mean.fit(curves)
+
+    # Return the mean shape
+    return frechet_mean.estimate_
+
+# Example usage:
+# curves = np.load('curves.npy')
+# mean_shape = compute_frechet_mean(curves)
+
+
+
+
+
 # 创建一个新的目录来保存变换后的曲线
 
-def align_procrustes(curves,base_id=0):
-    # 使用第一条曲线作为基准曲线
-    base_curve = curves[base_id]
+def align_procrustes(curves,base_id=0,external_curve=None):
+    if base_id>-1:
+        base_curve = curves[base_id]
+    else:
+        base_curve = external_curve
     new_curves = []
-    
     for i in range(len(curves)):
         curve = curves[i]
-        # print (orthogonal(base_curve, curve, translate=True, scale=True))
         # 对齐当前曲线到基准曲线
         result = orthogonal(base_curve, curve, translate=True, scale=False)
-    
         # Z是Procrustes变换后的曲线，用它来更新原始曲线
         # curves[i] = Z
         new_curves.append(result['new_b'])
-
     return np.array(new_curves)
 
 def arc_length_parametrize(curve):
@@ -56,7 +85,6 @@ def arc_length_parametrize(curve):
     for i in range(3):
         interp = interp1d(arc_lengths, curve[:, i], kind='cubic')
         new_curve[:, i] = interp(new_params)
-
     return new_curve
 
 def calculate_srvf(curve):
