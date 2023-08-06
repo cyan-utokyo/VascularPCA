@@ -63,7 +63,7 @@ log = open(bkup_dir+"log.txt", "w")
 # 创建一个新的目录来保存变换后的曲线
 cmap = matplotlib.cm.get_cmap('RdGy')
 
-shapetype = pd.read_csv("shape_UCVS.csv", header=None)
+shapetype = pd.read_csv("UVCS_class.csv", header=None)
 
 ill=pd.read_csv("./illcases.txt",header=None)
 ill = np.array(ill[0])
@@ -98,6 +98,15 @@ unaligned_curves = np.array(unaligned_curves)
 radii = np.array(radii)
 Curvatures = np.array(Curvatures)
 Torsions = np.array(Torsions)
+
+# 为每个不同的字母分配一个唯一的数字
+mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
+# 使用映射替换原始列表中的每个字母
+numeric_lst = [mapping[letter] for letter in Typevalues]
+# print(numeric_lst)
+
+
+
 
 fig = plt.figure(dpi=300,figsize=(10,6))
 ax1 = fig.add_subplot(221)
@@ -178,19 +187,95 @@ frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 保存数据
 all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, 16, pca_standardization)
 all_srvf_pca.PCA_training_and_test()
+all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
 all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 16, pca_standardization)
 all_pca.PCA_training_and_test()
+all_pca.compute_kde()
 joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
 np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
 np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
 
-plt.scatter(all_srvf_pca.train_result[:,0], all_srvf_pca.train_result[:,1])
-for i in range(len(Typevalues)):
-    plt.annotate(Typevalues[i], (all_srvf_pca.train_result[i,0], all_srvf_pca.train_result[i,1]))
-plt.show()
 
+pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
+
+fig = plt.figure(dpi =300, figsize=(20,10))
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+ax1.scatter(all_srvf_pca.train_res[:,0], all_srvf_pca.train_res[:,1], c=numeric_lst, cmap='viridis')
+for i in range(len(Typevalues)):
+    ax1.annotate(Typevalues[i], (all_srvf_pca.train_res[i,0], all_srvf_pca.train_res[i,1]))
+ax2.scatter(all_pca.train_res[:,0], all_pca.train_res[:,1], c=numeric_lst, cmap='viridis')
+for i in range(len(Typevalues)):
+    ax2.annotate(Typevalues[i], (all_pca.train_res[i,0], all_pca.train_res[i,1]))
+for ax in [ax1, ax2]:
+    ax.set_xlabel("PC1")
+    ax.set_ylabel("PC2")
+plt.savefig(pca_anlysis_dir+"PCA_total.png")
+plt.close()
+
+# 创建一个DataFrame
+df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(16)])
+df['Type'] = Typevalues
+# 创建一个2x4的子图网格
+fig, axes = plt.subplots(4, 2, figsize=(12, 20))
+# 为每个主成分绘制KDE
+for i in range(8):
+    ax = axes[i // 2, i % 2]
+    for label in np.unique(Typevalues):
+        sns.kdeplot(df[df['Type'] == label][f'PC{i+1}'], label=f'Type {label}', ax=ax)
+    # ax.set_title(f'KDE for Principal Component {i+1}')
+    ax.legend()
+plt.tight_layout()
+plt.savefig(pca_anlysis_dir+"srvfPCA_total_KDE.png")
+plt.close()
+
+# 创建一个DataFrame
+df = pd.DataFrame(all_pca.train_res, columns=[f'PC{i+1}' for i in range(16)])
+df['Type'] = Typevalues
+# 创建一个2x4的子图网格
+fig, axes = plt.subplots(4, 2, figsize=(12, 20))
+# 为每个主成分绘制KDE
+for i in range(8):
+    ax = axes[i // 2, i % 2]
+    for label in np.unique(Typevalues):
+        sns.kdeplot(df[df['Type'] == label][f'PC{i+1}'], label=f'Type {label}', ax=ax)
+    # ax.set_title(f'KDE for Principal Component {i+1}')
+    ax.legend()
+plt.tight_layout()
+plt.savefig(pca_anlysis_dir+"PCA_total_KDE.png")
+plt.close()
+
+cmap2 = plt.cm.get_cmap('turbo')
+
+for pc in range(16):
+    fig = plt.figure(dpi =300, figsize=(4,8))
+    ax1 = fig.add_subplot(311)
+    ax2 = fig.add_subplot(312)
+    ax3 = fig.add_subplot(313)
+    ax = [ax1, ax2, ax3]
+    for i in range(len(Procrustes_curves)):
+        for j in range(len(ax)):
+            ax[j].plot(Procrustes_curves[i,:,j], color=cmap2(all_srvf_pca.train_res[i,pc]/all_srvf_pca.train_res[:,pc].max()))
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig(pca_anlysis_dir+"srvfPcaOnCurves_{}.png".format(pc+1))
+    plt.close()
+
+for pc in range(16):
+    fig = plt.figure(dpi =300, figsize=(4,8))
+    ax1 = fig.add_subplot(311)
+    ax2 = fig.add_subplot(312)
+    ax3 = fig.add_subplot(313)
+    ax = [ax1, ax2, ax3]
+    for i in range(len(Procrustes_curves)):
+        for j in range(len(ax)):
+            ax[j].plot(Procrustes_curves[i,:,j], color=cmap2(all_pca.train_res[i,pc]/all_pca.train_res[:,pc].max()))
+    plt.tight_layout()
+    #plt.show()
+    plt.savefig(pca_anlysis_dir+"PcaOnCurves_{}.png".format(pc+1))
+    plt.close()
 
 
 

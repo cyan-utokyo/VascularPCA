@@ -146,9 +146,13 @@ class PCAHandler:
 
     def compute_kde(self):
         train_kde = gaussian_kde(self.train_res.T)
-        test_kde = gaussian_kde(self.test_res.T)
         self.train_kde = train_kde
-        self.test_kde = test_kde
+        if self.test_data is not None:
+            test_kde = gaussian_kde(self.test_res.T)
+            self.test_kde = test_kde
+        # test_kde = gaussian_kde(self.test_res.T)
+        
+        
     
     def compute_train_test_js_divergence(self): 
         # 计算train和test的Jensen-Shannon散度
