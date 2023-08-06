@@ -182,11 +182,11 @@ class PCAHandler:
     def PCA_training_and_test(self):
         pca = PCA(n_components=self.n_components)
         if self.standardization ==1:
-            self.train_data = zscore(self.train_data)
-            self.train_res = pca.fit_transform(self.train_data)
+            # self.train_data = 
+            self.train_res = pca.fit_transform(zscore(self.train_data))
             if self.test_data is not None:
-                self.test_data = zscore(self.test_data)
-                self.test_res = pca.transform(self.test_data)
+                # self.test_data = zscore(self.test_data)
+                self.test_res = pca.transform(zscore(self.test_data))
             self.pca = pca
         else:
             self.train_res = pca.fit_transform(self.train_data)

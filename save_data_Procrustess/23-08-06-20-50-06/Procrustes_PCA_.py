@@ -63,7 +63,7 @@ log = open(bkup_dir+"log.txt", "w")
 # 创建一个新的目录来保存变换后的曲线
 cmap = matplotlib.cm.get_cmap('RdGy')
 
-shapetype = pd.read_csv("UVCS_class.csv", header=None)
+shapetype = pd.read_csv("shape_UCVS.csv", header=None)
 
 ill=pd.read_csv("./illcases.txt",header=None)
 ill = np.array(ill[0])
@@ -207,6 +207,8 @@ for i in range(len(Typevalues)):
 plt.show()
 
 # 输出各类的KDE
+
+
 
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)

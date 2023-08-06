@@ -208,6 +208,8 @@ plt.show()
 
 # 输出各类的KDE
 
+
+
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
 

@@ -63,7 +63,7 @@ log = open(bkup_dir+"log.txt", "w")
 # 创建一个新的目录来保存变换后的曲线
 cmap = matplotlib.cm.get_cmap('RdGy')
 
-shapetype = pd.read_csv("UVCS_class.csv", header=None)
+shapetype = pd.read_csv("shape_UCVS.csv", header=None)
 
 ill=pd.read_csv("./illcases.txt",header=None)
 ill = np.array(ill[0])
@@ -195,18 +195,13 @@ joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
 np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
 np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
 
-fig = plt.figure(dpi =300, figsize=(20,10))
-ax1 = fig.add_subplot(121)
-ax2 = fig.add_subplot(122)
-ax1.scatter(all_srvf_pca.train_res[:,0], all_srvf_pca.train_res[:,1], c=numeric_lst, cmap='viridis')
+plt.scatter(all_srvf_pca.train_res[:,0], all_srvf_pca.train_res[:,1], c=numeric_lst, cmap='viridis')
 for i in range(len(Typevalues)):
-    ax1.annotate(Typevalues[i], (all_srvf_pca.train_res[i,0], all_srvf_pca.train_res[i,1]))
-ax2.scatter(all_pca.train_res[:,0], all_pca.train_res[:,1], c=numeric_lst, cmap='viridis')
-for i in range(len(Typevalues)):
-    ax2.annotate(Typevalues[i], (all_pca.train_res[i,0], all_pca.train_res[i,1]))
+    plt.annotate(Typevalues[i], (all_srvf_pca.train_res[i,0], all_srvf_pca.train_res[i,1]))
 plt.show()
 
-# 输出各类的KDE
+
+
 
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
