@@ -2,9 +2,9 @@
 *
 
 # But not these files
-!.gitignore
-!*.py
-!*.ipynb
+# !.gitignore
+# !*.py
+# !*.ipynb
 
 # Include folder structure
-!*/
+# !*/
