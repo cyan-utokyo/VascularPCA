@@ -20,7 +20,6 @@ from scipy.spatial import distance
 from myvtk.centerline_preprocessing import *
 from scipy import interpolate
 import matplotlib
-from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean, chebyshev, cityblock, cosine, correlation, sqeuclidean
 
 def compute_dtw(srvf_curves, curves, Q2):

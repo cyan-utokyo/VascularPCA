@@ -21,7 +21,7 @@ from myvtk.centerline_preprocessing import *
 from scipy import interpolate
 import matplotlib
 import matplotlib.cm as cm
-from fastdtw import fastdtw
+# from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from myvtk.dynamic_time_warp import *
 from myvtk.customize_pca import *

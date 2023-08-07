@@ -21,7 +21,6 @@ from myvtk.centerline_preprocessing import *
 from scipy import interpolate
 import matplotlib
 import matplotlib.cm as cm
-from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from myvtk.customize_pca import *
 from myvtk.make_fig import *
@@ -63,12 +62,13 @@ log = open(bkup_dir+"log.txt", "w")
 # 创建一个新的目录来保存变换后的曲线
 cmap = matplotlib.cm.get_cmap('RdGy')
 
-shapetype = pd.read_csv("UVCS_class.csv", header=None)
+shapetype = pd.read_csv("./UVCS_class.csv", header=None)
 
 ill=pd.read_csv("./illcases.txt",header=None)
 ill = np.array(ill[0])
 # print (ill)
 pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
+# print (pre_files)
 unaligned_curves = []
 Files = []
 radii = []
@@ -76,7 +76,9 @@ Curvatures = []
 Torsions = []
 Typevalues = [] 
 for idx in range(len(pre_files)):
-    filename = pre_files[idx].split("\\")[-1].split(".")[0][:-8]
+    # filename = pre_files[idx].split("\\")[-1].split(".")[0][:-8]
+    filename = os.path.splitext(os.path.basename(pre_files[idx]))[0][:-8]
+    print (filename)
     if filename in ill:
         print (filename, "is found in illcases.txt, skip")
         continue
@@ -152,6 +154,8 @@ parametrized_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
 Procrustes_curves = np.array(Procrustes_curves)
+
+print (Procrustes_curves.shape)
 
 # if SCALETO1:
 #     # 需要把长度还原到原始曲线或1

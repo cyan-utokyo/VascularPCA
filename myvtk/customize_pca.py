@@ -20,7 +20,7 @@ from scipy.spatial import distance
 from myvtk.centerline_preprocessing import *
 from scipy import interpolate
 import matplotlib
-from fastdtw import fastdtw
+# from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from myvtk.dynamic_time_warp import *
 from myvtk.General import *

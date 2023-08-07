@@ -48,11 +48,6 @@ def compute_frechet_mean(curves):
 # mean_shape = compute_frechet_mean(curves)
 
 
-
-
-
-# 创建一个新的目录来保存变换后的曲线
-
 def align_procrustes(curves,base_id=0,external_curve=None):
     if base_id>-1:
         base_curve = curves[base_id]
@@ -162,6 +157,7 @@ def compute_geodesic_dist(curves, external=False, external_curve=None):
         # 创建离散曲线对象
         discrete_curves_space = dc.DiscreteCurves(ambient_manifold=dc.Euclidean(dim=3))
         # 计算测地线距离
+        print (curve_A.shape, curve_B.shape)
         geodesic_distance = discrete_curves_space.metric.dist(curve_A, curve_B)
         geodesic_d.append(geodesic_distance)
     return np.array(geodesic_d)
