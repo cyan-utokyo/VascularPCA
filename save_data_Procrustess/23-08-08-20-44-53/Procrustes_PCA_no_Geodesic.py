@@ -40,10 +40,8 @@ import copy
 import joblib
 from myvtk.geometry import *
 from matplotlib.patches import Patch
-from matplotlib.colors import BoundaryNorm
-from matplotlib.colors import ListedColormap
-from minisom import MiniSom
-from sklearn.neighbors import KernelDensity
+
+
 
 SCALETO1 = False
 log = open("./log.txt", "w")
@@ -58,6 +56,21 @@ bkup_dir = mkdir(bkup_dir, dir_formatted_time)
 current_file_path = os.path.abspath(__file__)
 current_file_name = os.path.basename(__file__)
 backup_file_path = os.path.join(bkup_dir, current_file_name)
+shutil.copy2(current_file_path, backup_file_path)
+
+print ("backup dir: ", bkup_dir)
+# shutil.copyfile(source_file, destination_file)
+log = open(bkup_dir+"log.txt", "w")
+# 创建一个新的目录来保存变换后的曲线
+cmap = matplotlib.cm.get_cmap('RdGy')
+
+shapetype = pd.read_csv("./UVCS_class.csv", header=None)
+
+ill=pd.read_csv("./illcases.txt",header=None)
+ill = np.array(ill[0])
+# print (ill)
+pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
+# print (pre_files)
 unaligned_curves = []
 Files = []
 radii = []
@@ -68,10 +81,6 @@ Typevalues = []
 window_size = 4
 # calculate moving averages using numpy convolve
 weights = np.repeat(1.0, window_size)/window_size
-pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
-shapetype = pd.read_csv("./UVCS_class.csv", header=None)
-ill=pd.read_csv("./illcases.txt",header=None)
-ill = np.array(ill[0])
 for idx in range(len(pre_files)):
     # filename = pre_files[idx].split("\\")[-1].split(".")[0][:-8]
     filename = os.path.splitext(os.path.basename(pre_files[idx]))[0][:-8]
@@ -93,7 +102,6 @@ for idx in range(len(pre_files)):
     Torsions.append(sma_tors)
 unaligned_curves = np.array(unaligned_curves)
 geometry_dir = mkdir(bkup_dir, "geometry")
-Typevalues = np.array(Typevalues)
 ######################################
 #  这一段用来检验曲率和扭率的计算是否正确
 # 曲率的计算是在compute_curvature_and_torsion函数中进行的
@@ -253,96 +261,33 @@ all_pca.compute_kde()
 joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
 np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
 np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
-np.save(bkup_dir+"not_std_filenames.npy",Files)
 
 pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
-# Define a helper function to fit KernelDensity
-def fit_kde(data):
-    kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
-    kde.fit(data)
-    return kde
-# Extracting data based on type
-C_srvf_data = all_srvf_pca.train_res[Typevalues == 'C']
-U_srvf_data = all_srvf_pca.train_res[Typevalues == 'U']
-S_srvf_data = all_srvf_pca.train_res[Typevalues == 'S']
-V_srvf_data = all_srvf_pca.train_res[Typevalues == 'V']
-# Compute KDEs using sklearn's KernelDensity
-C_srvf_kde = fit_kde(C_srvf_data)
-U_srvf_kde = fit_kde(U_srvf_data)
-S_srvf_kde = fit_kde(S_srvf_data)
-V_srvf_kde = fit_kde(V_srvf_data)
-U_synthetic = U_srvf_kde.sample(1000)
-V_synthetic = V_srvf_kde.sample(1000)
-C_synthetic = C_srvf_kde.sample(1000)
-plt.scatter(all_srvf_pca.train_res[:,2], all_srvf_pca.train_res[:,3], c='k', s=50, marker="x")
-plt.scatter(U_synthetic[:,2], U_synthetic[:,3], c='w', s=30, edgecolor='r',alpha=0.4)
-plt.scatter(V_synthetic[:,2], V_synthetic[:,3], c='w', s=30, edgecolor='b',alpha=0.4)
-plt.scatter(C_synthetic[:,2], C_synthetic[:,3], c='w', s=30, edgecolor='g',alpha=0.4)
-plt.xlabel('PC3')
-plt.ylabel('PC4')
-plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic.png")
-plt.close()
-# Computing the KDE matrix
-# score = np.exp(s_kde.score_samples(data[0].reshape(1, -1)))
-# Extracting and computing KDEs for all_pca data
-C_data = all_pca.train_res[Typevalues == 'C']
-U_data = all_pca.train_res[Typevalues == 'U']
-S_data = all_pca.train_res[Typevalues == 'S']
-V_data = all_pca.train_res[Typevalues == 'V']
-C_kde = fit_kde(C_data)
-U_kde = fit_kde(U_data)
-S_kde = fit_kde(S_data)
-V_kde = fit_kde(V_data)
-U_synthetic = U_kde.sample(1000)
-V_synthetic = V_kde.sample(1000)
-C_synthetic = C_kde.sample(1000)
-plt.scatter(all_pca.train_res[:,1], all_pca.train_res[:,2], c='k', s=50, marker="x")
-plt.scatter(U_synthetic[:,1], U_synthetic[:,2], c='w', s=30, edgecolor='r',alpha=0.4)
-plt.scatter(V_synthetic[:,1], V_synthetic[:,2], c='w', s=30, edgecolor='b',alpha=0.4)
-plt.scatter(C_synthetic[:,1], C_synthetic[:,2], c='w', s=30, edgecolor='g',alpha=0.4)
-plt.xlabel('PC2')
-plt.ylabel('PC3')
-plt.savefig(pca_anlysis_dir + "pca_synthetic.png")
-plt.close()
 
-# 为每个不同的字母分配一个唯一的数字
-mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
-# 使用映射替换原始列表中的每个字母
-numeric_lst = [mapping[letter] for letter in Typevalues]
-# 定义你的颜色映射
-default_palette = sns.color_palette()
-cmap = ListedColormap(default_palette)
+
 fig = plt.figure(dpi=300, figsize=(20, 5))
 ax1 = fig.add_subplot(121)
 ax2 = fig.add_subplot(122)
-# 定义颜色规范
-boundaries = [-0.5, 0.5, 1.5, 2.5, 3.5] # 根据你的数据调整
-norm = BoundaryNorm(boundaries, cmap.N, clip=True)
 # 创建散点图
-sc1 = ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c=numeric_lst, cmap=cmap, norm=norm)
-sc2 = ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c=numeric_lst, cmap=cmap, norm=norm)
+sc1 = ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c=numeric_lst, cmap='turbo')
+sc2 = ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c=numeric_lst, cmap='turbo')
 # 添加注释
 for i in range(len(Typevalues)):
     filename = Files[i].split("/")[-1][:-12]
     ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
     ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
-
-# 获取Typevalues中的唯一值并进行排序
-unique_values = sorted(list(set(Typevalues)))
 # 创建一个颜色和标签的列表
-colors = [cmap(norm(mapping[val])) for val in unique_values]
-labels = unique_values
+colors = plt.cm.turbo([0, 0.125, 0.375, 0.625]) # 'turbo' 的4个等距颜色
+labels = ['0', '1', '2', '3']
 # 创建patch对象
-patches = [Patch(color=colors[i], label=labels[i]) for i in range(len(unique_values))]
+patches = [Patch(color=colors[i], label=labels[i]) for i in range(4)]
 # 在每个子图上添加图例
 for ax in [ax1, ax2]:
-    ax.grid(linestyle=':', linewidth=0.5)
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
     ax.legend(handles=patches)
 plt.savefig(pca_anlysis_dir+"PCA_total.png")
 plt.close()
-
 
 ####################为SRVF PCA绘制violinplot####################
 # 创建一个DataFrame
@@ -451,9 +396,6 @@ for pc in range(1, 17):  # PC1 to PC16
     plt.grid(True)
     plt.savefig(pca_anlysis_dir+f'QQ_plot_for_PC{pc}.png')
     plt.close()
-
-
-
 
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
