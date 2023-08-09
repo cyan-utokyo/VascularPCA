@@ -2,9 +2,19 @@
 *
 
 # But not these files
-# !.gitignore
-# !*.py
-# !*.ipynb
+!.gitignore
+!*.py
+!*.ipynb
 
 # Include folder structure
-# !*/
+!*/
+
+# Rule for save_data_Procrustess
+/save_data_Procrustess/*.vtk
+!/save_data_Procrustess/*
+
+# Rule for scaling/resamp_attr_ascii/vmtk64a
+!/scaling/resamp_attr_ascii/vmtk64a/*.vtk
+
+# Rule for bkup
+!/bkup/**
