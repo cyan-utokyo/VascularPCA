@@ -271,9 +271,10 @@ C_srvf_kde = fit_kde(C_srvf_data)
 U_srvf_kde = fit_kde(U_srvf_data)
 S_srvf_kde = fit_kde(S_srvf_data)
 V_srvf_kde = fit_kde(V_srvf_data)
-U_synthetic = U_srvf_kde.sample(1000)
-V_synthetic = V_srvf_kde.sample(1000)
-C_synthetic = C_srvf_kde.sample(1000)
+sample_num = 5
+U_synthetic = U_srvf_kde.sample(sample_num)
+V_synthetic = V_srvf_kde.sample(sample_num)
+C_synthetic = C_srvf_kde.sample(sample_num)
 plt.scatter(all_srvf_pca.train_res[:,2], all_srvf_pca.train_res[:,3], c='k', s=50, marker="x")
 plt.scatter(U_synthetic[:,2], U_synthetic[:,3], c='w', s=30, edgecolor='r',alpha=0.4)
 plt.scatter(V_synthetic[:,2], V_synthetic[:,3], c='w', s=30, edgecolor='b',alpha=0.4)
@@ -282,6 +283,14 @@ plt.xlabel('PC3')
 plt.ylabel('PC4')
 plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic.png")
 plt.close()
+U_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
+U_recovered = recovered_curves(U_synthetic_inverse, True)
+for i in range(len(U_recovered)):
+    U_c, U_t = compute_curvature_and_torsion(U_recovered[i])
+    plt.plot(U_c, label="Curvature")
+    plt.plot(U_t, label="Torsion")
+plt.show()
+
 # Computing the KDE matrix
 # score = np.exp(s_kde.score_samples(data[0].reshape(1, -1)))
 # Extracting and computing KDEs for all_pca data
@@ -293,9 +302,9 @@ C_kde = fit_kde(C_data)
 U_kde = fit_kde(U_data)
 S_kde = fit_kde(S_data)
 V_kde = fit_kde(V_data)
-U_synthetic = U_kde.sample(1000)
-V_synthetic = V_kde.sample(1000)
-C_synthetic = C_kde.sample(1000)
+U_synthetic = U_kde.sample(5)
+V_synthetic = V_kde.sample(5)
+C_synthetic = C_kde.sample(5)
 plt.scatter(all_pca.train_res[:,1], all_pca.train_res[:,2], c='k', s=50, marker="x")
 plt.scatter(U_synthetic[:,1], U_synthetic[:,2], c='w', s=30, edgecolor='r',alpha=0.4)
 plt.scatter(V_synthetic[:,1], V_synthetic[:,2], c='w', s=30, edgecolor='b',alpha=0.4)
@@ -393,16 +402,16 @@ for pc in range(1, 17):  # PC1 to PC16
     plt.savefig(pca_anlysis_dir+f'QQ_plot_for_srvf_PC{pc}.png')
     plt.close()
 
-synthetics_from_kde = all_srvf_pca.train_kde.resample(5)
-synthetics = all_srvf_pca.pca.inverse_transform(synthetics_from_kde.T)*all_srvf_pca.train_std+all_srvf_pca.train_mean
-synthetics = synthetics.reshape(5,64,3)
-synthetic_curve = inverse_srvf(synthetics, np.zeros(3))
-plt.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], color="k")
-plt.scatter(synthetics_from_kde[:, 0], synthetics_from_kde[:, 1], color="r")
-for i in range(len(synthetic_curve)):
-    makeVtkFile(bkup_dir+"synthetic_curve{}.vtk".format(i), synthetic_curve[i], [],[])
-    plt.annotate("synthetic_curve{}".format(i), (synthetics_from_kde[i, 0], synthetics_from_kde[i, 1]))
-plt.savefig(pca_anlysis_dir+"synthetic_curve.png")
+# synthetics_from_kde = all_srvf_pca.train_kde.resample(5)
+# synthetics = all_srvf_pca.pca.inverse_transform(synthetics_from_kde.T)*all_srvf_pca.train_std+all_srvf_pca.train_mean
+# synthetics = synthetics.reshape(5,64,3)
+# synthetic_curve = inverse_srvf(synthetics, np.zeros(3))
+# plt.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], color="k")
+# plt.scatter(synthetics_from_kde[:, 0], synthetics_from_kde[:, 1], color="r")
+# for i in range(len(synthetic_curve)):
+#     makeVtkFile(bkup_dir+"synthetic_curve{}.vtk".format(i), synthetic_curve[i], [],[])
+#     plt.annotate("synthetic_curve{}".format(i), (synthetics_from_kde[i, 0], synthetics_from_kde[i, 1]))
+# plt.savefig(pca_anlysis_dir+"synthetic_curve.png")
 
 ####################为坐标PCA绘制violinplot####################
 # 创建一个DataFrame
