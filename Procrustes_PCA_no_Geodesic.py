@@ -45,6 +45,8 @@ from matplotlib.colors import ListedColormap
 from minisom import MiniSom
 from sklearn.neighbors import KernelDensity
 
+
+PCA_N_COMPONENTS = 8
 SCALETO1 = False
 log = open("./log.txt", "w")
 # 获取当前时间
@@ -242,12 +244,12 @@ pca_standardization = 1
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 保存数据
-all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, 16, pca_standardization)
+all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, 8, pca_standardization)
 all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 16, pca_standardization)
+all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 8, pca_standardization)
 all_pca.PCA_training_and_test()
 all_pca.compute_kde()
 joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
@@ -355,12 +357,12 @@ plt.close()
 
 ####################为SRVF PCA绘制violinplot####################
 # 创建一个DataFrame
-df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(16)])
+df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = Typevalues
 # 创建一个4x4的子图网格
 fig, axes = plt.subplots(4, 4, figsize=(20, 20))
 # 为每个主成分绘制violinplot
-for i in range(16):
+for i in range(PCA_N_COMPONENTS):
     ax = axes[i // 4, i % 4]
     sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile')  # inner='quartile' 在violin内部显示四分位数
     ax.set_title(f'Violinplot for Principal Component {i+1}')
@@ -377,7 +379,7 @@ markers = ['o', 's', '^', 'D', '*', 'P', 'X', 'v', '<', '>']  # ... you can exte
 assert len(unique_types) <= len(markers), "Not enough markers defined!"
 colors = sns.color_palette(n_colors=len(unique_types))
 # 对于每个PC，进行QQ图分析
-for pc in range(1, 17):  # PC1 to PC16
+for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
     q = np.linspace(0, 1, 101)[1:-1]  # 从1%到99%
     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
     plt.figure(figsize=(8, 8))
@@ -415,12 +417,12 @@ for pc in range(1, 17):  # PC1 to PC16
 
 ####################为坐标PCA绘制violinplot####################
 # 创建一个DataFrame
-df = pd.DataFrame(all_pca.train_res, columns=[f'PC{i+1}' for i in range(16)])
+df = pd.DataFrame(all_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = Typevalues
 # 创建一个4x4的子图网格
 fig, axes = plt.subplots(4, 4, figsize=(20, 20))
 # 为每个主成分绘制violinplot
-for i in range(16):
+for i in range(PCA_N_COMPONENTS):
     ax = axes[i // 4, i % 4]
     sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile')  # inner='quartile' 在violin内部显示四分位数
     ax.set_title(f'Violinplot for Principal Component {i+1}')
@@ -436,7 +438,7 @@ markers = ['o', 's', '^', 'D', '*', 'P', 'X', 'v', '<', '>']  # ... you can exte
 assert len(unique_types) <= len(markers), "Not enough markers defined!"
 colors = sns.color_palette(n_colors=len(unique_types))
 # 对于每个PC，进行QQ图分析
-for pc in range(1, 17):  # PC1 to PC16
+for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
     q = np.linspace(0, 1, 101)[1:-1]  # 从1%到99%
     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
     plt.figure(figsize=(8, 8))
