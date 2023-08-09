@@ -337,6 +337,18 @@ for pc in range(1, 17):  # PC1 to PC16
     plt.grid(True)
     plt.savefig(pca_anlysis_dir+f'QQ_plot_for_srvf_PC{pc}.png')
     plt.close()
+
+synthetics_from_kde = all_srvf_pca.train_kde.resample(5)
+synthetics = all_srvf_pca.pca.inverse_transform(synthetics_from_kde.T)*all_srvf_pca.train_std+all_srvf_pca.train_mean
+synthetics = synthetics.reshape(5,64,3)
+synthetic_curve = inverse_srvf(synthetics, np.zeros(3))
+plt.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], color="k")
+plt.scatter(synthetics_from_kde[:, 0], synthetics_from_kde[:, 1], color="r")
+for i in range(len(synthetic_curve)):
+    makeVtkFile(bkup_dir+"synthetic_curve{}.vtk".format(i), synthetic_curve[i], [],[])
+    plt.annotate("synthetic_curve{}".format(i), (synthetics_from_kde[i, 0], synthetics_from_kde[i, 1]))
+plt.savefig(pca_anlysis_dir+"synthetic_curve.png")
+
 ####################为坐标PCA绘制violinplot####################
 # 创建一个DataFrame
 df = pd.DataFrame(all_pca.train_res, columns=[f'PC{i+1}' for i in range(16)])
