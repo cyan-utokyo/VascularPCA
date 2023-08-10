@@ -44,7 +44,7 @@ from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import ListedColormap
 from minisom import MiniSom
 from sklearn.neighbors import KernelDensity
-
+from myvtk.synthetic import *
 
 PCA_N_COMPONENTS = 8
 SCALETO1 = False
@@ -133,8 +133,8 @@ fig = plt.figure(dpi=300, figsize=(10, 4))
 def setup_axes(position):
     ax = fig.add_subplot(position)
     ax2 = ax.twinx()
-    ax.set_ylim(0, 1)
-    ax2.set_ylim(-1, 1)
+    ax.set_ylim(0, 1.2)
+    ax2.set_ylim(-1.2, 1.2)
     ax.grid(linestyle=":", alpha=0.5)
     ax.tick_params(axis='y', colors='red', labelsize=8)  # 设置y轴的颜色和字体大小
     ax2.tick_params(labelsize=8)  # 设置另一个y轴的字体大小
@@ -273,25 +273,41 @@ C_srvf_kde = fit_kde(C_srvf_data)
 U_srvf_kde = fit_kde(U_srvf_data)
 S_srvf_kde = fit_kde(S_srvf_data)
 V_srvf_kde = fit_kde(V_srvf_data)
-sample_num = 5
+sample_num = 1000
 U_synthetic = U_srvf_kde.sample(sample_num)
 V_synthetic = V_srvf_kde.sample(sample_num)
 C_synthetic = C_srvf_kde.sample(sample_num)
-plt.scatter(all_srvf_pca.train_res[:,2], all_srvf_pca.train_res[:,3], c='k', s=50, marker="x")
-plt.scatter(U_synthetic[:,2], U_synthetic[:,3], c='w', s=30, edgecolor='r',alpha=0.4)
-plt.scatter(V_synthetic[:,2], V_synthetic[:,3], c='w', s=30, edgecolor='b',alpha=0.4)
-plt.scatter(C_synthetic[:,2], C_synthetic[:,3], c='w', s=30, edgecolor='g',alpha=0.4)
-plt.xlabel('PC3')
-plt.ylabel('PC4')
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.scatter(all_srvf_pca.train_res[:,2], all_srvf_pca.train_res[:,3], c='k', s=50, marker="x")
+ax.scatter(U_synthetic[:,2], U_synthetic[:,3], c='w', s=30, edgecolor='r',alpha=0.4)
+ax.scatter(V_synthetic[:,2], V_synthetic[:,3], c='w', s=30, edgecolor='b',alpha=0.4)
+ax.scatter(C_synthetic[:,2], C_synthetic[:,3], c='w', s=30, edgecolor='g',alpha=0.4)
+ax.set_xlabel('PC3')
+ax.set_ylabel('PC4')
 plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic.png")
 plt.close()
+##############################
+# 绘制合成曲线的curvature和torsion
 U_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
 U_recovered = recovered_curves(U_synthetic_inverse, True)
-for i in range(len(U_recovered)):
-    U_c, U_t = compute_curvature_and_torsion(U_recovered[i])
-    plt.plot(U_c, label="Curvature")
-    plt.plot(U_t, label="Torsion")
-plt.show()
+V_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(V_synthetic).reshape(sample_num, -1, 3)
+V_recovered = recovered_curves(V_synthetic_inverse, True)
+C_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(C_synthetic).reshape(sample_num, -1, 3)
+C_recovered = recovered_curves(C_synthetic_inverse, True)
+# 使用函数绘制U, V, C等数据
+if sample_num < 6:
+    plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
+    plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
+    plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+else:
+    plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
+    plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
+    plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+
+
+# 绘制合成曲线的curvature和torsion
+##############################
 
 # Computing the KDE matrix
 # score = np.exp(s_kde.score_samples(data[0].reshape(1, -1)))
@@ -315,6 +331,12 @@ plt.xlabel('PC2')
 plt.ylabel('PC3')
 plt.savefig(pca_anlysis_dir + "pca_synthetic.png")
 plt.close()
+
+# To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
+# train_data = train_data x W
+# W可以被优化，使得生成曲线的curvature和torsion与原始曲线的curvature和torsion相似
+PCA_weight = np.mean(Curvatures, axis=0)
+
 
 # 为每个不同的字母分配一个唯一的数字
 mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
