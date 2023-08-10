@@ -45,6 +45,8 @@ from matplotlib.colors import ListedColormap
 from minisom import MiniSom
 from sklearn.neighbors import KernelDensity
 from myvtk.synthetic import *
+import statsmodels.api as sm
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
 PCA_N_COMPONENTS = 8
 SCALETO1 = False
@@ -188,6 +190,39 @@ ax4.set_title("V")
 plt.tight_layout()
 plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
 plt.close()
+############
+# 绘制group内的曲率和扭率对比全体的偏离程度的散点图
+fig = plt.figure(dpi=300, figsize=(9,4))
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(U_curvatures,axis=0), color="r",marker="o", alpha=0.5, label='U')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(V_curvatures,axis=0), color="g",marker="s", alpha=0.5, label='V')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(C_curvatures,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(U_torsions,axis=0), color="r",marker="o", alpha=0.5, label='U')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(V_torsions,axis=0), color="g",marker="s", alpha=0.5, label='V')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(C_torsions,axis=0), color="b",marker="^", alpha=0.5, label='C')
+# 获取ax1的x轴和y轴范围
+x1_min, x1_max = ax1.get_xlim()
+y1_min, y1_max = ax1.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_1 = max(x1_min, y1_min)
+diag_max_1 = min(x1_max, y1_max)
+ax1.plot([diag_min_1, diag_max_1], [diag_min_1, diag_max_1], linestyle=":", color="k")
+# 获取ax2的x轴和y轴范围
+x2_min, x2_max = ax2.get_xlim()
+y2_min, y2_max = ax2.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_2 = max(x2_min, y2_min)
+diag_max_2 = min(x2_max, y2_max)
+ax2.plot([diag_min_2, diag_max_2], [diag_min_2, diag_max_2], linestyle=":", color="k")
+ax1.legend(loc='best') # 添加图例到子图ax1
+ax2.legend(loc='best') # 添加图例到子图ax2
+for ax in [ax1, ax2]:
+    ax.grid(linestyle=":", alpha=0.5)
+plt.savefig(geometry_dir + "/group_param_compare.png")
+plt.close()
+#############
+
 ########################################
 
 print ("全データ（{}）を読み込みました。".format(len(pre_files)))
@@ -285,7 +320,7 @@ ax.scatter(V_synthetic[:,2], V_synthetic[:,3], c='w', s=30, edgecolor='b',alpha=
 ax.scatter(C_synthetic[:,2], C_synthetic[:,3], c='w', s=30, edgecolor='g',alpha=0.4)
 ax.set_xlabel('PC3')
 ax.set_ylabel('PC4')
-plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic.png")
+plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic_scatter.png")
 plt.close()
 ##############################
 # 绘制合成曲线的curvature和torsion
@@ -297,15 +332,13 @@ C_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(C_synthetic).
 C_recovered = recovered_curves(C_synthetic_inverse, True)
 # 使用函数绘制U, V, C等数据
 if sample_num < 6:
-    plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
-    plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
-    plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+    plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
+    plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
+    plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
 else:
-    plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
-    plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
-    plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
-
-
+    plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
+    plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
+    plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
 # 绘制合成曲线的curvature和torsion
 ##############################
 
@@ -320,18 +353,39 @@ C_kde = fit_kde(C_data)
 U_kde = fit_kde(U_data)
 S_kde = fit_kde(S_data)
 V_kde = fit_kde(V_data)
-U_synthetic = U_kde.sample(5)
-V_synthetic = V_kde.sample(5)
-C_synthetic = C_kde.sample(5)
-plt.scatter(all_pca.train_res[:,1], all_pca.train_res[:,2], c='k', s=50, marker="x")
-plt.scatter(U_synthetic[:,1], U_synthetic[:,2], c='w', s=30, edgecolor='r',alpha=0.4)
-plt.scatter(V_synthetic[:,1], V_synthetic[:,2], c='w', s=30, edgecolor='b',alpha=0.4)
-plt.scatter(C_synthetic[:,1], C_synthetic[:,2], c='w', s=30, edgecolor='g',alpha=0.4)
-plt.xlabel('PC2')
-plt.ylabel('PC3')
-plt.savefig(pca_anlysis_dir + "pca_synthetic.png")
+sample_num = 1000
+U_synthetic = U_srvf_kde.sample(sample_num)
+V_synthetic = V_srvf_kde.sample(sample_num)
+C_synthetic = C_srvf_kde.sample(sample_num)
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.scatter(all_pca.train_res[:,2], all_pca.train_res[:,3], c='k', s=50, marker="x")
+ax.scatter(U_synthetic[:,1], U_synthetic[:,2], c='w', s=30, edgecolor='r',alpha=0.4)
+ax.scatter(V_synthetic[:,1], V_synthetic[:,2], c='w', s=30, edgecolor='b',alpha=0.4)
+ax.scatter(C_synthetic[:,1], C_synthetic[:,2], c='w', s=30, edgecolor='g',alpha=0.4)
+ax.set_xlabel('PC2')
+ax.set_ylabel('PC3')
+plt.savefig(pca_anlysis_dir + "pca_synthetic_scatter.png")
 plt.close()
-
+##############################
+# 绘制合成曲线的curvature和torsion
+U_synthetic_inverse = all_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
+U_recovered = recovered_curves(U_synthetic_inverse, False)
+V_synthetic_inverse = all_pca.inverse_transform_from_loadings(V_synthetic).reshape(sample_num, -1, 3)
+V_recovered = recovered_curves(V_synthetic_inverse, False)
+C_synthetic_inverse = all_pca.inverse_transform_from_loadings(C_synthetic).reshape(sample_num, -1, 3)
+C_recovered = recovered_curves(C_synthetic_inverse, False)
+# 使用函数绘制U, V, C等数据
+if sample_num < 6:
+    plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
+    plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
+    plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+else:
+    plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
+    plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
+    plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+# 绘制合成曲线的curvature和torsion
+##############################
 # To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
 # train_data = train_data x W
 # W可以被优化，使得生成曲线的curvature和torsion与原始曲线的curvature和torsion相似
