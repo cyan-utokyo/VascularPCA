@@ -1,4 +1,31 @@
+import numpy as np
 import vtk
+
+def numpy_to_vtk_polydata(numpy_array):
+    # 这个函数暂时没法用
+    assert numpy_array.shape[1] == 3, "Expected Nx3 numpy array"
+
+    # 创建点
+    points = vtk.vtkPoints()
+    for point in numpy_array:
+        points.InsertNextPoint(point)
+
+    # 创建polyline
+    polyline = vtk.vtkPolyLine()
+    polyline.GetPointIds().SetNumberOfIds(numpy_array.shape[0])
+    for i in range(numpy_array.shape[0]):
+        polyline.GetPointIds().SetId(i, i)
+
+    # 创建cells
+    cells = vtk.vtkCellArray()
+    cells.InsertNextCell(polyline)
+
+    # 创建polydata
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+    polydata.SetLines(cells)
+
+    return polydata
 
 def load_vtk_file(filename, renderer):
     # 读取vtk文件
