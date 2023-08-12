@@ -64,18 +64,19 @@ def plot_variance(pca, train_res, test_res, savepath):
     box_data = []
     labels = []
     colors = []
-    for i in range(5):
+    for i in range(len(train_res[0])):
         box_data.append(train_res[:, i])  # train data of ith PC
-        labels.append('TPC{}'.format(i+1))
+        labels.append('PC{}'.format(i+1))
         colors.append(cmap(0.25))
-        box_data.append(test_res[:, i])  # test data of ith PC
-        labels.append('VPC{}'.format(i+1))
-        colors.append(cmap(0.75))
+        if test_res is not None:
+            box_data.append(test_res[:, i])  # test data of ith PC
+            labels.append('VPC{}'.format(i+1))
+            colors.append(cmap(0.75))
         # Add a space between different PCs
-        if i != 4:  # Don't add a space after the last PC
-            box_data.append([])
-            labels.append('')
-            colors.append('none')  # 'none' means transparent
+        # if i != 4:  # Don't add a space after the last PC
+        #     box_data.append([])
+        #     labels.append('')
+        #     colors.append('none')  # 'none' means transparent
     bp = ax2.boxplot(box_data, patch_artist=True, labels=labels)
     for patch, color in zip(bp['boxes'], colors):
         patch.set_facecolor(color)

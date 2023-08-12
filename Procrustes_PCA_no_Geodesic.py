@@ -48,7 +48,7 @@ from myvtk.synthetic import *
 import statsmodels.api as sm
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 
-PCA_N_COMPONENTS = 8
+PCA_N_COMPONENTS = 16
 SCALETO1 = False
 log = open("./log.txt", "w")
 # 获取当前时间
@@ -79,7 +79,7 @@ ill = np.array(ill[0])
 for idx in range(len(pre_files)):
     # filename = pre_files[idx].split("\\")[-1].split(".")[0][:-8]
     filename = os.path.splitext(os.path.basename(pre_files[idx]))[0][:-8]
-    print (filename)
+    # print (filename)
     if filename in ill:
         print (filename, "is found in illcases.txt, skip")
         continue
@@ -168,16 +168,23 @@ for i in range(len(unaligned_curves)):
     elif Typevalues[i] == "V":
         V_curvatures.append(Curvatures[i])
         V_torsions.append(Torsions[i])
-def plot_with_errorbars(ax, ax2, curv_data, tors_data):
+print ("count CUVS: ")
+print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
+def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_alpha=0.2):
     mean_curv = np.mean(curv_data, axis=0)
     std_curv = np.std(curv_data, axis=0)
     mean_tors = np.mean(tors_data, axis=0)
     std_tors = np.std(tors_data, axis=0)
 
-    ax.plot(mean_curv, color="r", linewidth=1)
-    ax.fill_between(range(len(mean_curv)), mean_curv - std_curv, mean_curv + std_curv, color="r", alpha=0.2)
-    ax2.plot(mean_tors, color="k", linestyle='--', linewidth=1)
-    ax2.fill_between(range(len(mean_tors)), mean_tors - std_tors, mean_tors + std_tors, color="k", alpha=0.2)
+    ax.plot(mean_curv, color="r", linewidth=1, alpha=line_alpha)
+    ax.fill_between(range(len(mean_curv)), mean_curv - std_curv, mean_curv + std_curv, color="r", alpha=errorbar_alpha)
+    ax2.plot(mean_tors, color="k", linestyle='--', linewidth=1, alpha=line_alpha)
+    ax2.fill_between(range(len(mean_tors)), mean_tors - std_tors, mean_tors + std_tors, color="k", alpha=errorbar_alpha)
+
+plot_with_errorbars(ax1, ax1a, Curvatures, Torsions)
+plot_with_errorbars(ax2, ax2a, Curvatures, Torsions)
+plot_with_errorbars(ax3, ax3a, Curvatures, Torsions)
+plot_with_errorbars(ax4, ax4a, Curvatures, Torsions)
 
 plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
 plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
@@ -279,12 +286,12 @@ pca_standardization = 1
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 保存数据
-all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, 8, pca_standardization)
+all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
 all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 8, pca_standardization)
+all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
 all_pca.PCA_training_and_test()
 all_pca.compute_kde()
 joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
@@ -293,6 +300,11 @@ np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
 np.save(bkup_dir+"not_std_filenames.npy",Files)
 
 pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
+
+pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
+all_pca.visualize_results(pca_components_figname)
+srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
+all_srvf_pca.visualize_results(srvf_pca_components_figname)
 # Define a helper function to fit KernelDensity
 def fit_kde(data):
     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
@@ -312,12 +324,14 @@ sample_num = 1000
 U_synthetic = U_srvf_kde.sample(sample_num)
 V_synthetic = V_srvf_kde.sample(sample_num)
 C_synthetic = C_srvf_kde.sample(sample_num)
+S_synthetic = C_srvf_kde.sample(sample_num)
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.scatter(all_srvf_pca.train_res[:,0], all_srvf_pca.train_res[:,1], c='k', s=50, marker="x")
 ax.scatter(U_synthetic[:,0], U_synthetic[:,1], c='w', s=30, edgecolor='r',alpha=0.4)
 ax.scatter(V_synthetic[:,0], V_synthetic[:,1], c='w', s=30, edgecolor='b',alpha=0.4)
 ax.scatter(C_synthetic[:,0], C_synthetic[:,1], c='w', s=30, edgecolor='g',alpha=0.4)
+ax.scatter(S_synthetic[:,0], S_synthetic[:,1], c='w', s=30, edgecolor='orange',alpha=0.4)
 ax.set_xlabel('PC1')
 ax.set_ylabel('PC2')
 plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic_scatter.png")
@@ -330,15 +344,19 @@ V_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(V_synthetic).
 V_recovered = recovered_curves(V_synthetic_inverse, True)
 C_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(C_synthetic).reshape(sample_num, -1, 3)
 C_recovered = recovered_curves(C_synthetic_inverse, True)
+S_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(S_synthetic).reshape(sample_num, -1, 3)
+S_recovered = recovered_curves(S_synthetic_inverse, True)
 # 使用函数绘制U, V, C等数据
 if sample_num < 6:
     plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
     plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
     plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
+    plot_recovered(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_srvf_synthetic.png")
 else:
     plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
+    plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "C_srvf_synthetic.png")
 # 绘制合成曲线的curvature和torsion
 ##############################
 
@@ -357,12 +375,14 @@ sample_num = 1000
 U_synthetic = U_kde.sample(sample_num)
 V_synthetic = V_kde.sample(sample_num)
 C_synthetic = C_kde.sample(sample_num)
+S_synthetic = S_kde.sample(sample_num)
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.scatter(all_pca.train_res[:,0], all_pca.train_res[:,1], c='k', s=50, marker="x")
 ax.scatter(U_synthetic[:,0], U_synthetic[:,1], c='w', s=30, edgecolor='r',alpha=0.4)
 ax.scatter(V_synthetic[:,0], V_synthetic[:,1], c='w', s=30, edgecolor='b',alpha=0.4)
 ax.scatter(C_synthetic[:,0], C_synthetic[:,1], c='w', s=30, edgecolor='g',alpha=0.4)
+ax.scatter(S_synthetic[:,0], S_synthetic[:,1], c='w', s=30, edgecolor='orange',alpha=0.4)
 ax.set_xlabel('PC1')
 ax.set_ylabel('PC2')
 plt.savefig(pca_anlysis_dir + "pca_synthetic_scatter.png")
@@ -375,15 +395,19 @@ V_synthetic_inverse = all_pca.inverse_transform_from_loadings(V_synthetic).resha
 V_recovered = recovered_curves(V_synthetic_inverse, False)
 C_synthetic_inverse = all_pca.inverse_transform_from_loadings(C_synthetic).reshape(sample_num, -1, 3)
 C_recovered = recovered_curves(C_synthetic_inverse, False)
+S_synthetic_inverse = all_pca.inverse_transform_from_loadings(S_synthetic).reshape(sample_num, -1, 3)
+S_recovered = recovered_curves(S_synthetic_inverse, False)
 # 使用函数绘制U, V, C等数据
 if sample_num < 6:
     plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
     plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
     plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+    plot_recovered(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_synthetic.png")
 else:
     plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_synthetic.png")
     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
+    plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_synthetic.png")
 # 绘制合成曲线的curvature和torsion
 ##############################
 # To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
@@ -397,7 +421,7 @@ mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
 # 使用映射替换原始列表中的每个字母
 numeric_lst = [mapping[letter] for letter in Typevalues]
 # 定义你的颜色映射
-default_palette = sns.color_palette()
+default_palette = sns.color_palette("turbo")
 cmap = ListedColormap(default_palette)
 fig = plt.figure(dpi=300, figsize=(20, 5))
 ax1 = fig.add_subplot(121)
@@ -411,8 +435,8 @@ sc2 = ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c=numeric_ls
 # 添加注释
 for i in range(len(Typevalues)):
     filename = Files[i].split("/")[-1][:-12]
-    ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
-    ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
+    # ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
+    # ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
 
 # 获取Typevalues中的唯一值并进行排序
 unique_values = sorted(list(set(Typevalues)))
