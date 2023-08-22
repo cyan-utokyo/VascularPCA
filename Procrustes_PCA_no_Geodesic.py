@@ -168,8 +168,14 @@ for i in range(len(unaligned_curves)):
     elif Typevalues[i] == "V":
         V_curvatures.append(Curvatures[i])
         V_torsions.append(Torsions[i])
-print ("count CUVS: ")
-print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
+C_curvatures = np.array(C_curvatures)
+C_torsions = np.array(C_torsions)
+U_curvatures = np.array(U_curvatures)
+U_torsions = np.array(U_torsions)
+V_curvatures = np.array(V_curvatures)
+V_torsions = np.array(V_torsions)
+S_curvatures = np.array(S_curvatures)
+S_torsions = np.array(S_torsions)
 def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_alpha=0.2):
     mean_curv = np.mean(curv_data, axis=0)
     std_curv = np.std(curv_data, axis=0)
@@ -197,6 +203,44 @@ ax4.set_title("V")
 plt.tight_layout()
 plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
 plt.close()
+
+print ("count CUVS: ")
+print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
+debias_Curvatures = np.stack([np.mean(C_curvatures,axis=0), 
+                                    np.mean(U_curvatures,axis=0), 
+                                    np.mean(V_curvatures,axis=0), 
+                                    np.mean(S_curvatures,axis=0)], axis = 1).T
+debias_Torsions = np.stack([np.mean(C_torsions,axis=0), 
+                                  np.mean(U_torsions,axis=0), 
+                                  np.mean(V_torsions,axis=0), 
+                                  np.mean(S_torsions,axis=0)], axis = 1).T
+print ("debias shape:",debias_Curvatures.shape, debias_Torsions.shape)
+# To-Do: 这个方法还需要改
+
+#################################
+# plot各种type的平均曲率和扭率,但是和全体的debias param对比
+fig = plt.figure(dpi=300, figsize=(10, 4))
+ax1, ax1a = setup_axes(221)
+ax2, ax2a = setup_axes(222)
+ax3, ax3a = setup_axes(223)
+ax4, ax4a = setup_axes(224)
+plot_with_errorbars(ax1, ax1a, debias_Curvatures, debias_Torsions)
+plot_with_errorbars(ax2, ax2a, debias_Curvatures, debias_Torsions)
+plot_with_errorbars(ax3, ax3a, debias_Curvatures, debias_Torsions)
+plot_with_errorbars(ax4, ax4a, debias_Curvatures, debias_Torsions)
+
+plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
+plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
+plot_with_errorbars(ax3, ax3a, U_curvatures, U_torsions)
+plot_with_errorbars(ax4, ax4a, V_curvatures, V_torsions)
+ax1.set_title("C")
+ax2.set_title("S")
+ax3.set_title("U")
+ax4.set_title("V")
+plt.tight_layout()
+plt.savefig(geometry_dir + "/debias_Curvatures_Torsions.png")
+plt.close()
+
 ############
 # 绘制group内的曲率和扭率对比全体的偏离程度的散点图
 fig = plt.figure(dpi=300, figsize=(9,4))
@@ -324,7 +368,7 @@ sample_num = 1000
 U_synthetic = U_srvf_kde.sample(sample_num)
 V_synthetic = V_srvf_kde.sample(sample_num)
 C_synthetic = C_srvf_kde.sample(sample_num)
-S_synthetic = C_srvf_kde.sample(sample_num)
+S_synthetic = S_srvf_kde.sample(sample_num)
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.scatter(all_srvf_pca.train_res[:,0], all_srvf_pca.train_res[:,1], c='k', s=50, marker="x")
