@@ -206,15 +206,15 @@ plt.close()
 
 print ("count CUVS: ")
 print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
-debias_Curvatures = np.stack([np.mean(C_curvatures,axis=0), 
-                                    np.mean(U_curvatures,axis=0), 
-                                    np.mean(V_curvatures,axis=0), 
-                                    np.mean(S_curvatures,axis=0)], axis = 1).T
-debias_Torsions = np.stack([np.mean(C_torsions,axis=0), 
-                                  np.mean(U_torsions,axis=0), 
-                                  np.mean(V_torsions,axis=0), 
-                                  np.mean(S_torsions,axis=0)], axis = 1).T
-print ("debias shape:",debias_Curvatures.shape, debias_Torsions.shape)
+# debias_Curvatures = np.stack([np.mean(C_curvatures,axis=0), 
+#                                     np.mean(U_curvatures,axis=0), 
+#                                     np.mean(V_curvatures,axis=0), 
+#                                     np.mean(S_curvatures,axis=0)], axis = 1).T
+# debias_Torsions = np.stack([np.mean(C_torsions,axis=0), 
+#                                   np.mean(U_torsions,axis=0), 
+#                                   np.mean(V_torsions,axis=0), 
+#                                   np.mean(S_torsions,axis=0)], axis = 1).T
+# print ("debias shape:",debias_Curvatures.shape, debias_Torsions.shape)
 # To-Do: 这个方法还需要改
 
 #################################
@@ -224,10 +224,10 @@ ax1, ax1a = setup_axes(221)
 ax2, ax2a = setup_axes(222)
 ax3, ax3a = setup_axes(223)
 ax4, ax4a = setup_axes(224)
-plot_with_errorbars(ax1, ax1a, debias_Curvatures, debias_Torsions)
-plot_with_errorbars(ax2, ax2a, debias_Curvatures, debias_Torsions)
-plot_with_errorbars(ax3, ax3a, debias_Curvatures, debias_Torsions)
-plot_with_errorbars(ax4, ax4a, debias_Curvatures, debias_Torsions)
+# plot_with_errorbars(ax1, ax1a, debias_Curvatures, debias_Torsions)
+# plot_with_errorbars(ax2, ax2a, debias_Curvatures, debias_Torsions)
+# plot_with_errorbars(ax3, ax3a, debias_Curvatures, debias_Torsions)
+# plot_with_errorbars(ax4, ax4a, debias_Curvatures, debias_Torsions)
 
 plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
 plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
@@ -238,7 +238,7 @@ ax2.set_title("S")
 ax3.set_title("U")
 ax4.set_title("V")
 plt.tight_layout()
-plt.savefig(geometry_dir + "/debias_Curvatures_Torsions.png")
+plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
 plt.close()
 
 ############
