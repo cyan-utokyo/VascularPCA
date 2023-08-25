@@ -40,8 +40,7 @@ import copy
 import joblib
 from myvtk.geometry import *
 from matplotlib.patches import Patch
-from matplotlib.colors import BoundaryNorm
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import BoundaryNorm, ListedColormap, Normalize
 from minisom import MiniSom
 from sklearn.neighbors import KernelDensity
 from myvtk.synthetic import *
@@ -142,10 +141,10 @@ def setup_axes(position,ymin,ymax):
     ax.spines['left'].set_color('k')  # 设置y轴线的颜色
     return ax# , ax2
 
-ax1 = setup_axes(221, 0, 1)
-ax2 = setup_axes(222, 0, 1)
-ax3 = setup_axes(223, 0, 1)
-ax4 = setup_axes(224, 0, 1)
+ax1 = setup_axes(221, 0, 1.2)
+ax2 = setup_axes(222, 0, 1.2)
+ax3 = setup_axes(223, 0, 1.2)
+ax4 = setup_axes(224, 0, 1.2)
 
 C_curvatures = []
 C_torsions = []
@@ -221,10 +220,10 @@ print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
 #################################
 # plot各种type的平均曲率和扭率,但是和全体的debias param对比.问题很大
 fig = plt.figure(dpi=300, figsize=(10, 4))
-ax1 = setup_axes(221,-1, 1)
-ax2 = setup_axes(222,-1, 1)
-ax3 = setup_axes(223,-1, 1)
-ax4 = setup_axes(224,-1, 1)
+ax1 = setup_axes(221,-1.5, 1.5)
+ax2 = setup_axes(222,-1.5, 1.5)
+ax3 = setup_axes(223,-1.5, 1.5)
+ax4 = setup_axes(224,-1.5, 1.5)
 
 plot_with_errorbars(ax1, ax1, C_torsions, Torsions)
 plot_with_errorbars(ax2, ax2, S_torsions, Torsions)
@@ -271,9 +270,8 @@ plt.savefig(geometry_dir + "/group_param_compare.png")
 plt.close()
 ####################################
 # Bootstrap
-
 log.write("Bootstrap\n")
-bootstrap_sample_size = 6
+bootstrap_sample_size = None
 log.write("sample size:{}\n".format(bootstrap_sample_size))
 
 def bootstrap_resampling(data, num_iterations=1000, sample_size=None):
@@ -314,7 +312,33 @@ means_overall_torsion, stds_overall_torsion = compute_bootstrap_statistics(boots
 fig, axes = plt.subplots(4, 2, dpi=300, figsize=(10, 8))
 def plot_with_shade(ax, data_samples,  title, ymin, ymax):
     x = range(data_samples.shape[2])
-    ax.boxplot(data_samples.reshape(data_samples.shape[0]*data_samples.shape[1], -1), showfliers=False)
+    # 定义箱型图样式参数
+    box_properties = {
+        'color': 'dimgray',
+        'linewidth': 1
+    }
+    whisker_properties = {
+        'color': 'dimgray',
+        'linewidth': 1
+    }
+    cap_properties = {
+        'color': 'dimgray',
+        'linewidth': 1
+    }
+    median_properties = {
+        'color': 'red',
+        'linewidth': 1.5
+    }
+
+    bp = ax.boxplot(data_samples.reshape(data_samples.shape[0]*data_samples.shape[1], -1), 
+            showfliers=False,
+            boxprops=box_properties, 
+            medianprops=median_properties,
+            whiskerprops=whisker_properties,
+            capprops=cap_properties)
+    means = np.mean(data_samples, axis=(0, 1))
+    ax.scatter(range(1, len(means)+1), means, marker='_', color='blue', zorder=5, s=5)
+
     ax.set_title(title)
     ax.set_ylim(ymin, ymax)
     # 设置x轴的标签
@@ -322,6 +346,8 @@ def plot_with_shade(ax, data_samples,  title, ymin, ymax):
     x_labels = [f"{val:.1f}" for val in np.linspace(0, 1, 6)]
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_labels)
+    ax.grid(linestyle=":", alpha=0.5)
+
 plot_with_shade(axes[0, 0], bootstrap_samples_C_curvature, "C - Means", 0, 1.2)
 plot_with_shade(axes[0, 1], bootstrap_samples_C_curvature, "C - Stds", 0, 1.2)
 plot_with_shade(axes[1, 0], bootstrap_samples_S_curvature, "S - Means", 0, 1.2)
@@ -405,6 +431,13 @@ pca_standardization = 1
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 保存数据
+
+# To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
+# train_data = train_data x W
+# W可以被优化，使得生成曲线的curvature和torsion与原始曲线的curvature和torsion相似
+PCA_weight = np.mean(Curvatures, axis=0)
+
+
 all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
 all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
@@ -529,10 +562,7 @@ else:
     plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_synthetic.png")
 # 绘制合成曲线的curvature和torsion
 ##############################
-# To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
-# train_data = train_data x W
-# W可以被优化，使得生成曲线的curvature和torsion与原始曲线的curvature和torsion相似
-PCA_weight = np.mean(Curvatures, axis=0)
+
 
 
 # 为每个不同的字母分配一个唯一的数字
@@ -540,17 +570,22 @@ mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
 # 使用映射替换原始列表中的每个字母
 numeric_lst = [mapping[letter] for letter in Typevalues]
 # 定义你的颜色映射
-default_palette = sns.color_palette("turbo")
+default_palette = sns.color_palette("turbo", n_colors=len(mapping))
 cmap = ListedColormap(default_palette)
 fig = plt.figure(dpi=300, figsize=(20, 5))
 ax1 = fig.add_subplot(121)
 ax2 = fig.add_subplot(122)
 # 定义颜色规范
-boundaries = [-0.5, 0.5, 1.5, 2.5, 3.5] # 根据你的数据调整
-norm = BoundaryNorm(boundaries, cmap.N, clip=True)
+# boundaries = [-0.5, 0.5, 1.5, 2.5, 3.5] # 根据你的数据调整
+# norm = BoundaryNorm(boundaries, cmap.N, clip=True)
+norm = Normalize(vmin=min(numeric_lst), vmax=max(numeric_lst))
 # 创建散点图
-sc1 = ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c=numeric_lst, cmap=cmap, norm=norm)
-sc2 = ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c=numeric_lst, cmap=cmap, norm=norm)
+srvf_x_PC = 0
+srvf_y_PC = 3
+x_PC = 0
+y_PC = 2
+sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC], c=numeric_lst, cmap=cmap, norm=norm)
+sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC], c=numeric_lst, cmap=cmap, norm=norm)
 # 添加注释
 for i in range(len(Typevalues)):
     filename = Files[i].split("/")[-1][:-12]
@@ -567,9 +602,12 @@ patches = [Patch(color=colors[i], label=labels[i]) for i in range(len(unique_val
 # 在每个子图上添加图例
 for ax in [ax1, ax2]:
     ax.grid(linestyle=':', linewidth=0.5)
-    ax.set_xlabel("PC1")
-    ax.set_ylabel("PC2")
+    
     ax.legend(handles=patches)
+ax1.set_xlabel("PC{}".format(srvf_x_PC+1))
+ax1.set_ylabel("PC{}".format(srvf_y_PC+1))
+ax2.set_xlabel("PC{}".format(x_PC+1))
+ax2.set_ylabel("PC{}".format(y_PC+1))
 plt.savefig(pca_anlysis_dir+"PCA_total.png")
 plt.close()
 
@@ -681,8 +719,6 @@ for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
     plt.grid(True)
     plt.savefig(pca_anlysis_dir+f'QQ_plot_for_PC{pc}.png')
     plt.close()
-
-
 
 
 log.write("PCA standardization: {}\n".format(pca_standardization))
