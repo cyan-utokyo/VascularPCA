@@ -51,18 +51,19 @@ from myvtk.Mymetrics import *
 
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
-log = open("./log.txt", "w")
+
 # 获取当前时间
 start_time = datetime.now()
 smooth_scale = 0.01
 # 将时间格式化为 'yymmddhhmmss' 格式
 dir_formatted_time = start_time.strftime('%y-%m-%d-%H-%M-%S')
-log.write("Start at: {}\n".format(dir_formatted_time))
 bkup_dir = mkdir("./", "save_data_Procrustess")
 bkup_dir = mkdir(bkup_dir, dir_formatted_time)
 current_file_path = os.path.abspath(__file__)
 current_file_name = os.path.basename(__file__)
 backup_file_path = os.path.join(bkup_dir, current_file_name)
+log = open(bkup_dir+"log.txt", "w")
+log.write("Start at: {}\n".format(dir_formatted_time))
 unaligned_curves = []
 Files = []
 radii = []
@@ -268,7 +269,85 @@ for ax in [ax1, ax2]:
     ax.grid(linestyle=":", alpha=0.5)
 plt.savefig(geometry_dir + "/group_param_compare.png")
 plt.close()
-#############
+####################################
+# Bootstrap
+
+log.write("Bootstrap\n")
+bootstrap_sample_size = 6
+log.write("sample size:{}\n".format(bootstrap_sample_size))
+
+def bootstrap_resampling(data, num_iterations=1000, sample_size=None):
+    """为给定的数据生成Bootstrap样本"""
+    n, m = data.shape  # 注意这里获取的是两个维度的大小
+    if sample_size is None:
+        sample_size = n  # 如果没有指定抽样大小，就使用原始数据的大小
+    bootstrap_samples = []
+    for _ in range(num_iterations):
+        # 使用randint而不是choice，并确保按行采样
+        indices = np.random.randint(0, n, size=sample_size)
+        sample = data[indices, :]
+        bootstrap_samples.append(sample)
+    return np.array(bootstrap_samples)
+
+# Bootstrap重采样
+bootstrap_samples_U_curvature = bootstrap_resampling(U_curvatures,sample_size=bootstrap_sample_size)
+bootstrap_samples_V_curvature = bootstrap_resampling(V_curvatures,sample_size=bootstrap_sample_size)
+bootstrap_samples_C_curvature = bootstrap_resampling(C_curvatures,sample_size=bootstrap_sample_size)
+bootstrap_samples_S_curvature = bootstrap_resampling(S_curvatures,sample_size=bootstrap_sample_size)
+bootstrap_samples_overall_curvature = bootstrap_resampling(Curvatures,sample_size=bootstrap_sample_size)
+bootstrap_samples_U_torsion = bootstrap_resampling(U_torsions,sample_size=bootstrap_sample_size)
+bootstrap_samples_V_torsion = bootstrap_resampling(V_torsions,sample_size=bootstrap_sample_size)
+bootstrap_samples_C_torsion = bootstrap_resampling(C_torsions,sample_size=bootstrap_sample_size)
+bootstrap_samples_S_torsion = bootstrap_resampling(S_torsions,sample_size=bootstrap_sample_size)
+bootstrap_samples_overall_torsion = bootstrap_resampling(Torsions,sample_size=bootstrap_sample_size)
+
+def compute_bootstrap_statistics(bootstrap_samples):
+    """计算Bootstrap样本的均值和标准差"""
+    means = np.mean(bootstrap_samples, axis=(0,1))
+    stds = np.std(bootstrap_samples, axis=(0,1))
+    return means, stds
+
+# 计算Bootstrap样本的统计数据
+means_overall_curvature, stds_overall_curvature = compute_bootstrap_statistics(bootstrap_samples_overall_curvature)
+means_overall_torsion, stds_overall_torsion = compute_bootstrap_statistics(bootstrap_samples_overall_torsion)
+
+fig, axes = plt.subplots(4, 2, dpi=300, figsize=(10, 8))
+def plot_with_shade(ax, data_samples,  title, ymin, ymax):
+    x = range(data_samples.shape[2])
+    ax.boxplot(data_samples.reshape(data_samples.shape[0]*data_samples.shape[1], -1), showfliers=False)
+    ax.set_title(title)
+    ax.set_ylim(ymin, ymax)
+    # 设置x轴的标签
+    x_ticks = np.linspace(0, len(x)-1, 6)  # 6个刻度点
+    x_labels = [f"{val:.1f}" for val in np.linspace(0, 1, 6)]
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_labels)
+plot_with_shade(axes[0, 0], bootstrap_samples_C_curvature, "C - Means", 0, 1.2)
+plot_with_shade(axes[0, 1], bootstrap_samples_C_curvature, "C - Stds", 0, 1.2)
+plot_with_shade(axes[1, 0], bootstrap_samples_S_curvature, "S - Means", 0, 1.2)
+plot_with_shade(axes[1, 1], bootstrap_samples_S_curvature, "S - Stds", 0, 1.2)
+plot_with_shade(axes[2, 0], bootstrap_samples_U_curvature, "U - Means", 0, 1.2)
+plot_with_shade(axes[2, 1], bootstrap_samples_U_curvature, "U - Stds", 0, 1.2)
+plot_with_shade(axes[3, 0], bootstrap_samples_V_curvature, "V - Means", 0, 1.2)
+plot_with_shade(axes[3, 1], bootstrap_samples_V_curvature, "V - Stds", 0, 1.2)
+plt.tight_layout()
+plt.savefig(geometry_dir+"Bootstrap_Distributions_with_Global_Curvature.png")
+plt.close()
+
+
+fig, axes = plt.subplots(4, 2, dpi=300, figsize=(10, 8))
+plot_with_shade(axes[0, 0], bootstrap_samples_C_torsion, "C - Means", -1.5, 1.5)
+plot_with_shade(axes[0, 1], bootstrap_samples_C_torsion, "C - Stds", -1.5, 1.5)
+plot_with_shade(axes[1, 0], bootstrap_samples_S_torsion, "S - Means", -1.5, 1.5)
+plot_with_shade(axes[1, 1], bootstrap_samples_S_torsion, "S - Stds", -1.5, 1.5)
+plot_with_shade(axes[2, 0], bootstrap_samples_U_torsion, "U - Means", -1.5, 1.5)
+plot_with_shade(axes[2, 1], bootstrap_samples_U_torsion, "U - Stds", -1.5, 1.5)
+plot_with_shade(axes[3, 0], bootstrap_samples_V_torsion, "V - Means", -1.5, 1.5)
+plot_with_shade(axes[3, 1], bootstrap_samples_V_torsion, "V - Stds", -1.5, 1.5)
+plt.tight_layout()
+plt.savefig(geometry_dir+"Bootstrap_Distributions_with_Global_Torsion.png")
+plt.close()
+
 
 ########################################
 
