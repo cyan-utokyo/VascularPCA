@@ -133,21 +133,19 @@ numeric_lst = [mapping[letter] for letter in Typevalues]
 ########################################
 # plot各种type的平均曲率和扭率
 fig = plt.figure(dpi=300, figsize=(10, 4))
-def setup_axes(position):
+def setup_axes(position,ymin,ymax):
     ax = fig.add_subplot(position)
-    ax2 = ax.twinx()
-    ax.set_ylim(0, 1.2)
-    ax2.set_ylim(-1.2, 1.2)
+    ax.set_ylim(ymin, ymax)
     ax.grid(linestyle=":", alpha=0.5)
-    ax.tick_params(axis='y', colors='red', labelsize=8)  # 设置y轴的颜色和字体大小
-    ax2.tick_params(labelsize=8)  # 设置另一个y轴的字体大小
-    ax.spines['left'].set_color('red')  # 设置y轴线的颜色
-    return ax, ax2
+    ax.tick_params(axis='y', colors='k', labelsize=8)  # 设置y轴的颜色和字体大小
+    ax.spines['left'].set_color('k')  # 设置y轴线的颜色
+    return ax# , ax2
 
-ax1, ax1a = setup_axes(221)
-ax2, ax2a = setup_axes(222)
-ax3, ax3a = setup_axes(223)
-ax4, ax4a = setup_axes(224)
+ax1 = setup_axes(221, 0, 1)
+ax2 = setup_axes(222, 0, 1)
+ax3 = setup_axes(223, 0, 1)
+ax4 = setup_axes(224, 0, 1)
+
 C_curvatures = []
 C_torsions = []
 S_curvatures = []
@@ -194,16 +192,16 @@ def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_al
 # plot_with_errorbars(ax4, ax4a, Curvatures, Torsions)
 # To-do：如何同时表示全体和各种type的曲率和扭率
 
-plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
-plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
-plot_with_errorbars(ax3, ax3a, U_curvatures, U_torsions)
-plot_with_errorbars(ax4, ax4a, V_curvatures, V_torsions)
+plot_with_errorbars(ax1, ax1, C_curvatures, Curvatures)
+plot_with_errorbars(ax2, ax2, S_curvatures, Curvatures)
+plot_with_errorbars(ax3, ax3, U_curvatures, Curvatures)
+plot_with_errorbars(ax4, ax4, V_curvatures, Curvatures)
 ax1.set_title("C")
 ax2.set_title("S")
 ax3.set_title("U")
 ax4.set_title("V")
 plt.tight_layout()
-plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
+plt.savefig(geometry_dir + "/Curvatures_GroupVsTotal.png")
 plt.close()
 
 print ("count CUVS: ")
@@ -220,28 +218,24 @@ print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
 # To-Do: 这个方法还需要改
 
 #################################
-# plot各种type的平均曲率和扭率,但是和全体的debias param对比.问题很大。
-# fig = plt.figure(dpi=300, figsize=(10, 4))
-# ax1, ax1a = setup_axes(221)
-# ax2, ax2a = setup_axes(222)
-# ax3, ax3a = setup_axes(223)
-# ax4, ax4a = setup_axes(224)
-# # plot_with_errorbars(ax1, ax1a, debias_Curvatures, debias_Torsions)
-# # plot_with_errorbars(ax2, ax2a, debias_Curvatures, debias_Torsions)
-# # plot_with_errorbars(ax3, ax3a, debias_Curvatures, debias_Torsions)
-# # plot_with_errorbars(ax4, ax4a, debias_Curvatures, debias_Torsions)
+# plot各种type的平均曲率和扭率,但是和全体的debias param对比.问题很大
+fig = plt.figure(dpi=300, figsize=(10, 4))
+ax1 = setup_axes(221,-1, 1)
+ax2 = setup_axes(222,-1, 1)
+ax3 = setup_axes(223,-1, 1)
+ax4 = setup_axes(224,-1, 1)
 
-# plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
-# plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
-# plot_with_errorbars(ax3, ax3a, U_curvatures, U_torsions)
-# plot_with_errorbars(ax4, ax4a, V_curvatures, V_torsions)
-# ax1.set_title("C")
-# ax2.set_title("S")
-# ax3.set_title("U")
-# ax4.set_title("V")
-# plt.tight_layout()
-# plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
-# plt.close()
+plot_with_errorbars(ax1, ax1, C_torsions, Torsions)
+plot_with_errorbars(ax2, ax2, S_torsions, Torsions)
+plot_with_errorbars(ax3, ax3, U_torsions, Torsions)
+plot_with_errorbars(ax4, ax4, V_torsions, Torsions)
+ax1.set_title("C")
+ax2.set_title("S")
+ax3.set_title("U")
+ax4.set_title("V")
+plt.tight_layout()
+plt.savefig(geometry_dir + "/Torsions_GroupVsTotal.png")
+plt.close()
 
 ############
 # 绘制group内的曲率和扭率对比全体的偏离程度的散点图
