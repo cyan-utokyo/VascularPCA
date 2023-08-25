@@ -47,6 +47,7 @@ from sklearn.neighbors import KernelDensity
 from myvtk.synthetic import *
 import statsmodels.api as sm
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
+from myvtk.Mymetrics import *
 
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
@@ -187,10 +188,11 @@ def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_al
     ax2.plot(mean_tors, color="k", linestyle='--', linewidth=1, alpha=line_alpha)
     ax2.fill_between(range(len(mean_tors)), mean_tors - std_tors, mean_tors + std_tors, color="k", alpha=errorbar_alpha)
 
-plot_with_errorbars(ax1, ax1a, Curvatures, Torsions)
-plot_with_errorbars(ax2, ax2a, Curvatures, Torsions)
-plot_with_errorbars(ax3, ax3a, Curvatures, Torsions)
-plot_with_errorbars(ax4, ax4a, Curvatures, Torsions)
+# plot_with_errorbars(ax1, ax1a, Curvatures, Torsions)
+# plot_with_errorbars(ax2, ax2a, Curvatures, Torsions)
+# plot_with_errorbars(ax3, ax3a, Curvatures, Torsions)
+# plot_with_errorbars(ax4, ax4a, Curvatures, Torsions)
+# To-do：如何同时表示全体和各种type的曲率和扭率
 
 plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
 plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
@@ -218,28 +220,28 @@ print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
 # To-Do: 这个方法还需要改
 
 #################################
-# plot各种type的平均曲率和扭率,但是和全体的debias param对比
-fig = plt.figure(dpi=300, figsize=(10, 4))
-ax1, ax1a = setup_axes(221)
-ax2, ax2a = setup_axes(222)
-ax3, ax3a = setup_axes(223)
-ax4, ax4a = setup_axes(224)
-# plot_with_errorbars(ax1, ax1a, debias_Curvatures, debias_Torsions)
-# plot_with_errorbars(ax2, ax2a, debias_Curvatures, debias_Torsions)
-# plot_with_errorbars(ax3, ax3a, debias_Curvatures, debias_Torsions)
-# plot_with_errorbars(ax4, ax4a, debias_Curvatures, debias_Torsions)
+# plot各种type的平均曲率和扭率,但是和全体的debias param对比.问题很大。
+# fig = plt.figure(dpi=300, figsize=(10, 4))
+# ax1, ax1a = setup_axes(221)
+# ax2, ax2a = setup_axes(222)
+# ax3, ax3a = setup_axes(223)
+# ax4, ax4a = setup_axes(224)
+# # plot_with_errorbars(ax1, ax1a, debias_Curvatures, debias_Torsions)
+# # plot_with_errorbars(ax2, ax2a, debias_Curvatures, debias_Torsions)
+# # plot_with_errorbars(ax3, ax3a, debias_Curvatures, debias_Torsions)
+# # plot_with_errorbars(ax4, ax4a, debias_Curvatures, debias_Torsions)
 
-plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
-plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
-plot_with_errorbars(ax3, ax3a, U_curvatures, U_torsions)
-plot_with_errorbars(ax4, ax4a, V_curvatures, V_torsions)
-ax1.set_title("C")
-ax2.set_title("S")
-ax3.set_title("U")
-ax4.set_title("V")
-plt.tight_layout()
-plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
-plt.close()
+# plot_with_errorbars(ax1, ax1a, C_curvatures, C_torsions)
+# plot_with_errorbars(ax2, ax2a, S_curvatures, S_torsions)
+# plot_with_errorbars(ax3, ax3a, U_curvatures, U_torsions)
+# plot_with_errorbars(ax4, ax4a, V_curvatures, V_torsions)
+# ax1.set_title("C")
+# ax2.set_title("S")
+# ax3.set_title("U")
+# ax4.set_title("V")
+# plt.tight_layout()
+# plt.savefig(geometry_dir + "/Curvatures_Torsions.png")
+# plt.close()
 
 ############
 # 绘制group内的曲率和扭率对比全体的偏离程度的散点图
