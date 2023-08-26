@@ -245,9 +245,11 @@ ax2 = fig.add_subplot(122)
 ax1.scatter(np.mean(Curvatures,axis=0),np.mean(U_curvatures,axis=0), color="r",marker="o", alpha=0.5, label='U')
 ax1.scatter(np.mean(Curvatures,axis=0),np.mean(V_curvatures,axis=0), color="g",marker="s", alpha=0.5, label='V')
 ax1.scatter(np.mean(Curvatures,axis=0),np.mean(C_curvatures,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(S_curvatures,axis=0), color="orange",marker="*", alpha=0.5, label='S')
 ax2.scatter(np.mean(Torsions,axis=0),np.mean(U_torsions,axis=0), color="r",marker="o", alpha=0.5, label='U')
 ax2.scatter(np.mean(Torsions,axis=0),np.mean(V_torsions,axis=0), color="g",marker="s", alpha=0.5, label='V')
 ax2.scatter(np.mean(Torsions,axis=0),np.mean(C_torsions,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(S_torsions,axis=0), color="orange",marker="*", alpha=0.5, label='S')
 # 获取ax1的x轴和y轴范围
 x1_min, x1_max = ax1.get_xlim()
 y1_min, y1_max = ax1.get_ylim()
@@ -572,55 +574,6 @@ else:
 # 绘制合成曲线的curvature和torsion
 ##############################
 
-
-
-# 为每个不同的字母分配一个唯一的数字
-mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
-# 使用映射替换原始列表中的每个字母
-numeric_lst = [mapping[letter] for letter in Typevalues]
-# 定义你的颜色映射
-default_palette = sns.color_palette("turbo", n_colors=len(mapping))
-cmap = ListedColormap(default_palette)
-fig = plt.figure(dpi=300, figsize=(20, 5))
-ax1 = fig.add_subplot(121)
-ax2 = fig.add_subplot(122)
-# 定义颜色规范
-# boundaries = [-0.5, 0.5, 1.5, 2.5, 3.5] # 根据你的数据调整
-# norm = BoundaryNorm(boundaries, cmap.N, clip=True)
-norm = Normalize(vmin=min(numeric_lst), vmax=max(numeric_lst))
-# 创建散点图
-srvf_x_PC = 0
-srvf_y_PC = 3
-x_PC = 0
-y_PC = 2
-sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC], c=numeric_lst, cmap=cmap, norm=norm)
-sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC], c=numeric_lst, cmap=cmap, norm=norm)
-# 添加注释
-for i in range(len(Typevalues)):
-    filename = Files[i].split("/")[-1][:-12]
-    # ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
-    # ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
-
-# 获取Typevalues中的唯一值并进行排序
-unique_values = sorted(list(set(Typevalues)))
-# 创建一个颜色和标签的列表
-colors = [cmap(norm(mapping[val])) for val in unique_values]
-labels = unique_values
-# 创建patch对象
-patches = [Patch(color=colors[i], label=labels[i]) for i in range(len(unique_values))]
-# 在每个子图上添加图例
-for ax in [ax1, ax2]:
-    ax.grid(linestyle=':', linewidth=0.5)
-    
-    ax.legend(handles=patches)
-ax1.set_xlabel("PC{}".format(srvf_x_PC+1))
-ax1.set_ylabel("PC{}".format(srvf_y_PC+1))
-ax2.set_xlabel("PC{}".format(x_PC+1))
-ax2.set_ylabel("PC{}".format(y_PC+1))
-plt.savefig(pca_anlysis_dir+"PCA_total.png")
-plt.close()
-
-
 ####################为SRVF PCA绘制violinplot####################
 # 创建一个DataFrame
 df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
@@ -729,6 +682,39 @@ for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
     plt.savefig(pca_anlysis_dir+f'QQ_plot_for_PC{pc}.png')
     plt.close()
 
+
+srvf_x_PC = 0
+srvf_y_PC = 3
+x_PC = 0
+y_PC = 2
+
+fig = plt.figure(dpi=300, figsize=(20, 5))
+ax1 = fig.add_subplot(111)
+sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC],
+                  c=Typevalues, cmap=plt.cm.get_cmap('jet', 4))
+# 添加注释
+for i in range(len(Typevalues)):
+    filename = Files[i].split("/")[-1][:-12]
+    # ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
+    # ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
+ax1.set_xlabel("PC{}".format(srvf_x_PC+1))
+ax1.set_ylabel("PC{}".format(srvf_y_PC+1))
+plt.savefig(pca_anlysis_dir+"srvf_PCA_total.png")
+plt.close()
+
+fig = plt.figure(dpi=300, figsize=(20, 5))
+ax2 = fig.add_subplot(111)
+sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC],
+                  c=Typevalues, cmap=plt.cm.get_cmap('jet', 4))
+# 添加注释
+for i in range(len(Typevalues)):
+    filename = Files[i].split("/")[-1][:-12]
+    # ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
+    # ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
+ax2.set_xlabel("PC{}".format(x_PC+1))
+ax2.set_ylabel("PC{}".format(y_PC+1))
+plt.savefig(pca_anlysis_dir+"PCA_total.png")
+plt.close()
 
 log.write("PCA standardization: {}\n".format(pca_standardization))
 print ("所有PCA的标准化状态：", pca_standardization)
