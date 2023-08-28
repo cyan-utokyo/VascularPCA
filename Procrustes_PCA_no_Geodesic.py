@@ -589,9 +589,9 @@ ax2 = fig.add_subplot(122)
 # norm = BoundaryNorm(boundaries, cmap.N, clip=True)
 norm = Normalize(vmin=min(numeric_lst), vmax=max(numeric_lst))
 # 创建散点图
-srvf_x_PC = 0
+srvf_x_PC = 2
 srvf_y_PC = 3
-x_PC = 0
+x_PC = 1
 y_PC = 2
 sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC], c=numeric_lst, cmap=cmap, norm=norm)
 sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC], c=numeric_lst, cmap=cmap, norm=norm)
