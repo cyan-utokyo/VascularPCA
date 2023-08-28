@@ -10,12 +10,16 @@
 3. **理论上**,CUSV应当有什么特征（以及利用这些特征开发出的自动分类算法的简要介绍）
 
 # 曲线的表达形式
+![图：参数化方式不同，则距离也不同](./bkup/23-08-26-15-12-21/reparamterization_and_distance.png)  
+- Initial Distance (uniform sam): 0.6721288390358938
+- New Distance (non-uniform sampling): 0.7084933997504819
+
+
 1. 为什么选择曲线的表达形式是重要的？（几乎相当于*为什么需要用SRVF表达一条曲线*）因为只有正确的表达形式的参数间差异才能反映实际形状的差异。
     - 举个例子：在坏的参数化形式下，同一形状可能有不同表达形式，不同形式之间有计算上的差异，这导致明明是同一个形状，却在计算上不同 
-![](./bkup/reparamterization_and_distance.png)
     - 为什么上述现象是不好的？（这段纯粹是写给玛丽看）因为我们希望达成的效果是PCA空间中的一点对应唯一的一个形状
-1. 引入SRVF：这是一种用标准化速度表达曲线形状的方式。它的式子是~，因此它不受影响。
-2. 在引入SRVF的基础上介绍Geodesic，但具体要在**metric**一节说明。
+2. 引入SRVF：这是一种用标准化速度表达曲线形状的方式。它的式子是~，因此它不受影响。
+3. 在引入SRVF的基础上介绍Geodesic，但具体要在**metric**一节说明。
 
 ## 坐标的PCA
 1. 什么是PCA：一种对多维特征的正交操作，可以得到一组互不相关的特征
@@ -53,11 +57,11 @@
     1. 尽管数据并不均衡，但以最少标签为采样数采样，得到的每种类别的curvature和torsion的均值变化并不大。
     2. 标签数量最多的U型形状在一些特定位置的方差的方差更大，这表明即使同样是U型血管，在这些特定位置的torsion也有很大不确定性。这可能意味着U型可以继续被分类成一些亚型。
 ### 各类别平均$\kappa$和$\tau$的特征（直观）
-- To-do: 这部分还没引入对齐和重新采样，所以X轴必须是标准化长度
-![和无造作的BraVa平均相比曲率](./bkup_dir/23-08-26-15-12-21/geometry/Curvatures_GroupVsTotal.png)
-![和无造作的BraVa平均相比扭率](./bkup_dir/23-08-26-15-12-21/geometry/Torsions_GroupVsTotal.png)
+- To-do: 这部分还没引入对齐和重新采样，所以X轴必须是标准化长度  
+![图：和无造作的BraVa平均相比曲率](./bkup_dir/23-08-26-15-12-21/geometry/Curvatures_GroupVsTotal.png)  
+![图：和无造作的BraVa平均相比扭率](./bkup_dir/23-08-26-15-12-21/geometry/Torsions_GroupVsTotal.png)  
 ### 各类别平均$\kappa$和$\tau$的特征（数值）
-![各type平均形状与无造作的BraVa平均的偏差](./bkup_dir/23-08-26-15-12-21/geometry/group_param_compare.png)
+![图：各type平均param与无造作的BraVa平均的偏差](./bkup_dir/23-08-26-15-12-21/geometry/group_param_compare.png)  
 1. 结果与见解
    - 在曲率一项上，血管上比较平缓的区域（曲率<0.2的）在几种type里差异较小。在更弯曲的区域（曲率>0.2）的，U型血管的曲率往往会比平均更高，而V型和C型会比平均更低
    - 在扭率一项上，U型的趋势与平均一致，这意味着U型更少有扭率的正负反转。C型不一致的倾向更大，这说明C型有更多扭率的正负反转
@@ -71,12 +75,12 @@
 
 ## 坐标的PCA
 ### 位置坐标的PCA
-![位置坐标的PCA和SRVF的PCA](./bkup_dir/23-08-11-18-04-51/pca_analysis/PCA_total.png)
-![位置PCA](./bkup_dir/23-08-11-18-04-51/pca_analysis/pca_plot_variance.png)
-![srvfPCA](./bkup_dir/23-08-11-18-04-51/pca_analysis/srvf_pca_plot_variance.png)
+![图：位置坐标的PCA和SRVF的PCA](./bkup_dir/23-08-11-18-04-51/pca_analysis/PCA_total.png)  
+![图：位置PCA](./bkup_dir/23-08-11-18-04-51/pca_analysis/pca_plot_variance.png)  
+![图：srvfPCA](./bkup_dir/23-08-11-18-04-51/pca_analysis/srvf_pca_plot_variance.png)  
 ### 两种PCA的PCA loading的统计分布
-![位置坐标PCA的loading分布](./bkup_dir/23-08-11-16-05-32/pca_analysis/PCA_total_Violinplot.png)
-![SRVF坐标PCA的loading分布](./bkup_dir/23-08-11-16-05-32/pca_analysis/srvfPCA_total_Violinplot.png)
+![图：位置坐标PCA的loading分布](./bkup_dir/23-08-11-16-05-32/pca_analysis/PCA_total_Violinplot.png)  
+![图：RVF坐标PCA的loading分布](./bkup_dir/23-08-11-16-05-32/pca_analysis/srvfPCA_total_Violinplot.png)  
 ### 使用KDE拟合各type的loading分布状况
 - 它们组成一个高维点云，这个点云在2D映射下长这样，可以看出同一类别在低维（2d）上的映射是不连续的，也就是说无法某一类别内的形状并不会受单一PC影响。
 - To-Do: 一个2d KDE+scatter
