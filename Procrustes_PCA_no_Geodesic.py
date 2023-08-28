@@ -688,10 +688,20 @@ srvf_y_PC = 3
 x_PC = 0
 y_PC = 2
 
-fig = plt.figure(dpi=300, figsize=(20, 5))
+type_to_color = {
+    'U': '#001100',
+    'V': '#112200',
+    'C': '#223300',
+    'S': '#334400'
+}
+
+# 2. 使用这个dictionary将Typevalues转换为颜色列表
+color_values = [type_to_color[t] for t in Typevalues]
+
+fig = plt.figure(dpi=300, figsize=(6, 5))
 ax1 = fig.add_subplot(111)
 sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC],
-                  c=Typevalues, cmap=plt.cm.get_cmap('jet', 4))
+                  c=color_values)
 # 添加注释
 for i in range(len(Typevalues)):
     filename = Files[i].split("/")[-1][:-12]
@@ -702,10 +712,10 @@ ax1.set_ylabel("PC{}".format(srvf_y_PC+1))
 plt.savefig(pca_anlysis_dir+"srvf_PCA_total.png")
 plt.close()
 
-fig = plt.figure(dpi=300, figsize=(20, 5))
+fig = plt.figure(dpi=300, figsize=(6, 5))
 ax2 = fig.add_subplot(111)
 sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC],
-                  c=Typevalues, cmap=plt.cm.get_cmap('jet', 4))
+                  c=color_values)
 # 添加注释
 for i in range(len(Typevalues)):
     filename = Files[i].split("/")[-1][:-12]

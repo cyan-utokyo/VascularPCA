@@ -1,13 +1,13 @@
 # intro
 
 # Objective
-使用主成分分析方法开发一套分析CMA血管中心线形状的framework，该framework囊括了血管形状的geometric parameters的评价，也包含血管相似程度的评价
+使用主成分分析方法开发一套分析CMA（Cerebral）血管中心线形状的framework，该framework囊括了血管形状的geometric parameters的评价，也包含血管相似程度的评价
 
 # Method
 ## Geometric param of CMA?
 1. Curvature & Torsion是如何计算出来的
-2. CMA的Geom param有什么特征
-3. **理论上**,CUSV应当有什么特征（以及利用这些特征开发出的自动分类算法的简要介绍）
+2. Cerebral Major Artery/CMA的Geom param有什么特征
+3. 一种传统的CMA形状分类方法将CMA按照ICA siphon形状**理论上**,CUSV应当有什么特征（以及利用这些特征开发出的自动分类算法的简要介绍）
 
 # 曲线的表达形式
 ![图：参数化方式不同，则距离也不同](./bkup/23-08-26-15-12-21/reparamterization_and_distance.png)  
