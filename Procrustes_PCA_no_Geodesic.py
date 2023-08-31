@@ -133,13 +133,22 @@ numeric_lst = [mapping[letter] for letter in Typevalues]
 ########################################
 # plot各种type的平均曲率和扭率
 fig = plt.figure(dpi=300, figsize=(10, 4))
-def setup_axes(position,ymin,ymax):
+
+def setup_axes(position, ymin, ymax):
     ax = fig.add_subplot(position)
     ax.set_ylim(ymin, ymax)
     ax.grid(linestyle=":", alpha=0.5)
     ax.tick_params(axis='y', colors='k', labelsize=8)  # 设置y轴的颜色和字体大小
     ax.spines['left'].set_color('k')  # 设置y轴线的颜色
-    return ax# , ax2
+    
+    # 设置x轴刻度和标签
+    actual_ticks = np.linspace(0, 60, 5)  # 假设数据范围是0到60
+    display_ticks = np.linspace(0, 1, 5)  # 希望显示的范围是0到1
+    
+    ax.set_xticks(actual_ticks)
+    ax.set_xticklabels(display_ticks)
+    
+    return ax
 
 ax1 = setup_axes(221, 0, 1.2)
 ax2 = setup_axes(222, 0, 1.2)
