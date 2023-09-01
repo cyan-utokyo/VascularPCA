@@ -48,6 +48,7 @@ from myvtk.Mymetrics import *
 
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
+PCA_STANDARDIZATION = 1
 
 # 获取当前时间
 start_time = datetime.now()
@@ -132,9 +133,6 @@ numeric_lst = [mapping[letter] for letter in Typevalues]
 ########################################
 # plot各种type的平均曲率和扭率
 
-
-
-
 C_curvatures = []
 C_torsions = []
 S_curvatures = []
@@ -167,9 +165,6 @@ S_torsions = np.array(S_torsions)
 print ("count CUVS: ")
 print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
 
-kde_X = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(X)
-kde_Y = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(Y)
-
 
 
 def setup_axes(position, ymin, ymax):
@@ -198,16 +193,12 @@ def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_al
     ax2.plot(mean_tors, color="k", linestyle='--', linewidth=1, alpha=line_alpha)
     ax2.fill_between(range(len(mean_tors)), mean_tors - std_tors, mean_tors + std_tors, color="k", alpha=errorbar_alpha)
 
+# 计算curvature统计
 fig = plt.figure(dpi=300, figsize=(10, 4))
 ax1 = setup_axes(221, 0, 1.2)
 ax2 = setup_axes(222, 0, 1.2)
 ax3 = setup_axes(223, 0, 1.2)
 ax4 = setup_axes(224, 0, 1.2)
-# plot_with_errorbars(ax1, ax1a, Curvatures, Torsions)
-# plot_with_errorbars(ax2, ax2a, Curvatures, Torsions)
-# plot_with_errorbars(ax3, ax3a, Curvatures, Torsions)
-# plot_with_errorbars(ax4, ax4a, Curvatures, Torsions)
-# To-do：如何同时表示全体和各种type的曲率和扭率
 plot_with_errorbars(ax1, ax1, C_curvatures, Curvatures)
 plot_with_errorbars(ax2, ax2, S_curvatures, Curvatures)
 plot_with_errorbars(ax3, ax3, U_curvatures, Curvatures)
@@ -220,16 +211,12 @@ plt.tight_layout()
 plt.savefig(geometry_dir + "/Curvatures_GroupVsTotal.png")
 plt.close()
 
-
-
-#################################
-
+# 计算torsion统计
 fig = plt.figure(dpi=300, figsize=(10, 4))
 ax1 = setup_axes(221,-1.5, 1.5)
 ax2 = setup_axes(222,-1.5, 1.5)
 ax3 = setup_axes(223,-1.5, 1.5)
 ax4 = setup_axes(224,-1.5, 1.5)
-
 plot_with_errorbars(ax1, ax1, C_torsions, Torsions)
 plot_with_errorbars(ax2, ax2, S_torsions, Torsions)
 plot_with_errorbars(ax3, ax3, U_torsions, Torsions)
@@ -437,29 +424,24 @@ makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
 makeVtkFile(bkup_dir+"mean_srvf.vtk", mean_srvf_inverse,[],[] )
 
-# Geodesic计算
-# log.write("- Geodesic is not computed.\n")
-# log.write("- Geodesic distance is computed by SRVR, this is the only way that makes sense.\n")
-# Procrustes_geodesic_d = compute_geodesic_dist(Procrustes_curves)
-
-pca_standardization = 1
+C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_curvatures)
+U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_curvatures)
+S_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_curvatures)
+V_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_curvatures)
 
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 保存数据
 
-# To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
-# train_data = train_data x W
-# W可以被优化，使得生成曲线的curvature和torsion与原始曲线的curvature和torsion相似
 PCA_weight = np.mean(Curvatures, axis=0)
 
 
-all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
+all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
 all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
+all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
 all_pca.PCA_training_and_test()
 all_pca.compute_kde()
 joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
@@ -530,6 +512,21 @@ srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_synth
 print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
 srvf_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
 print ("srvf_recovers.shape: ", srvf_recovers.shape)
+
+C_srvf_synthetic_curvature = []
+C_srvf_synthetic_torsion = []
+for i in range(len(C_synthetic_inverse)):
+    C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
+    C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
+log_likelihood_C_on_srvf_C = C_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+log_likelihood_C_on_srvf_S = S_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+log_likelihood_C_on_srvf_U = U_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+log_likelihood_C_on_srvf_V = V_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+print ("log_likelihood_C_on_srvf_C: ", np.mean(log_likelihood_C_on_srvf_C))
+print ("log_likelihood_C_on_srvf_S: ", np.mean(log_likelihood_C_on_srvf_S))
+print ("log_likelihood_C_on_srvf_U: ", np.mean(log_likelihood_C_on_srvf_U))
+print ("log_likelihood_C_on_srvf_V: ", np.mean(log_likelihood_C_on_srvf_V))
+log_likelihood_U_on_srvf_C = C_curvatures_kde.score_samples(U_srvf_synthetic_curvature)
 
 # 绘制合成曲线的curvature和torsion
 ##############################
@@ -743,8 +740,8 @@ ax2.set_ylabel("PC{}".format(y_PC+1))
 plt.savefig(pca_anlysis_dir+"PCA_total.png")
 plt.close()
 
-log.write("PCA standardization: {}\n".format(pca_standardization))
-print ("所有PCA的标准化状态：", pca_standardization)
+log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
+print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 #
 
 
@@ -877,7 +874,7 @@ for loop in range(1):
         train_data, test_data = data_values  # 取出列表中的两个值
         train_data=train_data.reshape(train_num,-1)
         test_data=test_data.reshape(test_num,-1)
-        coord_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
+        coord_PCAs.append(PCAHandler(train_data, test_data,standardization=PCA_STANDARDIZATION))
         coord_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"coord_componentse_{}.png".format(data_key)
         coord_PCAs[-1].visualize_results(components_figname)
@@ -910,14 +907,14 @@ for loop in range(1):
         test_res = []
         united_internal_PCAs = []
         for i in range(3):
-            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=pca_standardization))
+            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=PCA_STANDARDIZATION))
             united_internal_PCAs[-1].PCA_training_and_test()
             train_res_temp, test_res_temp = united_internal_PCAs[-1].train_res, united_internal_PCAs[-1].test_res
             train_res.append(train_res_temp)
             test_res.append(test_res_temp)
         train_data = np.array(train_res).transpose(1,0,2).reshape(train_num, -1)
         test_data = np.array(test_res).transpose(1,0,2).reshape(test_num, -1)
-        united_PCAs.append(PCAHandler(train_data, test_data, standardization=pca_standardization))
+        united_PCAs.append(PCAHandler(train_data, test_data, standardization=PCA_STANDARDIZATION))
         united_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"united_componentse_{}.png".format(data_key)
         united_PCAs[-1].visualize_results(components_figname)
@@ -959,7 +956,7 @@ for loop in range(1):
         test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
         loop_log.write("- PCA_training_and_test will standardize data automatically.\n")
         loop_log.write("- PCA_training_and_test will add a small amount of noise to the data.\n")
-        param_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
+        param_PCAs.append(PCAHandler(train_data, test_data,standardization=PCA_STANDARDIZATION))
         param_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"param_componentse_{}.png".format(data_key)
         param_PCAs[-1].visualize_results(components_figname)
