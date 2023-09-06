@@ -428,6 +428,10 @@ C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_curvatu
 U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_curvatures)
 S_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_curvatures)
 V_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_curvatures)
+C_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_torsions)
+U_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_torsions)
+S_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_torsions)
+V_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_torsions)
 
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
@@ -513,20 +517,101 @@ print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
 srvf_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
 print ("srvf_recovers.shape: ", srvf_recovers.shape)
 
-C_srvf_synthetic_curvature = []
-C_srvf_synthetic_torsion = []
-for i in range(len(C_synthetic_inverse)):
-    C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
-    C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
-log_likelihood_C_on_srvf_C = C_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-log_likelihood_C_on_srvf_S = S_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-log_likelihood_C_on_srvf_U = U_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-log_likelihood_C_on_srvf_V = V_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-print ("log_likelihood_C_on_srvf_C: ", np.mean(log_likelihood_C_on_srvf_C))
-print ("log_likelihood_C_on_srvf_S: ", np.mean(log_likelihood_C_on_srvf_S))
-print ("log_likelihood_C_on_srvf_U: ", np.mean(log_likelihood_C_on_srvf_U))
-print ("log_likelihood_C_on_srvf_V: ", np.mean(log_likelihood_C_on_srvf_V))
-log_likelihood_U_on_srvf_C = C_curvatures_kde.score_samples(U_srvf_synthetic_curvature)
+def compute_synthetic_curvature_and_torsion(C_recovered):
+    C_srvf_synthetic_curvature = []
+    C_srvf_synthetic_torsion = []
+    for i in range(len(C_synthetic_inverse)):
+        C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
+        C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
+    C_srvf_synthetic_curvature = np.array(C_srvf_synthetic_curvature)
+    C_srvf_synthetic_torsion = np.array(C_srvf_synthetic_torsion)
+    return C_srvf_synthetic_curvature, C_srvf_synthetic_torsion
+
+
+C_srvf_synthetic_curvatures, C_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered)
+U_srvf_synthetic_curvatures, U_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered)
+V_srvf_synthetic_curvatures, V_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered)
+S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered)
+
+C_srvf_synthetic_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_srvf_synthetic_curvatures)
+U_srvf_synthetic_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_srvf_synthetic_curvatures)
+S_srvf_synthetic_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_srvf_synthetic_curvatures)
+V_srvf_synthetic_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_srvf_synthetic_curvatures)
+C_srvf_synthetic_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_srvf_synthetic_torsions)
+U_srvf_synthetic_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_srvf_synthetic_torsions)
+S_srvf_synthetic_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_srvf_synthetic_torsions)
+V_srvf_synthetic_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_srvf_synthetic_torsions)
+
+log_likelihood_C_on_Csynthetic = np.mean(C_srvf_synthetic_curvatures_kde.score_samples(C_curvatures))
+log_likelihood_Csynthetic_on_C = np.mean(C_curvatures_kde.score_samples(C_srvf_synthetic_curvatures))
+log_likelihood_C_on_Usynthetic = np.mean(U_srvf_synthetic_curvatures_kde.score_samples(C_curvatures))
+log_likelihood_Usynthetic_on_C = np.mean(C_curvatures_kde.score_samples(U_srvf_synthetic_curvatures))
+log_likelihood_C_on_Vsynthetic = np.mean(V_srvf_synthetic_curvatures_kde.score_samples(C_curvatures))
+log_likelihood_Vsynthetic_on_C = np.mean(C_curvatures_kde.score_samples(V_srvf_synthetic_curvatures))
+log_likelihood_C_on_Ssynthetic = np.mean(S_srvf_synthetic_curvatures_kde.score_samples(C_curvatures))
+log_likelihood_Ssynthetic_on_C = np.mean(C_curvatures_kde.score_samples(S_srvf_synthetic_curvatures))
+
+log_likelihood_U_on_Usynthetic = np.mean(U_srvf_synthetic_curvatures_kde.score_samples(U_curvatures))
+log_likelihood_Usynthetic_on_U = np.mean(U_curvatures_kde.score_samples(U_srvf_synthetic_curvatures))
+log_likelihood_U_on_Vsynthetic = np.mean(V_srvf_synthetic_curvatures_kde.score_samples(U_curvatures))
+log_likelihood_Vsynthetic_on_U = np.mean(U_curvatures_kde.score_samples(V_srvf_synthetic_curvatures))
+log_likelihood_U_on_Ssynthetic = np.mean(S_srvf_synthetic_curvatures_kde.score_samples(U_curvatures))
+log_likelihood_Ssynthetic_on_U = np.mean(U_curvatures_kde.score_samples(S_srvf_synthetic_curvatures))
+log_likelihood_U_on_Csynthetic = np.mean(C_srvf_synthetic_curvatures_kde.score_samples(U_curvatures))
+log_likelihood_Csynthetic_on_U = np.mean(U_curvatures_kde.score_samples(C_srvf_synthetic_curvatures))
+
+log_likelihood_V_on_Vsynthetic = np.mean(V_srvf_synthetic_curvatures_kde.score_samples(V_curvatures))
+log_likelihood_Vsynthetic_on_V = np.mean(V_curvatures_kde.score_samples(V_srvf_synthetic_curvatures))
+log_likelihood_V_on_Usynthetic = np.mean(U_srvf_synthetic_curvatures_kde.score_samples(V_curvatures))
+log_likelihood_Usynthetic_on_V = np.mean(V_curvatures_kde.score_samples(U_srvf_synthetic_curvatures))
+log_likelihood_V_on_Ssynthetic = np.mean(S_srvf_synthetic_curvatures_kde.score_samples(V_curvatures))
+log_likelihood_Ssynthetic_on_V = np.mean(V_curvatures_kde.score_samples(S_srvf_synthetic_curvatures))
+log_likelihood_V_on_Csynthetic = np.mean(C_srvf_synthetic_curvatures_kde.score_samples(V_curvatures))
+log_likelihood_Csynthetic_on_V = np.mean(V_curvatures_kde.score_samples(C_srvf_synthetic_curvatures))
+
+log_likelihood_S_on_Ssynthetic = np.mean(S_srvf_synthetic_curvatures_kde.score_samples(S_curvatures))
+log_likelihood_Ssynthetic_on_S = np.mean(S_curvatures_kde.score_samples(S_srvf_synthetic_curvatures))
+log_likelihood_S_on_Usynthetic = np.mean(U_srvf_synthetic_curvatures_kde.score_samples(S_curvatures))
+log_likelihood_Usynthetic_on_S = np.mean(S_curvatures_kde.score_samples(U_srvf_synthetic_curvatures))
+log_likelihood_S_on_Vsynthetic = np.mean(V_srvf_synthetic_curvatures_kde.score_samples(S_curvatures))
+log_likelihood_Vsynthetic_on_S = np.mean(S_curvatures_kde.score_samples(V_srvf_synthetic_curvatures))
+log_likelihood_S_on_Csynthetic = np.mean(C_srvf_synthetic_curvatures_kde.score_samples(S_curvatures))
+log_likelihood_Csynthetic_on_S = np.mean(S_curvatures_kde.score_samples(C_srvf_synthetic_curvatures))
+
+
+
+labels = [
+    'C_on_Csynthetic', 'Csynthetic_on_C', 'C_on_Usynthetic', 'Usynthetic_on_C',
+    'C_on_Vsynthetic', 'Vsynthetic_on_C', 'C_on_Ssynthetic', 'Ssynthetic_on_C',
+    'U_on_Usynthetic', 'Usynthetic_on_U', 'U_on_Vsynthetic', 'Vsynthetic_on_U',
+    'U_on_Ssynthetic', 'Ssynthetic_on_U', 'U_on_Csynthetic', 'Csynthetic_on_U',
+    'V_on_Vsynthetic', 'Vsynthetic_on_V', 'V_on_Usynthetic', 'Usynthetic_on_V',
+    'V_on_Ssynthetic', 'Ssynthetic_on_V', 'V_on_Csynthetic', 'Csynthetic_on_V',
+    'S_on_Ssynthetic', 'Ssynthetic_on_S', 'S_on_Usynthetic', 'Usynthetic_on_S',
+    'S_on_Vsynthetic', 'Vsynthetic_on_S', 'S_on_Csynthetic', 'Csynthetic_on_S'
+]
+
+log_likelihoods = [
+    log_likelihood_C_on_Csynthetic, log_likelihood_Csynthetic_on_C, log_likelihood_C_on_Usynthetic, log_likelihood_Usynthetic_on_C,
+    log_likelihood_C_on_Vsynthetic, log_likelihood_Vsynthetic_on_C, log_likelihood_C_on_Ssynthetic, log_likelihood_Ssynthetic_on_C,
+    log_likelihood_U_on_Usynthetic, log_likelihood_Usynthetic_on_U, log_likelihood_U_on_Vsynthetic, log_likelihood_Vsynthetic_on_U,
+    log_likelihood_U_on_Ssynthetic, log_likelihood_Ssynthetic_on_U, log_likelihood_U_on_Csynthetic, log_likelihood_Csynthetic_on_U,
+    log_likelihood_V_on_Vsynthetic, log_likelihood_Vsynthetic_on_V, log_likelihood_V_on_Usynthetic, log_likelihood_Usynthetic_on_V,
+    log_likelihood_V_on_Ssynthetic, log_likelihood_Ssynthetic_on_V, log_likelihood_V_on_Csynthetic, log_likelihood_Csynthetic_on_V,
+    log_likelihood_S_on_Ssynthetic, log_likelihood_Ssynthetic_on_S, log_likelihood_S_on_Usynthetic, log_likelihood_Usynthetic_on_S,
+    log_likelihood_S_on_Vsynthetic, log_likelihood_Vsynthetic_on_S, log_likelihood_S_on_Csynthetic, log_likelihood_Csynthetic_on_S
+]
+
+plt.figure(figsize=(15, 10))
+plt.barh(labels, log_likelihoods, color='skyblue')
+plt.xlabel('Average Log-Likelihood')
+plt.title('Comparison of Average Log-Likelihoods')
+
+for i, v in enumerate(log_likelihoods):
+    plt.text(v, i, " {:.2f}".format(v), va='center', color='black')
+
+plt.show()
+
 
 # 绘制合成曲线的curvature和torsion
 ##############################
