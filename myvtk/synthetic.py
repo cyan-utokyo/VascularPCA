@@ -99,7 +99,7 @@ def plot_recovered(recovered, curvatures, torsions, title_prefix, weights, savep
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_recovered_stats(recovered, curvatures, torsions, title_prefix, weights, savepath):
+def plot_recovered_stats(recovered, curvatures, torsions, title_prefix, weights, savepath, color='blue'):
     """
     绘制recovered数据的曲率和扭转的平均值和标准差。
     
@@ -122,7 +122,7 @@ def plot_recovered_stats(recovered, curvatures, torsions, title_prefix, weights,
     rec_tors_std = np.std(recovered_torsions, axis=0)
 
     # 绘制recovered的平均曲率和标准差
-    axes[0].errorbar(range(len(rec_curv_mean)), rec_curv_mean, yerr=rec_curv_std, color='blue', label=f"{title_prefix}_recovered mean ± std")
+    axes[0].errorbar(range(len(rec_curv_mean)), rec_curv_mean, yerr=rec_curv_std, color=color, label=f"{title_prefix}_recovered mean ± std")
     
     # 绘制curvatures的平均值和标准差
     curv_mean = np.mean(curvatures, axis=0)
@@ -130,7 +130,7 @@ def plot_recovered_stats(recovered, curvatures, torsions, title_prefix, weights,
     axes[0].errorbar(range(len(curv_mean)), curv_mean, yerr=curv_std, color='dimgray', alpha=0.5, label=f"{title_prefix}_curvatures mean ± std")
 
     # 绘制recovered的平均扭转和标准差
-    axes[1].errorbar(range(len(rec_tors_mean)), rec_tors_mean, yerr=rec_tors_std, color='blue', label=f"{title_prefix}_recovered mean ± std")
+    axes[1].errorbar(range(len(rec_tors_mean)), rec_tors_mean, yerr=rec_tors_std, color=color, label=f"{title_prefix}_recovered mean ± std")
 
     # 绘制torsions的平均值和标准差
     tors_mean = np.mean(torsions, axis=0)
@@ -153,4 +153,24 @@ def plot_recovered_stats(recovered, curvatures, torsions, title_prefix, weights,
     
     plt.tight_layout()
     plt.savefig(savepath)
+    plt.close()
     #plt.show()
+
+
+
+def plot_stats_by_label(recovered, labels, curvatures, torsions, title_prefix, weights, savepath_prefix):
+    # 创建一个标签到颜色的映射
+    label_to_color = {
+        0: 'red',
+        1: 'blue',
+        2: 'orange'
+    }
+    unique_labels = np.unique(labels)
+    for label in unique_labels:
+        # 选择这个标签的数据
+        selected_recovered = [recovered[i] for i in range(len(recovered)) if labels[i] == label]
+        # 使用该标签的颜色
+        color = label_to_color[label]
+        # 使用标签来保存图片，例如：U_0_srvf_synthetic.png
+        savepath = savepath_prefix + f"_{label}_srvf_synthetic.png"
+        plot_recovered_stats(selected_recovered, curvatures, torsions, title_prefix, weights, savepath, color=color)

@@ -522,7 +522,10 @@ kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
 kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
 kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
 kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
-
+labels_U = kmeans_U.labels_
+labels_V = kmeans_V.labels_
+labels_C = kmeans_C.labels_
+labels_S = kmeans_S.labels_
 def generate_palette(color_base, n_colors=5):
     # 使用seaborn生成单色调色板，然后将颜色从RGB转换为十六进制格式
     return [sns.desaturate(color, 0.8) for color in sns.color_palette(color_base, n_colors=n_colors)]
@@ -569,10 +572,16 @@ if sample_num < 6:
     plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
     plot_recovered(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_srvf_synthetic.png")
 else:
+    # 现在，为每一个类别调用新函数
+    # plot_stats_by_label(U_recovered, labels_U, U_curvatures, U_torsions, "U", weights, geometry_dir + "U")
+    # plot_stats_by_label(V_recovered, labels_V, V_curvatures, V_torsions, "V", weights, geometry_dir + "V")
+    # plot_stats_by_label(C_recovered, labels_C, C_curvatures, C_torsions, "C", weights, geometry_dir + "C")
+    # plot_stats_by_label(S_recovered, labels_S, S_curvatures, S_torsions, "S", weights, geometry_dir + "S")
     plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
     plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "C_srvf_synthetic.png")
+    # 调用上述函数为每个数据集绘制图形
 
 srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_synthetic], axis=0)
 print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
@@ -629,8 +638,6 @@ for ax in [ax1, ax2]:
 plt.savefig(geometry_dir + "/group_param_compare_srvfSynthetic.png")
 plt.close()
 
-
-print ("C_srvf_synthetic_curvatures.shape: ", C_srvf_synthetic_curvatures.shape)
 
 # 绘制合成曲线的curvature和torsion
 ##############################
