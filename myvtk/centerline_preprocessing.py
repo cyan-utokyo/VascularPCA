@@ -146,6 +146,17 @@ def align_icp(curves,base_id=80,external_curve=None):
 
     return np.array(new_curves)
 
+
+def compute_geodesic_dist_between_two_curves(curve_A, curve_B):
+    # 创建离散曲线对象
+    discrete_curves_space = dc.DiscreteCurves(ambient_manifold=dc.Euclidean(dim=3))
+    # 确保曲线维度正确
+    if curve_A.shape != curve_B.shape:
+        raise ValueError("The dimensions of the two curves should be the same.")
+    # 计算测地线距离
+    geodesic_distance = discrete_curves_space.metric.dist(curve_A, curve_B)
+    return geodesic_distance
+
 def compute_geodesic_dist(curves, external=False, external_curve=None):
     geodesic_d = []
     if external == False:

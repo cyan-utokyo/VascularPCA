@@ -12,10 +12,10 @@ from scipy.spatial.transform import Rotation as R
 from procrustes import orthogonal
 from myvtk.General import *
 from datetime import datetime
-# import geomstats.geometry.pre_shape as pre_shape
-# import geomstats.geometry.discrete_curves as dc
-# from geomstats.geometry.euclidean import EuclideanMetric
-# from geomstats.geometry.hypersphere import HypersphereMetric
+import geomstats.geometry.pre_shape as pre_shape
+import geomstats.geometry.discrete_curves as dc
+from geomstats.geometry.euclidean import EuclideanMetric
+from geomstats.geometry.hypersphere import HypersphereMetric
 from scipy.spatial import distance
 from myvtk.centerline_preprocessing import *
 from scipy import interpolate
@@ -23,10 +23,8 @@ import matplotlib
 import matplotlib.cm as cm
 from scipy.spatial.distance import euclidean
 from myvtk.customize_pca import *
-# from myvtk.make_fig import *
 import shutil
 import os
-# from myvtk.dtw import *
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
@@ -47,9 +45,12 @@ from myvtk.synthetic import *
 import statsmodels.api as sm
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 from myvtk.Mymetrics import *
+import warnings
 
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
+PCA_STANDARDIZATION = 1
 
 # 获取当前时间
 start_time = datetime.now()
@@ -63,6 +64,7 @@ current_file_name = os.path.basename(__file__)
 backup_file_path = os.path.join(bkup_dir, current_file_name)
 log = open(bkup_dir+"log.txt", "w")
 log.write("Start at: {}\n".format(dir_formatted_time))
+log.write("PCA_N_COMPONENTS:"+str(PCA_N_COMPONENTS)+"\n")
 unaligned_curves = []
 Files = []
 radii = []
@@ -132,19 +134,6 @@ numeric_lst = [mapping[letter] for letter in Typevalues]
 
 ########################################
 # plot各种type的平均曲率和扭率
-fig = plt.figure(dpi=300, figsize=(10, 4))
-def setup_axes(position,ymin,ymax):
-    ax = fig.add_subplot(position)
-    ax.set_ylim(ymin, ymax)
-    ax.grid(linestyle=":", alpha=0.5)
-    ax.tick_params(axis='y', colors='k', labelsize=8)  # 设置y轴的颜色和字体大小
-    ax.spines['left'].set_color('k')  # 设置y轴线的颜色
-    return ax# , ax2
-
-ax1 = setup_axes(221, 0, 1.2)
-ax2 = setup_axes(222, 0, 1.2)
-ax3 = setup_axes(223, 0, 1.2)
-ax4 = setup_axes(224, 0, 1.2)
 
 C_curvatures = []
 C_torsions = []
@@ -175,6 +164,26 @@ V_curvatures = np.array(V_curvatures)
 V_torsions = np.array(V_torsions)
 S_curvatures = np.array(S_curvatures)
 S_torsions = np.array(S_torsions)
+print ("count CUVS: ")
+print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
+
+
+
+def setup_axes(position, ymin, ymax):
+    ax = fig.add_subplot(position)
+    ax.set_ylim(ymin, ymax)
+    ax.grid(linestyle=":", alpha=0.5)
+    ax.tick_params(axis='y', colors='k', labelsize=8)  # 设置y轴的颜色和字体大小
+    ax.spines['left'].set_color('k')  # 设置y轴线的颜色
+    
+    # 设置x轴刻度和标签
+    actual_ticks = np.linspace(0, 60, 5)  # 假设数据范围是0到60
+    display_ticks = np.linspace(0, 1, 5)  # 希望显示的范围是0到1
+    
+    ax.set_xticks(actual_ticks)
+    ax.set_xticklabels(display_ticks)
+    
+    return ax
 def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_alpha=0.2):
     mean_curv = np.mean(curv_data, axis=0)
     std_curv = np.std(curv_data, axis=0)
@@ -186,12 +195,12 @@ def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_al
     ax2.plot(mean_tors, color="k", linestyle='--', linewidth=1, alpha=line_alpha)
     ax2.fill_between(range(len(mean_tors)), mean_tors - std_tors, mean_tors + std_tors, color="k", alpha=errorbar_alpha)
 
-# plot_with_errorbars(ax1, ax1a, Curvatures, Torsions)
-# plot_with_errorbars(ax2, ax2a, Curvatures, Torsions)
-# plot_with_errorbars(ax3, ax3a, Curvatures, Torsions)
-# plot_with_errorbars(ax4, ax4a, Curvatures, Torsions)
-# To-do：如何同时表示全体和各种type的曲率和扭率
-
+# 计算curvature统计
+fig = plt.figure(dpi=300, figsize=(10, 4))
+ax1 = setup_axes(221, 0, 1.2)
+ax2 = setup_axes(222, 0, 1.2)
+ax3 = setup_axes(223, 0, 1.2)
+ax4 = setup_axes(224, 0, 1.2)
 plot_with_errorbars(ax1, ax1, C_curvatures, Curvatures)
 plot_with_errorbars(ax2, ax2, S_curvatures, Curvatures)
 plot_with_errorbars(ax3, ax3, U_curvatures, Curvatures)
@@ -204,27 +213,12 @@ plt.tight_layout()
 plt.savefig(geometry_dir + "/Curvatures_GroupVsTotal.png")
 plt.close()
 
-print ("count CUVS: ")
-print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
-# debias_Curvatures = np.stack([np.mean(C_curvatures,axis=0), 
-#                                     np.mean(U_curvatures,axis=0), 
-#                                     np.mean(V_curvatures,axis=0), 
-#                                     np.mean(S_curvatures,axis=0)], axis = 1).T
-# debias_Torsions = np.stack([np.mean(C_torsions,axis=0), 
-#                                   np.mean(U_torsions,axis=0), 
-#                                   np.mean(V_torsions,axis=0), 
-#                                   np.mean(S_torsions,axis=0)], axis = 1).T
-# print ("debias shape:",debias_Curvatures.shape, debias_Torsions.shape)
-# To-Do: 这个方法还需要改
-
-#################################
-# plot各种type的平均曲率和扭率,但是和全体的debias param对比.问题很大
+# 计算torsion统计
 fig = plt.figure(dpi=300, figsize=(10, 4))
 ax1 = setup_axes(221,-1.5, 1.5)
 ax2 = setup_axes(222,-1.5, 1.5)
 ax3 = setup_axes(223,-1.5, 1.5)
 ax4 = setup_axes(224,-1.5, 1.5)
-
 plot_with_errorbars(ax1, ax1, C_torsions, Torsions)
 plot_with_errorbars(ax2, ax2, S_torsions, Torsions)
 plot_with_errorbars(ax3, ax3, U_torsions, Torsions)
@@ -432,29 +426,29 @@ makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
 makeVtkFile(bkup_dir+"mean_srvf.vtk", mean_srvf_inverse,[],[] )
 
-# Geodesic计算
-log.write("- Geodesic is not computed.\n")
-# log.write("- Geodesic distance is computed by SRVR, this is the only way that makes sense.\n")
-# Procrustes_geodesic_d = compute_geodesic_dist(Procrustes_curves)
-
-pca_standardization = 1
+BW = 1
+C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(C_curvatures)
+U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(U_curvatures)
+S_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(S_curvatures)
+V_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(V_curvatures)
+C_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(C_torsions)
+U_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(U_torsions)
+S_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(S_torsions)
+V_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(V_torsions)
 
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 保存数据
 
-# To-do: 弄一个基于curvature和torsion的PCA原始数据的权重矢量W
-# train_data = train_data x W
-# W可以被优化，使得生成曲线的curvature和torsion与原始曲线的curvature和torsion相似
 PCA_weight = np.mean(Curvatures, axis=0)
 
 
-all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
+all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
 all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, pca_standardization)
+all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
 all_pca.PCA_training_and_test()
 all_pca.compute_kde()
 joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
@@ -520,6 +514,41 @@ else:
     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
     plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "C_srvf_synthetic.png")
+
+srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_synthetic], axis=0)
+print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
+srvf_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
+print ("srvf_recovers.shape: ", srvf_recovers.shape)
+
+def output_likelihood(C_synthetic_inverse, C_recovered, C):
+    C_srvf_synthetic_curvature = []
+    C_srvf_synthetic_torsion = []
+    for i in range(len(C_synthetic_inverse)):
+        C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
+        C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
+    log_likelihood_curv_C_on_srvf_C = C_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+    log_likelihood_curv_C_on_srvf_S = S_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+    log_likelihood_curv_C_on_srvf_U = U_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+    log_likelihood_curv_C_on_srvf_V = V_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
+    log_likelihood_tors_C_on_srvf_C = C_torsions_kde.score_samples(C_srvf_synthetic_torsion)
+    log_likelihood_tors_C_on_srvf_S = S_torsions_kde.score_samples(C_srvf_synthetic_torsion)
+    log_likelihood_tors_C_on_srvf_U = U_torsions_kde.score_samples(C_srvf_synthetic_torsion)
+    log_likelihood_tors_C_on_srvf_V = V_torsions_kde.score_samples(C_srvf_synthetic_torsion)
+
+    print ("log_likelihood_{}_on_srvf_C: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_C))
+    print ("log_likelihood_{}_on_srvf_S: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_S))
+    print ("log_likelihood_{}_on_srvf_U: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_U))
+    print ("log_likelihood_{}_on_srvf_V: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_V))
+    print ("log_likelihood_tors_{}_on_srvf_C: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_C))
+    print ("log_likelihood_tors_{}_on_srvf_S: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_S))
+    print ("log_likelihood_tors_{}_on_srvf_U: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_U))
+    print ("log_likelihood_tors_{}_on_srvf_V: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_V))
+
+output_likelihood(C_synthetic_inverse, C_recovered, "C")
+output_likelihood(S_synthetic_inverse, S_recovered, "S")
+output_likelihood(U_synthetic_inverse, U_recovered, "U")
+output_likelihood(V_synthetic_inverse, V_recovered, "V")
+
 # 绘制合成曲线的curvature和torsion
 ##############################
 
@@ -571,6 +600,12 @@ else:
     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_synthetic.png")
     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_synthetic.png")
     plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_synthetic.png")
+
+non_srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_synthetic], axis=0)
+print ("non_srvf_synthetics.shape: ", non_srvf_synthetics.shape)
+non_srvf_pca_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
+print ("non_srvf_recovers.shape: ", non_srvf_pca_recovers.shape)
+
 # 绘制合成曲线的curvature和torsion
 ##############################
 
@@ -726,9 +761,66 @@ ax2.set_ylabel("PC{}".format(y_PC+1))
 plt.savefig(pca_anlysis_dir+"PCA_total.png")
 plt.close()
 
-log.write("PCA standardization: {}\n".format(pca_standardization))
-print ("所有PCA的标准化状态：", pca_standardization)
+log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
+print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 #
+
+
+print ("开始计算geodesic距离")
+total_geod_dist = []
+total_type_pair = []
+total_pca_dist  = []
+total_srvf_pca_dist = []
+for i in range(len(Procrustes_curves)):
+    for j in range(i+1, len(Procrustes_curves)):
+        geodesic_d = compute_geodesic_dist_between_two_curves(Procrustes_curves[i], Procrustes_curves[j])
+        pca_dist = np.linalg.norm(all_pca.train_res[i]-all_pca.train_res[j])
+        srvf_pca_dist = np.linalg.norm(all_srvf_pca.train_res[i]-all_srvf_pca.train_res[j])
+        total_geod_dist.append(geodesic_d)
+        total_type_pair.append([Typevalues[i], Typevalues[j]])
+        total_pca_dist.append(pca_dist)
+        total_srvf_pca_dist.append(srvf_pca_dist)
+total_geod_dist = np.array(total_geod_dist)
+total_pca_dist = np.array(total_pca_dist)
+total_srvf_pca_dist = np.array(total_srvf_pca_dist)
+
+pca_correlation = np.corrcoef(total_pca_dist, total_geod_dist)[0,1] 
+srvf_pca_correlation = np.corrcoef(total_srvf_pca_dist, total_geod_dist)[0,1]
+log.write("PCA correlation matrix: "+ str(pca_correlation)+"\n")
+log.write("SRVF PCA correlation matrix: "+str(srvf_pca_correlation)+"\n")
+
+srvf_synthetic_geod_dist = []
+srvf_pca_dist = []
+sampling_range = np.concatenate([range(0,100), range(1000,1100), range(2000,2100), range(3000,3100)])
+
+for i in sampling_range:
+    for j in sampling_range:
+        geodesic_d = compute_geodesic_dist_between_two_curves(srvf_recovers[i], srvf_recovers[j])
+        pca_dist = np.linalg.norm(srvf_synthetics[i]-srvf_synthetics[j])
+        srvf_synthetic_geod_dist.append(geodesic_d)
+        srvf_pca_dist.append(pca_dist)
+srvf_synthetic_geod_dist = np.array(srvf_synthetic_geod_dist)
+srvf_pca_dist = np.array(srvf_pca_dist)
+# print ("srvf synthetic geodesic distance shape: ", srvf_synthetic_geod_dist.shape)
+# print ("srvf pca distance shape: ", srvf_pca_dist.shape)
+srvf_pca_correlation = np.corrcoef(srvf_pca_dist, srvf_synthetic_geod_dist)[0,1]
+log.write("SRVF PCA correlation matrix (synthetic) : "+str(srvf_pca_correlation)+"\n")
+
+non_srvf_geod_dist = []
+non_srvf_pca_dist = []
+for i in sampling_range:
+    for j in sampling_range:
+        geodesic_d = compute_geodesic_dist_between_two_curves(non_srvf_pca_recovers[i], non_srvf_pca_recovers[j])
+        pca_dist = np.linalg.norm(non_srvf_synthetics[i]-non_srvf_synthetics[j])
+        non_srvf_geod_dist.append(geodesic_d)
+        non_srvf_pca_dist.append(pca_dist)
+non_srvf_geod_dist = np.array(non_srvf_geod_dist)
+non_srvf_pca_dist = np.array(non_srvf_pca_dist)
+# print ("non_srvf geodesic distance shape: ", non_srvf_geod_dist.shape)
+# print ("non_srvf pca distance shape: ", non_srvf_pca_dist.shape)
+non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,1]
+log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
+
 """
 for loop in range(1):
     procrustes_curves = np.copy(Procrustes_curves)
@@ -803,7 +895,7 @@ for loop in range(1):
         train_data, test_data = data_values  # 取出列表中的两个值
         train_data=train_data.reshape(train_num,-1)
         test_data=test_data.reshape(test_num,-1)
-        coord_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
+        coord_PCAs.append(PCAHandler(train_data, test_data,standardization=PCA_STANDARDIZATION))
         coord_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"coord_componentse_{}.png".format(data_key)
         coord_PCAs[-1].visualize_results(components_figname)
@@ -836,14 +928,14 @@ for loop in range(1):
         test_res = []
         united_internal_PCAs = []
         for i in range(3):
-            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=pca_standardization))
+            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=PCA_STANDARDIZATION))
             united_internal_PCAs[-1].PCA_training_and_test()
             train_res_temp, test_res_temp = united_internal_PCAs[-1].train_res, united_internal_PCAs[-1].test_res
             train_res.append(train_res_temp)
             test_res.append(test_res_temp)
         train_data = np.array(train_res).transpose(1,0,2).reshape(train_num, -1)
         test_data = np.array(test_res).transpose(1,0,2).reshape(test_num, -1)
-        united_PCAs.append(PCAHandler(train_data, test_data, standardization=pca_standardization))
+        united_PCAs.append(PCAHandler(train_data, test_data, standardization=PCA_STANDARDIZATION))
         united_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"united_componentse_{}.png".format(data_key)
         united_PCAs[-1].visualize_results(components_figname)
@@ -885,7 +977,7 @@ for loop in range(1):
         test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
         loop_log.write("- PCA_training_and_test will standardize data automatically.\n")
         loop_log.write("- PCA_training_and_test will add a small amount of noise to the data.\n")
-        param_PCAs.append(PCAHandler(train_data, test_data,standardization=pca_standardization))
+        param_PCAs.append(PCAHandler(train_data, test_data,standardization=PCA_STANDARDIZATION))
         param_PCAs[-1].PCA_training_and_test()
         components_figname = save_new_shuffle+"param_componentse_{}.png".format(data_key)
         param_PCAs[-1].visualize_results(components_figname)

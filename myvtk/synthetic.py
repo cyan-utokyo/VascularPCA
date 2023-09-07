@@ -145,6 +145,11 @@ def plot_recovered_stats(recovered, curvatures, torsions, title_prefix, weights,
     for ax in axes:
         ax.legend()
         ax.grid(linestyle=":", alpha=0.5)
+        actual_ticks = np.linspace(0, 60, 5)  # 假设数据范围是0到60
+        display_ticks = np.linspace(0, 1, 5)  # 希望显示的范围是0到1
+        
+        ax.set_xticks(actual_ticks)
+        ax.set_xticklabels(display_ticks)
     
     plt.tight_layout()
     plt.savefig(savepath)
