@@ -45,9 +45,12 @@ from myvtk.synthetic import *
 import statsmodels.api as sm
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 from myvtk.Mymetrics import *
+from sklearn.cluster import KMeans
+from matplotlib.lines import Line2D
 import warnings
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
+
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
@@ -426,15 +429,14 @@ makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
 makeVtkFile(bkup_dir+"mean_srvf.vtk", mean_srvf_inverse,[],[] )
 
-BW = 1
-C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(C_curvatures)
-U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(U_curvatures)
-S_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(S_curvatures)
-V_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(V_curvatures)
-C_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(C_torsions)
-U_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(U_torsions)
-S_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(S_torsions)
-V_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=BW).fit(V_torsions)
+C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_curvatures)
+U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_curvatures)
+S_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_curvatures)
+V_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_curvatures)
+C_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_torsions)
+U_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_torsions)
+S_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_torsions)
+V_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_torsions)
 
 # frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
@@ -482,17 +484,80 @@ U_synthetic = U_srvf_kde.sample(sample_num)
 V_synthetic = V_srvf_kde.sample(sample_num)
 C_synthetic = C_srvf_kde.sample(sample_num)
 S_synthetic = S_srvf_kde.sample(sample_num)
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.scatter(all_srvf_pca.train_res[:,0], all_srvf_pca.train_res[:,1], c='k', s=50, marker="x")
-ax.scatter(U_synthetic[:,0], U_synthetic[:,1], c='w', s=30, edgecolor='r',alpha=0.4)
-ax.scatter(V_synthetic[:,0], V_synthetic[:,1], c='w', s=30, edgecolor='b',alpha=0.4)
-ax.scatter(C_synthetic[:,0], C_synthetic[:,1], c='w', s=30, edgecolor='g',alpha=0.4)
-ax.scatter(S_synthetic[:,0], S_synthetic[:,1], c='w', s=30, edgecolor='orange',alpha=0.4)
-ax.set_xlabel('PC1')
-ax.set_ylabel('PC2')
+# 定义一个函数来计算elbow值
+def compute_elbow(data, max_clusters=10):
+    wcss = []
+    for i in range(1, max_clusters+1):
+        kmeans = KMeans(n_clusters=i, init='k-means++', max_iter=300, n_init=10, random_state=0)
+        kmeans.fit(data)
+        wcss.append(kmeans.inertia_)
+    # 计算每个点和其前后点的斜率差值
+    slopes = [wcss[i] - wcss[i+1] for i in range(len(wcss)-1)]
+    slopes_diff = [slopes[i] - slopes[i+1] for i in range(len(slopes)-1)]
+    # 拐点是斜率变化最大的地方+2（因为数组从0开始并且我们要加上后一个点）
+    elbow = slopes_diff.index(max(slopes_diff)) + 2
+    return wcss, elbow
+U_wcss, U_elbow = compute_elbow(U_synthetic)
+V_wcss, V_elbow = compute_elbow(V_synthetic)
+C_wcss, C_elbow = compute_elbow(C_synthetic)
+S_wcss, S_elbow = compute_elbow(S_synthetic)
+# 绘制elbow图
+
+plt.figure()
+plt.plot(range(1, 11), U_wcss, marker='o', label='U_synthetic')
+plt.plot(range(1, 11), V_wcss, marker='o', label='V_synthetic')
+plt.plot(range(1, 11), C_wcss, marker='o', label='C_synthetic')
+plt.plot(range(1, 11), S_wcss, marker='o', label='S_synthetic')
+# 标记每个elbow点
+plt.scatter(U_elbow, U_wcss[U_elbow-1], s=150,  marker='*', label="Elbow U")
+plt.scatter(V_elbow, V_wcss[V_elbow-1], s=150, marker='*', label="Elbow V")
+plt.scatter(C_elbow, C_wcss[C_elbow-1], s=150,  marker='*', label="Elbow C")
+plt.scatter(S_elbow, S_wcss[S_elbow-1], s=150,  marker='*', label="Elbow S")
+plt.title('Elbow Method')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS')
+plt.legend()
+plt.savefig(pca_anlysis_dir + "ELBOW_srvf_pca_synthetic.png")
+plt.close()
+
+# 用最佳的k值进行聚类
+kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
+kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
+kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
+kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
+labels_U = kmeans_U.labels_
+labels_V = kmeans_V.labels_
+labels_C = kmeans_C.labels_
+labels_S = kmeans_S.labels_
+def generate_palette(color_base, n_colors=5):
+    # 使用seaborn生成单色调色板，然后将颜色从RGB转换为十六进制格式
+    return [sns.desaturate(color, 0.8) for color in sns.color_palette(color_base, n_colors=n_colors)]
+
+synthetic_cluster_colors = {
+    "U": generate_palette("Reds_r",U_elbow),  # 5 shades of red for U
+    "V": generate_palette("Blues_r",V_elbow),  # 5 shades of blue for V
+    "C": generate_palette("Greens_r",C_elbow),  # 5 shades of green for C
+    "S": generate_palette("YlOrBr_r",S_elbow)   # 5 shades of yellow-orange-brown for S
+}
+
+def plot_synthetic_data(ax, all_data, synthetic_data, kmeans_labels, color_map, label):
+    ax.scatter(all_data[:, 0], all_data[:, 1], c='dimgray', s=50, marker="x")
+    for cluster_num in np.unique(kmeans_labels):
+        mask = kmeans_labels == cluster_num
+        ax.scatter(synthetic_data[mask, 0], synthetic_data[mask, 1], color=color_map[label][cluster_num], s=50, marker=f"${label}$")
+    ax.set_title(f'{label}_synthetic')
+    ax.set_xlabel('PC1')
+    ax.set_ylabel('PC2')
+
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+plot_synthetic_data(axs[0, 0], all_srvf_pca.train_res, U_synthetic, kmeans_U.labels_, synthetic_cluster_colors, 'U')
+plot_synthetic_data(axs[0, 1], all_srvf_pca.train_res, V_synthetic, kmeans_V.labels_, synthetic_cluster_colors, 'V')
+plot_synthetic_data(axs[1, 0], all_srvf_pca.train_res, C_synthetic, kmeans_C.labels_, synthetic_cluster_colors, 'C')
+plot_synthetic_data(axs[1, 1], all_srvf_pca.train_res, S_synthetic, kmeans_S.labels_, synthetic_cluster_colors, 'S')
+plt.tight_layout()
 plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic_scatter.png")
 plt.close()
+
 ##############################
 # 绘制合成曲线的curvature和torsion
 U_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
@@ -510,44 +575,72 @@ if sample_num < 6:
     plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
     plot_recovered(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_srvf_synthetic.png")
 else:
+    # 现在，为每一个类别调用新函数
+    # plot_stats_by_label(U_recovered, labels_U, U_curvatures, U_torsions, "U", weights, geometry_dir + "U")
+    # plot_stats_by_label(V_recovered, labels_V, V_curvatures, V_torsions, "V", weights, geometry_dir + "V")
+    # plot_stats_by_label(C_recovered, labels_C, C_curvatures, C_torsions, "C", weights, geometry_dir + "C")
+    # plot_stats_by_label(S_recovered, labels_S, S_curvatures, S_torsions, "S", weights, geometry_dir + "S")
     plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
     plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "C_srvf_synthetic.png")
+    # 调用上述函数为每个数据集绘制图形
 
 srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_synthetic], axis=0)
 print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
 srvf_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
 print ("srvf_recovers.shape: ", srvf_recovers.shape)
 
-def output_likelihood(C_synthetic_inverse, C_recovered, C):
+def compute_synthetic_curvature_and_torsion(C_recovered):
     C_srvf_synthetic_curvature = []
     C_srvf_synthetic_torsion = []
     for i in range(len(C_synthetic_inverse)):
         C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
         C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
-    log_likelihood_curv_C_on_srvf_C = C_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-    log_likelihood_curv_C_on_srvf_S = S_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-    log_likelihood_curv_C_on_srvf_U = U_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-    log_likelihood_curv_C_on_srvf_V = V_curvatures_kde.score_samples(C_srvf_synthetic_curvature)
-    log_likelihood_tors_C_on_srvf_C = C_torsions_kde.score_samples(C_srvf_synthetic_torsion)
-    log_likelihood_tors_C_on_srvf_S = S_torsions_kde.score_samples(C_srvf_synthetic_torsion)
-    log_likelihood_tors_C_on_srvf_U = U_torsions_kde.score_samples(C_srvf_synthetic_torsion)
-    log_likelihood_tors_C_on_srvf_V = V_torsions_kde.score_samples(C_srvf_synthetic_torsion)
+    C_srvf_synthetic_curvature = np.array(C_srvf_synthetic_curvature)
+    C_srvf_synthetic_torsion = np.array(C_srvf_synthetic_torsion)
+    return C_srvf_synthetic_curvature, C_srvf_synthetic_torsion
 
-    print ("log_likelihood_{}_on_srvf_C: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_C))
-    print ("log_likelihood_{}_on_srvf_S: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_S))
-    print ("log_likelihood_{}_on_srvf_U: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_U))
-    print ("log_likelihood_{}_on_srvf_V: ".format(C), np.mean(log_likelihood_curv_C_on_srvf_V))
-    print ("log_likelihood_tors_{}_on_srvf_C: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_C))
-    print ("log_likelihood_tors_{}_on_srvf_S: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_S))
-    print ("log_likelihood_tors_{}_on_srvf_U: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_U))
-    print ("log_likelihood_tors_{}_on_srvf_V: ".format(C), np.mean(log_likelihood_tors_C_on_srvf_V))
+C_srvf_synthetic_curvatures, C_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered)
+U_srvf_synthetic_curvatures, U_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered)
+V_srvf_synthetic_curvatures, V_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered)
+S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered)
 
-output_likelihood(C_synthetic_inverse, C_recovered, "C")
-output_likelihood(S_synthetic_inverse, S_recovered, "S")
-output_likelihood(U_synthetic_inverse, U_recovered, "U")
-output_likelihood(V_synthetic_inverse, V_recovered, "V")
+############
+# 绘制group内的曲率和扭率对比全体的偏离程度的散点图
+
+fig = plt.figure(dpi=300, figsize=(9,4))
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(U_srvf_synthetic_curvatures,axis=0), color="r",marker="o", alpha=0.5, label='U')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(V_srvf_synthetic_curvatures,axis=0), color="g",marker="s", alpha=0.5, label='V')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(C_srvf_synthetic_curvatures,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(S_srvf_synthetic_curvatures,axis=0), color="orange",marker="*", alpha=0.5, label='S')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(U_srvf_synthetic_torsions,axis=0), color="r",marker="o", alpha=0.5, label='U')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(V_srvf_synthetic_torsions,axis=0), color="g",marker="s", alpha=0.5, label='V')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(C_srvf_synthetic_torsions,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(S_srvf_synthetic_torsions,axis=0), color="orange",marker="*", alpha=0.5, label='S')
+# 获取ax1的x轴和y轴范围
+x1_min, x1_max = ax1.get_xlim()
+y1_min, y1_max = ax1.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_1 = max(x1_min, y1_min)
+diag_max_1 = min(x1_max, y1_max)
+ax1.plot([diag_min_1, diag_max_1], [diag_min_1, diag_max_1], linestyle=":", color="k")
+# 获取ax2的x轴和y轴范围
+x2_min, x2_max = ax2.get_xlim()
+y2_min, y2_max = ax2.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_2 = max(x2_min, y2_min)
+diag_max_2 = min(x2_max, y2_max)
+ax2.plot([diag_min_2, diag_max_2], [diag_min_2, diag_max_2], linestyle=":", color="k")
+ax1.legend(loc='best') # 添加图例到子图ax1
+ax2.legend(loc='best') # 添加图例到子图ax2
+for ax in [ax1, ax2]:
+    ax.grid(linestyle=":", alpha=0.5)
+plt.savefig(geometry_dir + "/group_param_compare_srvfSynthetic.png")
+plt.close()
+
 
 # 绘制合成曲线的curvature和torsion
 ##############################
@@ -568,17 +661,53 @@ U_synthetic = U_kde.sample(sample_num)
 V_synthetic = V_kde.sample(sample_num)
 C_synthetic = C_kde.sample(sample_num)
 S_synthetic = S_kde.sample(sample_num)
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.scatter(all_pca.train_res[:,0], all_pca.train_res[:,1], c='k', s=50, marker="x")
-ax.scatter(U_synthetic[:,0], U_synthetic[:,1], c='w', s=30, edgecolor='r',alpha=0.4)
-ax.scatter(V_synthetic[:,0], V_synthetic[:,1], c='w', s=30, edgecolor='b',alpha=0.4)
-ax.scatter(C_synthetic[:,0], C_synthetic[:,1], c='w', s=30, edgecolor='g',alpha=0.4)
-ax.scatter(S_synthetic[:,0], S_synthetic[:,1], c='w', s=30, edgecolor='orange',alpha=0.4)
-ax.set_xlabel('PC1')
-ax.set_ylabel('PC2')
+
+# 对于每个X_synthetic计算elbow值
+U_wcss, U_elbow = compute_elbow(U_synthetic)
+V_wcss, V_elbow = compute_elbow(V_synthetic)
+C_wcss, C_elbow = compute_elbow(C_synthetic)
+S_wcss, S_elbow = compute_elbow(S_synthetic)
+# 绘制elbow图
+plt.figure()
+plt.plot(range(1, 11), U_wcss, marker='o', label='U_synthetic')
+plt.plot(range(1, 11), V_wcss, marker='o', label='V_synthetic')
+plt.plot(range(1, 11), C_wcss, marker='o', label='C_synthetic')
+plt.plot(range(1, 11), S_wcss, marker='o', label='S_synthetic')
+# 标记每个elbow点
+plt.scatter(U_elbow, U_wcss[U_elbow-1], s=150,  marker='*', label="Elbow U")
+plt.scatter(V_elbow, V_wcss[V_elbow-1], s=150, marker='*', label="Elbow V")
+plt.scatter(C_elbow, C_wcss[C_elbow-1], s=150,  marker='*', label="Elbow C")
+plt.scatter(S_elbow, S_wcss[S_elbow-1], s=150,  marker='*', label="Elbow S")
+plt.title('Elbow Method')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS')
+plt.legend()
+plt.savefig(pca_anlysis_dir + "ELBOW_pca_synthetic.png")
+plt.close()
+
+synthetic_cluster_colors = {
+    "U": generate_palette("Reds_r",U_elbow),  # 5 shades of red for U
+    "V": generate_palette("Blues_r",V_elbow),  # 5 shades of blue for V
+    "C": generate_palette("Greens_r",C_elbow),  # 5 shades of green for C
+    "S": generate_palette("YlOrBr_r",S_elbow)   # 5 shades of yellow-orange-brown for S
+}
+
+kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
+kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
+kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
+kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
+
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+
+plot_synthetic_data(axs[0, 0], all_pca.train_res, U_synthetic, kmeans_U.labels_, synthetic_cluster_colors, 'U')
+plot_synthetic_data(axs[0, 1], all_pca.train_res, V_synthetic, kmeans_V.labels_, synthetic_cluster_colors, 'V')
+plot_synthetic_data(axs[1, 0], all_pca.train_res, C_synthetic, kmeans_C.labels_, synthetic_cluster_colors, 'C')
+plot_synthetic_data(axs[1, 1], all_pca.train_res, S_synthetic, kmeans_S.labels_, synthetic_cluster_colors, 'S')
+
+plt.tight_layout()
 plt.savefig(pca_anlysis_dir + "pca_synthetic_scatter.png")
 plt.close()
+
 ##############################
 # 绘制合成曲线的curvature和torsion
 U_synthetic_inverse = all_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
@@ -605,6 +734,45 @@ non_srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_s
 print ("non_srvf_synthetics.shape: ", non_srvf_synthetics.shape)
 non_srvf_pca_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
 print ("non_srvf_recovers.shape: ", non_srvf_pca_recovers.shape)
+
+C_synthetic_curvatures, C_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered)
+U_synthetic_curvatures, U_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered)
+V_synthetic_curvatures, V_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered)
+S_synthetic_curvatures, S_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered)
+
+############
+# 绘制group内的曲率和扭率对比全体的偏离程度的散点图
+fig = plt.figure(dpi=300, figsize=(9,4))
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(U_synthetic_curvatures,axis=0), color="r",marker="o", alpha=0.5, label='U')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(V_synthetic_curvatures,axis=0), color="g",marker="s", alpha=0.5, label='V')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(C_synthetic_curvatures,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax1.scatter(np.mean(Curvatures,axis=0),np.mean(S_synthetic_curvatures,axis=0), color="orange",marker="*", alpha=0.5, label='S')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(U_synthetic_torsions,axis=0), color="r",marker="o", alpha=0.5, label='U')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(V_synthetic_torsions,axis=0), color="g",marker="s", alpha=0.5, label='V')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(C_synthetic_torsions,axis=0), color="b",marker="^", alpha=0.5, label='C')
+ax2.scatter(np.mean(Torsions,axis=0),np.mean(S_synthetic_torsions,axis=0), color="orange",marker="*", alpha=0.5, label='S')
+# 获取ax1的x轴和y轴范围
+x1_min, x1_max = ax1.get_xlim()
+y1_min, y1_max = ax1.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_1 = max(x1_min, y1_min)
+diag_max_1 = min(x1_max, y1_max)
+ax1.plot([diag_min_1, diag_max_1], [diag_min_1, diag_max_1], linestyle=":", color="k")
+# 获取ax2的x轴和y轴范围
+x2_min, x2_max = ax2.get_xlim()
+y2_min, y2_max = ax2.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_2 = max(x2_min, y2_min)
+diag_max_2 = min(x2_max, y2_max)
+ax2.plot([diag_min_2, diag_max_2], [diag_min_2, diag_max_2], linestyle=":", color="k")
+ax1.legend(loc='best') # 添加图例到子图ax1
+ax2.legend(loc='best') # 添加图例到子图ax2
+for ax in [ax1, ax2]:
+    ax.grid(linestyle=":", alpha=0.5)
+plt.savefig(geometry_dir + "/group_param_compare_Synthetic.png")
+plt.close()
 
 # 绘制合成曲线的curvature和torsion
 ##############################
@@ -719,45 +887,46 @@ for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
 
 
 srvf_x_PC = 0
-srvf_y_PC = 3
+srvf_y_PC = 1 # 3
 x_PC = 0
-y_PC = 2
+y_PC = 1 # 2
 
-type_to_color = {
-    'U': '#001100',
-    'V': '#112200',
-    'C': '#223300',
-    'S': '#334400'
-}
+def get_main_color(palette):
+    return palette[0]
+# 取主颜色
+main_colors = {key: get_main_color(value) for key, value in synthetic_cluster_colors.items()}
+# 使用这个dictionary将Typevalues转换为颜色列表
+color_values = [main_colors[t] for t in Typevalues]
 
-# 2. 使用这个dictionary将Typevalues转换为颜色列表
-color_values = [type_to_color[t] for t in Typevalues]
+# 创建图例的 handles 和 labels
+legend_elements = [Line2D([0], [0], marker='o', color='w', 
+                          markerfacecolor=main_colors[t], markersize=10, 
+                          label=t) for t in ['U', 'C', 'V', 'S']]
 
 fig = plt.figure(dpi=300, figsize=(6, 5))
 ax1 = fig.add_subplot(111)
 sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC],
-                  c=color_values)
-# 添加注释
-for i in range(len(Typevalues)):
-    filename = Files[i].split("/")[-1][:-12]
-    # ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
-    # ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
+                  c=color_values,
+                  alpha=0.7,
+                  edgecolors='white')
+ax1.grid(linestyle='--', linewidth=0.5)
 ax1.set_xlabel("PC{}".format(srvf_x_PC+1))
 ax1.set_ylabel("PC{}".format(srvf_y_PC+1))
+ax1.legend(handles=legend_elements)  # 添加图例
 plt.savefig(pca_anlysis_dir+"srvf_PCA_total.png")
 plt.close()
 
 fig = plt.figure(dpi=300, figsize=(6, 5))
 ax2 = fig.add_subplot(111)
 sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC],
-                  c=color_values)
-# 添加注释
-for i in range(len(Typevalues)):
-    filename = Files[i].split("/")[-1][:-12]
-    # ax1.annotate(filename, (all_srvf_pca.train_res[i, 0], all_srvf_pca.train_res[i, 1]))
-    # ax2.annotate(filename, (all_pca.train_res[i, 0], all_pca.train_res[i, 1]))
+                  c=color_values,
+                  alpha=0.7,
+                  edgecolors='white')
+
 ax2.set_xlabel("PC{}".format(x_PC+1))
 ax2.set_ylabel("PC{}".format(y_PC+1))
+ax2.grid(linestyle='--', linewidth=0.5)
+ax2.legend(handles=legend_elements)  # 添加图例
 plt.savefig(pca_anlysis_dir+"PCA_total.png")
 plt.close()
 
@@ -1039,3 +1208,4 @@ end_time = datetime.now()
 total_time = end_time - start_time
 print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")
 log.close()
+open_folder_in_explorer(bkup_dir)
