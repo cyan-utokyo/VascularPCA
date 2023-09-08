@@ -521,10 +521,10 @@ plt.savefig(pca_anlysis_dir + "ELBOW_srvf_pca_synthetic.png")
 plt.close()
 
 # 用最佳的k值进行聚类
-kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
-kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
-kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
-kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
+kmeans_U = KMeans(n_clusters=U_elbow, n_init=10).fit(U_synthetic)
+kmeans_V = KMeans(n_clusters=V_elbow, n_init=10).fit(V_synthetic)
+kmeans_C = KMeans(n_clusters=C_elbow, n_init=10).fit(C_synthetic)
+kmeans_S = KMeans(n_clusters=S_elbow, n_init=10).fit(S_synthetic)
 labels_U = kmeans_U.labels_
 labels_V = kmeans_V.labels_
 labels_C = kmeans_C.labels_
@@ -692,10 +692,10 @@ synthetic_cluster_colors = {
     "S": generate_palette("YlOrBr_r",S_elbow)   # 5 shades of yellow-orange-brown for S
 }
 
-kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
-kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
-kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
-kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
+kmeans_U = KMeans(n_clusters=U_elbow, n_init=10).fit(U_synthetic)
+kmeans_V = KMeans(n_clusters=V_elbow, n_init=10).fit(V_synthetic)
+kmeans_C = KMeans(n_clusters=C_elbow, n_init=10).fit(C_synthetic)
+kmeans_S = KMeans(n_clusters=S_elbow, n_init=10).fit(S_synthetic)
 
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
 
