@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from scipy.interpolate import interp1d
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, KernelPCA
 from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 from scipy.stats import zscore
@@ -48,6 +48,8 @@ from myvtk.Mymetrics import *
 from sklearn.cluster import KMeans
 from matplotlib.lines import Line2D
 import warnings
+from sklearn.metrics.pairwise import rbf_kernel
+
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
 
@@ -934,6 +936,67 @@ log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
 print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 #
 
+###########################################################
+######### Kernel PCA.通过KernelPCA或其他核技术，自定义一个核，使数据在新的特征空间中更均匀地分布。
+gamma=0.005
+array_0 = np.zeros(1000)
+array_1 = np.ones(1000)
+array_2 = np.ones(1000) * 2
+array_3 = np.ones(1000) * 3
+
+final_array = np.concatenate([array_0, array_1, array_2, array_3])
+kpca = KernelPCA(n_components=3, kernel='rbf', gamma=gamma)
+K = rbf_kernel(srvf_synthetics, gamma=gamma)
+eigenvalues = np.linalg.eigvalsh(K)
+print("EIGENVALUES:", eigenvalues)
+X_kpca = kpca.fit_transform(srvf_synthetics)
+# 绘图
+plt.figure(figsize=(8,6))
+plt.scatter(X_kpca[:, 0], X_kpca[:, 2], c=final_array, alpha=1, cmap=plt.cm.get_cmap('rainbow', 4))
+plt.title('Kernel PCA (gamma:{})'.format(gamma))
+plt.xlabel('PC1')
+plt.ylabel('PC2')
+plt.legend()  # 添加图例
+plt.savefig(pca_anlysis_dir+"srvf_kernel_PCA_total.png")
+
+gamma=0.01
+kpca = KernelPCA(n_components=3, kernel='rbf', gamma=gamma)
+K = rbf_kernel(non_srvf_synthetics , gamma=gamma)
+eigenvalues = np.linalg.eigvalsh(K)
+print("EIGENVALUES:", eigenvalues)
+X_kpca = kpca.fit_transform(non_srvf_synthetics )
+# 绘图
+plt.figure(figsize=(8,6))
+plt.scatter(X_kpca[:, 0], X_kpca[:, 2], c=final_array, alpha=1, cmap=plt.cm.get_cmap('rainbow', 4))
+plt.title('Kernel PCA (gamma:{})'.format(gamma))
+plt.xlabel('PC1')
+plt.ylabel('PC2')
+plt.legend()  # 添加图例
+plt.savefig(pca_anlysis_dir+"kernel_PCA_total.png")
+#########
+###########################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 print ("开始计算geodesic距离")
 total_geod_dist = []
@@ -989,6 +1052,11 @@ non_srvf_pca_dist = np.array(non_srvf_pca_dist)
 # print ("non_srvf pca distance shape: ", non_srvf_pca_dist.shape)
 non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,1]
 log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
+
+
+
+
+
 
 """
 for loop in range(1):
