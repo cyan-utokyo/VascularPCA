@@ -519,7 +519,16 @@ min_index = np.argmin(random_dists)
 
 # 使用该索引获取对应的vector
 optimized_landmark_w = random_vecs[min_index]
-
+np.save(bkup_dir+"optimized_landmark_w.npy", optimized_landmark_w)
+fig = plt.figure(dpi=300, figsize=(6, 4))
+ax1 = fig.add_subplot(111)
+ax1.plot(optimized_landmark_w)
+ax1.set_xlabel('Index')
+ax1.set_ylabel('Weight')
+ax1.set_title('Optimized landmark weights')
+plt.tight_layout()
+plt.savefig(bkup_dir+"optimized_landmark_w.png")
+plt.close()
 
 landmark_w = optimized_landmark_w
 interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
