@@ -49,7 +49,7 @@ from sklearn.cluster import KMeans
 from matplotlib.lines import Line2D
 import warnings
 from sklearn.metrics.pairwise import rbf_kernel
-
+from scipy.optimize import minimize
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
 
@@ -413,7 +413,11 @@ for i in range(len(Procrustes_curves)):
 Procrustes_curves = np.array(Procrustes_curves)
 
 print (Procrustes_curves.shape)
-
+i=0
+j=1
+plot_curve_with_peaks_name = geometry_dir + "peak_of_{}_and_{}.png".format(i,j)
+plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsions, 
+                       plot_curve_with_peaks_name, axes=(1,2), distance=30)
 # if SCALETO1:
 #     # 需要把长度还原到原始曲线或1
 #     for i in range(len(Procrustes_curves)):
@@ -427,8 +431,7 @@ print (Procrustes_curves.shape)
 # interpolate Curvatures to (87, 64)
 
 
-import numpy as np
-from scipy.optimize import minimize
+
 
 # 给定landmark_w，计算加权的Procrustes_curves
 
@@ -455,103 +458,94 @@ def compute_geod_dist_mat(weighted_procrustes_curves):
             geod_dist_mat[i, j] = geodesic_d
     return geod_dist_mat
 
-# 优化的目标函数
-def objective(landmark_w, Procrustes_curves, Curvatures, numeric_lst):
-    # print ("numeric_lst:", numeric_lst)
-    weighted_curves = compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w)
-    geod_dist_mat = compute_geod_dist_mat(weighted_curves)
+# # 优化的目标函数
+# def objective(landmark_w, Procrustes_curves, Curvatures, numeric_lst):
+#     # print ("numeric_lst:", numeric_lst)
+#     weighted_curves = compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w)
+#     geod_dist_mat = compute_geod_dist_mat(weighted_curves)
 
-    # Check for NaN values in geod_dist_mat
-    # if np.isnan(geod_dist_mat).any():
-    #     return 1e10  # Return a large positive value
+#     # Check for NaN values in geod_dist_mat
+#     # if np.isnan(geod_dist_mat).any():
+#     #     return 1e10  # Return a large positive value
 
-    # PCA处理
-    geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-    reduced_data,_,_ = geod_dist_pca.PCA_training_and_test()
+#     # PCA处理
+#     geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+#     reduced_data,_,_ = geod_dist_pca.PCA_training_and_test()
 
-    # 计算四个类别的中心点
-    class_centers = []
-    for label in [0, 1, 2, 3]:
-        # indices = np.where(numeric_lst == label)[0]
-        indices = np.where(np.array(numeric_lst) == label)[0]
-        # print ("label:",label,"indices:",indices)
-        class_center = np.mean(reduced_data[indices], axis=0)
-        class_centers.append(class_center)
+#     # 计算四个类别的中心点
+#     class_centers = []
+#     for label in [0, 1, 2, 3]:
+#         # indices = np.where(numeric_lst == label)[0]
+#         indices = np.where(np.array(numeric_lst) == label)[0]
+#         # print ("label:",label,"indices:",indices)
+#         class_center = np.mean(reduced_data[indices], axis=0)
+#         class_centers.append(class_center)
     
-    # 计算类别之间的距离
-    distances = []
-    for i in range(4):
-        for j in range(i+1, 4):
-            distances.append(np.linalg.norm(class_centers[i] - class_centers[j]))
-    
-    # 因为我们使用的是minimize函数，所以需要返回负的距离以实现最大化效果
-    return -np.sum(distances)
+#     # 计算类别之间的距离
+#     distances = []
+#     for i in range(4):
+#         for j in range(i+1, 4):
+#             distances.append(np.linalg.norm(class_centers[i] - class_centers[j]))
+#     # 因为我们使用的是minimize函数，所以需要返回负的距离以实现最大化效果
+#     return -np.sum(distances)
 
-# 使用scipy.optimize.minimize进行优化
 # initial_landmark_w = np.ones_like(Procrustes_curves[0,:,0])
-# res = minimize(objective, initial_landmark_w, 
-#                args=(Procrustes_curves, Curvatures, numeric_lst), 
-#                method='L-BFGS-B')
+# random_vecs = []
+# random_dists = []
+# from tqdm import tqdm
+# for i in tqdm(range(1)):
+#     random_vector = np.random.rand(*initial_landmark_w.shape)
+#     random_dist = objective(random_vector, Procrustes_curves, Curvatures, numeric_lst)
+#     random_vecs.append(random_vector)
+#     random_dists.append(random_dist)
+# fig = plt.figure(dpi=300, figsize=(6, 4))
+# ax1 = fig.add_subplot(111)
+# ax1.hist(random_dists, bins=20, edgecolor='black', alpha=0.7)  # 可以修改bins的值来调整柱状的宽度
+# ax1.set_xlabel('Distance')
+# ax1.set_ylabel('Frequency')
+# ax1.set_title('Histogram of random_dists')
+# plt.tight_layout()
+# plt.savefig(bkup_dir+"random_dists_histogram.png")
+# plt.close()
 
-# optimized_landmark_w = res.x
-# print(optimized_landmark_w)
-initial_landmark_w = np.ones_like(Procrustes_curves[0,:,0])
-random_vecs = []
-random_dists = []
-from tqdm import tqdm
-for i in tqdm(range(1000)):
-    random_vector = np.random.rand(*initial_landmark_w.shape)
-    random_dist = objective(random_vector, Procrustes_curves, Curvatures, numeric_lst)
-    random_vecs.append(random_vector)
-    random_dists.append(random_dist)
-fig = plt.figure(dpi=300, figsize=(6, 4))
-ax1 = fig.add_subplot(111)
-ax1.hist(random_dists, bins=20, edgecolor='black', alpha=0.7)  # 可以修改bins的值来调整柱状的宽度
-ax1.set_xlabel('Distance')
-ax1.set_ylabel('Frequency')
-ax1.set_title('Histogram of random_dists')
-plt.tight_layout()
-plt.savefig(bkup_dir+"random_dists_histogram.png")
-plt.close()
+# # 获取最小值的索引
+# min_index = np.argmin(random_dists)
 
-# 获取最小值的索引
-min_index = np.argmin(random_dists)
+# # 使用该索引获取对应的vector
+# optimized_landmark_w = random_vecs[min_index]
+# np.save(bkup_dir+"optimized_landmark_w.npy", optimized_landmark_w)
+# fig = plt.figure(dpi=300, figsize=(6, 4))
+# ax1 = fig.add_subplot(111)
+# ax1.plot(optimized_landmark_w)
+# ax1.set_xlabel('Index')
+# ax1.set_ylabel('Weight')
+# ax1.set_title('Optimized landmark weights')
+# plt.tight_layout()
+# plt.savefig(bkup_dir+"optimized_landmark_w.png")
+# plt.close()
 
-# 使用该索引获取对应的vector
-optimized_landmark_w = random_vecs[min_index]
-np.save(bkup_dir+"optimized_landmark_w.npy", optimized_landmark_w)
-fig = plt.figure(dpi=300, figsize=(6, 4))
-ax1 = fig.add_subplot(111)
-ax1.plot(optimized_landmark_w)
-ax1.set_xlabel('Index')
-ax1.set_ylabel('Weight')
-ax1.set_title('Optimized landmark weights')
-plt.tight_layout()
-plt.savefig(bkup_dir+"optimized_landmark_w.png")
-plt.close()
+# landmark_w = optimized_landmark_w
+# interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
+# weighted_procrustes_curves = np.zeros_like(Procrustes_curves)
+# for i in range(len(Curvatures)):
+#     interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])), np.linspace(0, 1, len(Curvatures[i])), Curvatures[i])
+# for i in range(len(interpolated_curvatures)):
+#     for j in range(len(interpolated_curvatures[i])):
+#         weighted_procrustes_curves[i][j] = Procrustes_curves[i][j] * interpolated_curvatures[i][j] * landmark_w[j]
 
-landmark_w = optimized_landmark_w
-interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
-weighted_procrustes_curves = np.zeros_like(Procrustes_curves)
-for i in range(len(Curvatures)):
-    interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])), np.linspace(0, 1, len(Curvatures[i])), Curvatures[i])
-for i in range(len(interpolated_curvatures)):
-    for j in range(len(interpolated_curvatures[i])):
-        weighted_procrustes_curves[i][j] = Procrustes_curves[i][j] * interpolated_curvatures[i][j] * landmark_w[j]
+# geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
+# for i in range(len(weighted_procrustes_curves)):
+#     for j in range(len(weighted_procrustes_curves)):
+#         geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i], weighted_procrustes_curves[j])
+#         geod_dist_mat[i, j] = geodesic_d
 
-geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
-for i in range(len(weighted_procrustes_curves)):
-    for j in range(len(weighted_procrustes_curves)):
-        geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i], weighted_procrustes_curves[j])
-        geod_dist_mat[i, j] = geodesic_d
-
-geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-geod_dist_pca.PCA_training_and_test()
-fig = plt.figure(dpi=300, figsize=(6, 4))
-ax1 = fig.add_subplot(111)
-ax1.scatter(geod_dist_pca.train_res[:, 0], geod_dist_pca.train_res[:, 1], c=numeric_lst, cmap="turbo")
-plt.savefig(bkup_dir + "geod_dist_pca.png")
-plt.close()
+# geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+# geod_dist_pca.PCA_training_and_test()
+# fig = plt.figure(dpi=300, figsize=(6, 4))
+# ax1 = fig.add_subplot(111)
+# ax1.scatter(geod_dist_pca.train_res[:, 0], geod_dist_pca.train_res[:, 1], c=numeric_lst, cmap="turbo")
+# plt.savefig(bkup_dir + "geod_dist_pca.png")
+# plt.close()
 
 
 # SRVF计算
@@ -1164,7 +1158,7 @@ non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,
 log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
 
 
-
+### 
 """
 for loop in range(1):
     procrustes_curves = np.copy(Procrustes_curves)
