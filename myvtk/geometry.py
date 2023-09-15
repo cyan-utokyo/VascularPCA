@@ -112,8 +112,8 @@ def determine_type(curve):
 
 def plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsion, savepath, axes=(0,1), distance=5):
     # 获取峰值的位置
-    peaks_curvature_i = find_peaks(Curvatures[i], height=0.1, distance=10)[0]
-    peaks_curvature_j = find_peaks(Curvatures[j], height=0.1, distance=10)[0]
+    peaks_curvature_i = find_peaks(Curvatures[i], height=0.25, distance=5)[0]
+    peaks_curvature_j = find_peaks(Curvatures[j], height=0.25, distance=5)[0]
     peaks_torsion_i = find_peaks(Torsion[i])[0]
     peaks_torsion_j = find_peaks(Torsion[j])[0]
 
