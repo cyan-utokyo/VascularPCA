@@ -1,4 +1,5 @@
 # Ignore all
+.DS_Store
 *
 
 # But not these files
