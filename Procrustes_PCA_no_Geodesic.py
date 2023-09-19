@@ -556,6 +556,40 @@ for i in range(len(Procrustes_curves)):
 makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
 makeVtkFile(bkup_dir+"mean_srvf.vtk", mean_srvf_inverse,[],[] )
+contains_nan = np.isnan(Procs_srvf_curves).any()
+
+print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
+#####
+# 创建一个4个subplot的figure
+# 创建一个4个subplot的figure
+fig, axs = plt.subplots(2, 2, figsize=(7, 10), dpi=300)
+labels = ['C', 'U', 'S', 'V']
+
+for index, label in enumerate(labels):
+    ax = axs.flatten()[index]
+
+    for i, type_value in enumerate(Typevalues):
+        if type_value == label:
+            # 绘制黑色的Procrustes_curves曲线
+            ax.plot(Procrustes_curves[i][:, 0], Procrustes_curves[i][:, 1], '-o', color='black')
+
+            # 在每个点上绘制红色箭头
+            for j in range(64):
+                start_point = Procrustes_curves[i][j, 0:2]
+                # end_point = start_point + Procs_srvf_curves[i][j, 0:2]
+                end_point = start_point + (Procs_srvf_curves[i][j, 0:2] / 3)
+                ax.annotate("", xy=end_point, xytext=start_point,
+                            arrowprops=dict(arrowstyle="->", color='red'))
+
+            # 为每种标签只绘制一条曲线，所以找到后立即退出循环
+            break 
+
+    ax.set_title(f'Type: {label}')
+    ax.grid(True)
+
+plt.tight_layout()
+plt.savefig(geometry_dir + "/Procrustes_curves_with_srvf.png")
+#####
 
 C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_curvatures)
 U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_curvatures)
