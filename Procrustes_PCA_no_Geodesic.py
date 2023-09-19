@@ -558,6 +558,7 @@ plt.tight_layout()
 plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic_scatter.png")
 plt.close()
 
+
 ##############################
 # 绘制合成曲线的curvature和torsion
 U_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
