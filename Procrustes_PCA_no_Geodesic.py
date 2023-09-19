@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from scipy.interpolate import interp1d
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, KernelPCA
 from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 from scipy.stats import zscore
@@ -48,6 +48,8 @@ from myvtk.Mymetrics import *
 from sklearn.cluster import KMeans
 from matplotlib.lines import Line2D
 import warnings
+from sklearn.metrics.pairwise import rbf_kernel
+from scipy.optimize import minimize
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
 
@@ -411,14 +413,140 @@ for i in range(len(Procrustes_curves)):
 Procrustes_curves = np.array(Procrustes_curves)
 
 print (Procrustes_curves.shape)
-
+i=0
+j=1
+plot_curve_with_peaks_name = geometry_dir + "peak_of_{}_and_{}.png".format(i,j)
+plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsions, 
+                       plot_curve_with_peaks_name, axes=(1,2), distance=30)
 # if SCALETO1:
 #     # 需要把长度还原到原始曲线或1
 #     for i in range(len(Procrustes_curves)):
 #         aligned_length = measure_length(Procrustes_curves[i])
 #         procrustes_length = measure_length(Procrustes_curves[i])
 #         Procrustes_curves[i] = Procrustes_curves[i] * (1.0/procrustes_length) # 这里是把长度还原到1
-log.write("Scaled all curves to one.\n")
+# log.write("Scaled all curves to one.\n")
+
+# shape of Procrustes_curves: (87, 64, 3)
+# shape of Curvatures: (87, 61)
+# interpolate Curvatures to (87, 64)
+
+
+
+
+# 给定landmark_w，计算加权的Procrustes_curves
+
+def compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w):
+    interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
+    multiplicative_factors = np.zeros_like(Procrustes_curves)
+
+    for i in range(len(Curvatures)):
+        interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])),
+                                               np.linspace(0, 1, len(Curvatures[i])),
+                                               Curvatures[i])
+        multiplicative_factors[i] = Procrustes_curves[i] * interpolated_curvatures[i][:, np.newaxis]
+
+    weighted_procrustes_curves = multiplicative_factors * landmark_w[:, np.newaxis]
+    return weighted_procrustes_curves
+
+# 根据weighted_procrustes_curves计算距离矩阵
+def compute_geod_dist_mat(weighted_procrustes_curves):
+    geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
+    for i in range(len(weighted_procrustes_curves)):
+        for j in range(len(weighted_procrustes_curves)):
+            geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i],
+                                                                  weighted_procrustes_curves[j])
+            geod_dist_mat[i, j] = geodesic_d
+    return geod_dist_mat
+
+# # 优化的目标函数
+# def objective(landmark_w, Procrustes_curves, Curvatures, numeric_lst):
+#     # print ("numeric_lst:", numeric_lst)
+#     weighted_curves = compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w)
+#     geod_dist_mat = compute_geod_dist_mat(weighted_curves)
+
+#     # Check for NaN values in geod_dist_mat
+#     # if np.isnan(geod_dist_mat).any():
+#     #     return 1e10  # Return a large positive value
+
+#     # PCA处理
+#     geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+#     reduced_data,_,_ = geod_dist_pca.PCA_training_and_test()
+
+#     # 计算四个类别的中心点
+#     class_centers = []
+#     for label in [0, 1, 2, 3]:
+#         # indices = np.where(numeric_lst == label)[0]
+#         indices = np.where(np.array(numeric_lst) == label)[0]
+#         # print ("label:",label,"indices:",indices)
+#         class_center = np.mean(reduced_data[indices], axis=0)
+#         class_centers.append(class_center)
+    
+#     # 计算类别之间的距离
+#     distances = []
+#     for i in range(4):
+#         for j in range(i+1, 4):
+#             distances.append(np.linalg.norm(class_centers[i] - class_centers[j]))
+#     # 因为我们使用的是minimize函数，所以需要返回负的距离以实现最大化效果
+#     return -np.sum(distances)
+
+# initial_landmark_w = np.ones_like(Procrustes_curves[0,:,0])
+# random_vecs = []
+# random_dists = []
+# from tqdm import tqdm
+# for i in tqdm(range(1)):
+#     random_vector = np.random.rand(*initial_landmark_w.shape)
+#     random_dist = objective(random_vector, Procrustes_curves, Curvatures, numeric_lst)
+#     random_vecs.append(random_vector)
+#     random_dists.append(random_dist)
+# fig = plt.figure(dpi=300, figsize=(6, 4))
+# ax1 = fig.add_subplot(111)
+# ax1.hist(random_dists, bins=20, edgecolor='black', alpha=0.7)  # 可以修改bins的值来调整柱状的宽度
+# ax1.set_xlabel('Distance')
+# ax1.set_ylabel('Frequency')
+# ax1.set_title('Histogram of random_dists')
+# plt.tight_layout()
+# plt.savefig(bkup_dir+"random_dists_histogram.png")
+# plt.close()
+
+# # 获取最小值的索引
+# min_index = np.argmin(random_dists)
+
+# # 使用该索引获取对应的vector
+# optimized_landmark_w = random_vecs[min_index]
+# np.save(bkup_dir+"optimized_landmark_w.npy", optimized_landmark_w)
+# fig = plt.figure(dpi=300, figsize=(6, 4))
+# ax1 = fig.add_subplot(111)
+# ax1.plot(optimized_landmark_w)
+# ax1.set_xlabel('Index')
+# ax1.set_ylabel('Weight')
+# ax1.set_title('Optimized landmark weights')
+# plt.tight_layout()
+# plt.savefig(bkup_dir+"optimized_landmark_w.png")
+# plt.close()
+
+# landmark_w = optimized_landmark_w
+# interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
+# weighted_procrustes_curves = np.zeros_like(Procrustes_curves)
+# for i in range(len(Curvatures)):
+#     interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])), np.linspace(0, 1, len(Curvatures[i])), Curvatures[i])
+# for i in range(len(interpolated_curvatures)):
+#     for j in range(len(interpolated_curvatures[i])):
+#         weighted_procrustes_curves[i][j] = Procrustes_curves[i][j] * interpolated_curvatures[i][j] * landmark_w[j]
+
+# geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
+# for i in range(len(weighted_procrustes_curves)):
+#     for j in range(len(weighted_procrustes_curves)):
+#         geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i], weighted_procrustes_curves[j])
+#         geod_dist_mat[i, j] = geodesic_d
+
+# geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+# geod_dist_pca.PCA_training_and_test()
+# fig = plt.figure(dpi=300, figsize=(6, 4))
+# ax1 = fig.add_subplot(111)
+# ax1.scatter(geod_dist_pca.train_res[:, 0], geod_dist_pca.train_res[:, 1], c=numeric_lst, cmap="turbo")
+# plt.savefig(bkup_dir + "geod_dist_pca.png")
+# plt.close()
+
 
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
@@ -521,10 +649,10 @@ plt.savefig(pca_anlysis_dir + "ELBOW_srvf_pca_synthetic.png")
 plt.close()
 
 # 用最佳的k值进行聚类
-kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
-kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
-kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
-kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
+kmeans_U = KMeans(n_clusters=U_elbow, n_init=10).fit(U_synthetic)
+kmeans_V = KMeans(n_clusters=V_elbow, n_init=10).fit(V_synthetic)
+kmeans_C = KMeans(n_clusters=C_elbow, n_init=10).fit(C_synthetic)
+kmeans_S = KMeans(n_clusters=S_elbow, n_init=10).fit(S_synthetic)
 labels_U = kmeans_U.labels_
 labels_V = kmeans_V.labels_
 labels_C = kmeans_C.labels_
@@ -693,10 +821,10 @@ synthetic_cluster_colors = {
     "S": generate_palette("YlOrBr_r",S_elbow)   # 5 shades of yellow-orange-brown for S
 }
 
-kmeans_U = KMeans(n_clusters=U_elbow).fit(U_synthetic)
-kmeans_V = KMeans(n_clusters=V_elbow).fit(V_synthetic)
-kmeans_C = KMeans(n_clusters=C_elbow).fit(C_synthetic)
-kmeans_S = KMeans(n_clusters=S_elbow).fit(S_synthetic)
+kmeans_U = KMeans(n_clusters=U_elbow, n_init=10).fit(U_synthetic)
+kmeans_V = KMeans(n_clusters=V_elbow, n_init=10).fit(V_synthetic)
+kmeans_C = KMeans(n_clusters=C_elbow, n_init=10).fit(C_synthetic)
+kmeans_S = KMeans(n_clusters=S_elbow, n_init=10).fit(S_synthetic)
 
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
 
@@ -935,6 +1063,45 @@ log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
 print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 #
 
+###########################################################
+######### Kernel PCA.通过KernelPCA或其他核技术，自定义一个核，使数据在新的特征空间中更均匀地分布。
+# gamma=0.005
+# array_0 = np.zeros(1000)
+# array_1 = np.ones(1000)
+# array_2 = np.ones(1000) * 2
+# array_3 = np.ones(1000) * 3
+
+# final_array = np.concatenate([array_0, array_1, array_2, array_3])
+# kpca = KernelPCA(n_components=3, kernel='rbf', gamma=gamma)
+# K = rbf_kernel(srvf_synthetics, gamma=gamma)
+# eigenvalues = np.linalg.eigvalsh(K)
+# print("EIGENVALUES:", eigenvalues)
+# X_kpca = kpca.fit_transform(srvf_synthetics)
+# # 绘图
+# plt.figure(figsize=(8,6))
+# plt.scatter(X_kpca[:, 0], X_kpca[:, 2], c=final_array, alpha=1, cmap=plt.cm.get_cmap('rainbow', 4))
+# plt.title('Kernel PCA (gamma:{})'.format(gamma))
+# plt.xlabel('PC1')
+# plt.ylabel('PC2')
+# plt.legend()  # 添加图例
+# plt.savefig(pca_anlysis_dir+"srvf_kernel_PCA_total.png")
+
+# gamma=0.01
+# kpca = KernelPCA(n_components=3, kernel='rbf', gamma=gamma)
+# K = rbf_kernel(non_srvf_synthetics , gamma=gamma)
+# eigenvalues = np.linalg.eigvalsh(K)
+# print("EIGENVALUES:", eigenvalues)
+# X_kpca = kpca.fit_transform(non_srvf_synthetics )
+# # 绘图
+# plt.figure(figsize=(8,6))
+# plt.scatter(X_kpca[:, 0], X_kpca[:, 2], c=final_array, alpha=1, cmap=plt.cm.get_cmap('rainbow', 4))
+# plt.title('Kernel PCA (gamma:{})'.format(gamma))
+# plt.xlabel('PC1')
+# plt.ylabel('PC2')
+# plt.legend()  # 添加图例
+# plt.savefig(pca_anlysis_dir+"kernel_PCA_total.png")
+#########
+###########################################################
 
 print ("开始计算geodesic距离")
 total_geod_dist = []
@@ -991,6 +1158,8 @@ non_srvf_pca_dist = np.array(non_srvf_pca_dist)
 non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,1]
 log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
 
+
+### 
 """
 for loop in range(1):
     procrustes_curves = np.copy(Procrustes_curves)

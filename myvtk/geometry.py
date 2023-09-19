@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.signal import savgol_filter
-
+import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 def smooth_curve(curve, window_length=7, polyorder=3):
     """
     平滑3D曲线使用Savitzky-Golay滤波器
@@ -105,3 +106,39 @@ def determine_type(curve):
     curvature, torsion = compute_curvature_and_torsion(curve)
     scores = calculate_scores(curvature, torsion)
     return max(scores, key=scores.get)
+
+
+
+
+def plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsion, savepath, axes=(0,1), distance=5):
+    # 获取峰值的位置
+    peaks_curvature_i = find_peaks(Curvatures[i], height=0.25, distance=5)[0]
+    peaks_curvature_j = find_peaks(Curvatures[j], height=0.25, distance=5)[0]
+    peaks_torsion_i = find_peaks(Torsion[i])[0]
+    peaks_torsion_j = find_peaks(Torsion[j])[0]
+
+    fig, ax = plt.subplots()
+    # 绘制3D曲线在2D平面上
+    ax.plot(Procrustes_curves[i, :, axes[0]], Procrustes_curves[i, :, axes[1]], color='k', label='Curve ' + str(i))
+    ax.plot(Procrustes_curves[j, :, axes[0]] + distance, Procrustes_curves[j, :, axes[1]], color='k', label='Curve ' + str(j))  
+
+    # 添加峰值的点
+    ax.scatter(Procrustes_curves[i, peaks_curvature_i, axes[0]], Procrustes_curves[i, peaks_curvature_i, axes[1]], color='red', s=50, label='Curvature Peaks i')
+    ax.scatter(Procrustes_curves[j, peaks_curvature_j, axes[0]] + distance, Procrustes_curves[j, peaks_curvature_j, axes[1]], color='red', s=50, label='Curvature Peaks j')
+    # ax.scatter(Procrustes_curves[i, peaks_torsion_i, axes[0]], Procrustes_curves[i, peaks_torsion_i, axes[1]], color='blue', s=50, label='Torsion Peaks i')
+    # ax.scatter(Procrustes_curves[j, peaks_torsion_j, axes[0]] + distance, Procrustes_curves[j, peaks_torsion_j, axes[1]], color='blue', s=50, label='Torsion Peaks j')
+
+    # 连接红点
+    for p1, p2 in zip(peaks_curvature_i, peaks_curvature_j):
+        ax.plot([Procrustes_curves[i, p1, axes[0]], Procrustes_curves[j, p2, axes[0]] + distance], [Procrustes_curves[i, p1, axes[1]], Procrustes_curves[j, p2, axes[1]]], 'r-', lw=1)
+    # 连接蓝点
+    # for p1, p2 in zip(peaks_torsion_i, peaks_torsion_j):
+    #     ax.plot([Procrustes_curves[i, p1, axes[0]], Procrustes_curves[j, p2, axes[0]] + distance], [Procrustes_curves[i, p1, axes[1]], Procrustes_curves[j, p2, axes[1]]], 'b-', lw=1)
+
+    # ax.legend()
+    plt.savefig(savepath)
+    plt.close()
+
+# # 示例
+# i, j = 0, 1  # 按需要更改
+# plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsion)
