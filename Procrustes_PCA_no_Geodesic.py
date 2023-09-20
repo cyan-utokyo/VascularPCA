@@ -50,6 +50,7 @@ from matplotlib.lines import Line2D
 import warnings
 from sklearn.metrics.pairwise import rbf_kernel
 from scipy.optimize import minimize
+from myvtk.mygeodesic_plot import *
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
 
@@ -560,35 +561,10 @@ contains_nan = np.isnan(Procs_srvf_curves).any()
 
 print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
 #####
-# 创建一个4个subplot的figure
-# 创建一个4个subplot的figure
-fig, axs = plt.subplots(2, 2, figsize=(7, 10), dpi=300)
-labels = ['C', 'U', 'S', 'V']
 
-for index, label in enumerate(labels):
-    ax = axs.flatten()[index]
+# 绘制一个4子图的plot，有对齐后的4个类别的曲线和SRVF曲线标注
+plot_curves_with_arrows(1, 2, Procrustes_curves, Procs_srvf_curves, Typevalues, geometry_dir + "/Procrustes_curves_with_srvf.png")
 
-    for i, type_value in enumerate(Typevalues):
-        if type_value == label:
-            # 绘制黑色的Procrustes_curves曲线
-            ax.plot(Procrustes_curves[i][:, 0], Procrustes_curves[i][:, 1], '-o', color='black')
-
-            # 在每个点上绘制红色箭头
-            for j in range(64):
-                start_point = Procrustes_curves[i][j, 0:2]
-                # end_point = start_point + Procs_srvf_curves[i][j, 0:2]
-                end_point = start_point + (Procs_srvf_curves[i][j, 0:2] / 3)
-                ax.annotate("", xy=end_point, xytext=start_point,
-                            arrowprops=dict(arrowstyle="->", color='red'))
-
-            # 为每种标签只绘制一条曲线，所以找到后立即退出循环
-            break 
-
-    ax.set_title(f'Type: {label}')
-    ax.grid(True)
-
-plt.tight_layout()
-plt.savefig(geometry_dir + "/Procrustes_curves_with_srvf.png")
 #####
 
 C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_curvatures)
@@ -1137,60 +1113,174 @@ print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 #########
 ###########################################################
 
-print ("开始计算geodesic距离")
-total_geod_dist = []
-total_type_pair = []
-total_pca_dist  = []
-total_srvf_pca_dist = []
-for i in range(len(Procrustes_curves)):
-    for j in range(i+1, len(Procrustes_curves)):
-        geodesic_d = compute_geodesic_dist_between_two_curves(Procrustes_curves[i], Procrustes_curves[j])
-        pca_dist = np.linalg.norm(all_pca.train_res[i]-all_pca.train_res[j])
-        srvf_pca_dist = np.linalg.norm(all_srvf_pca.train_res[i]-all_srvf_pca.train_res[j])
-        total_geod_dist.append(geodesic_d)
-        total_type_pair.append([Typevalues[i], Typevalues[j]])
-        total_pca_dist.append(pca_dist)
-        total_srvf_pca_dist.append(srvf_pca_dist)
-total_geod_dist = np.array(total_geod_dist)
-total_pca_dist = np.array(total_pca_dist)
-total_srvf_pca_dist = np.array(total_srvf_pca_dist)
+# print ("开始计算geodesic距离")
+# total_geod_dist = []
+# total_type_pair = []
+# total_pca_dist  = []
+# total_srvf_pca_dist = []
+# for i in range(len(Procrustes_curves)):
+#     for j in range(i+1, len(Procrustes_curves)):
+#         geodesic_d = compute_geodesic_dist_between_two_curves(Procrustes_curves[i], Procrustes_curves[j])
+#         pca_dist = np.linalg.norm(all_pca.train_res[i]-all_pca.train_res[j])
+#         srvf_pca_dist = np.linalg.norm(all_srvf_pca.train_res[i]-all_srvf_pca.train_res[j])
+#         total_geod_dist.append(geodesic_d)
+#         total_type_pair.append([Typevalues[i], Typevalues[j]])
+#         total_pca_dist.append(pca_dist)
+#         total_srvf_pca_dist.append(srvf_pca_dist)
+# total_geod_dist = np.array(total_geod_dist)
+# total_pca_dist = np.array(total_pca_dist)
+# total_srvf_pca_dist = np.array(total_srvf_pca_dist)
 
-pca_correlation = np.corrcoef(total_pca_dist, total_geod_dist)[0,1] 
-srvf_pca_correlation = np.corrcoef(total_srvf_pca_dist, total_geod_dist)[0,1]
-log.write("PCA correlation matrix: "+ str(pca_correlation)+"\n")
-log.write("SRVF PCA correlation matrix: "+str(srvf_pca_correlation)+"\n")
+# pca_correlation = np.corrcoef(total_pca_dist, total_geod_dist)[0,1] 
+# srvf_pca_correlation = np.corrcoef(total_srvf_pca_dist, total_geod_dist)[0,1]
+# log.write("PCA correlation matrix: "+ str(pca_correlation)+"\n")
+# log.write("SRVF PCA correlation matrix: "+str(srvf_pca_correlation)+"\n")
 
-srvf_synthetic_geod_dist = []
-srvf_pca_dist = []
-sampling_range = np.concatenate([range(0,100), range(1000,1100), range(2000,2100), range(3000,3100)])
+# srvf_synthetic_geod_dist = []
+# srvf_pca_dist = []
+# sampling_range = np.concatenate([range(0,100), range(1000,1100), range(2000,2100), range(3000,3100)])
 
-for i in sampling_range:
-    for j in sampling_range:
-        geodesic_d = compute_geodesic_dist_between_two_curves(srvf_recovers[i], srvf_recovers[j])
-        pca_dist = np.linalg.norm(srvf_synthetics[i]-srvf_synthetics[j])
-        srvf_synthetic_geod_dist.append(geodesic_d)
-        srvf_pca_dist.append(pca_dist)
-srvf_synthetic_geod_dist = np.array(srvf_synthetic_geod_dist)
-srvf_pca_dist = np.array(srvf_pca_dist)
-# print ("srvf synthetic geodesic distance shape: ", srvf_synthetic_geod_dist.shape)
-# print ("srvf pca distance shape: ", srvf_pca_dist.shape)
-srvf_pca_correlation = np.corrcoef(srvf_pca_dist, srvf_synthetic_geod_dist)[0,1]
-log.write("SRVF PCA correlation matrix (synthetic) : "+str(srvf_pca_correlation)+"\n")
+# for i in sampling_range:
+#     for j in sampling_range:
+#         geodesic_d = compute_geodesic_dist_between_two_curves(srvf_recovers[i], srvf_recovers[j])
+#         pca_dist = np.linalg.norm(srvf_synthetics[i]-srvf_synthetics[j])
+#         srvf_synthetic_geod_dist.append(geodesic_d)
+#         srvf_pca_dist.append(pca_dist)
+# srvf_synthetic_geod_dist = np.array(srvf_synthetic_geod_dist)
+# srvf_pca_dist = np.array(srvf_pca_dist)
+# # print ("srvf synthetic geodesic distance shape: ", srvf_synthetic_geod_dist.shape)
+# # print ("srvf pca distance shape: ", srvf_pca_dist.shape)
+# srvf_pca_correlation = np.corrcoef(srvf_pca_dist, srvf_synthetic_geod_dist)[0,1]
+# log.write("SRVF PCA correlation matrix (synthetic) : "+str(srvf_pca_correlation)+"\n")
 
-non_srvf_geod_dist = []
-non_srvf_pca_dist = []
-for i in sampling_range:
-    for j in sampling_range:
-        geodesic_d = compute_geodesic_dist_between_two_curves(non_srvf_pca_recovers[i], non_srvf_pca_recovers[j])
-        pca_dist = np.linalg.norm(non_srvf_synthetics[i]-non_srvf_synthetics[j])
-        non_srvf_geod_dist.append(geodesic_d)
-        non_srvf_pca_dist.append(pca_dist)
-non_srvf_geod_dist = np.array(non_srvf_geod_dist)
-non_srvf_pca_dist = np.array(non_srvf_pca_dist)
-# print ("non_srvf geodesic distance shape: ", non_srvf_geod_dist.shape)
-# print ("non_srvf pca distance shape: ", non_srvf_pca_dist.shape)
-non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,1]
-log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
+# non_srvf_geod_dist = []
+# non_srvf_pca_dist = []
+# for i in sampling_range:
+#     for j in sampling_range:
+#         geodesic_d = compute_geodesic_dist_between_two_curves(non_srvf_pca_recovers[i], non_srvf_pca_recovers[j])
+#         pca_dist = np.linalg.norm(non_srvf_synthetics[i]-non_srvf_synthetics[j])
+#         non_srvf_geod_dist.append(geodesic_d)
+#         non_srvf_pca_dist.append(pca_dist)
+# non_srvf_geod_dist = np.array(non_srvf_geod_dist)
+# non_srvf_pca_dist = np.array(non_srvf_pca_dist)
+# # print ("non_srvf geodesic distance shape: ", non_srvf_geod_dist.shape)
+# # print ("non_srvf pca distance shape: ", non_srvf_pca_dist.shape)
+# non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,1]
+# log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
+
+
+##### 计算geodesic并评价线性相关性
+##########################################
+spec = []
+geodesic_dir = mkdir(bkup_dir, "geodesic")
+# U, U, V, V, C, C, S, S
+case_study = ['BG11_Left', 'BG18_Left',
+              'BH0031_Left', 'BH0017_Right',
+              'BH0006_Left', 'BH0003_Right',
+              'BH0012_Left', 'BH0016_Left']
+spec_label = ['U1','U2',
+              'V1','V2',
+              'C1','C2',
+              'S1','S2',
+              'FrechetMean', 'ArithmeticMean']
+for i in range(len(Files)):
+    for c in case_study:
+        if c in Files[i]:
+            spec.append(Procrustes_curves[i])
+
+FrechetMean = compute_frechet_mean(Procrustes_curves)
+ArithmeticMean = np.mean(Procrustes_curves, axis=0)
+spec.append(FrechetMean)
+spec.append(ArithmeticMean)
+spec = np.array(spec)
+print ("spec.shape: ", spec.shape)
+for i  in range(len(spec[:-2])):
+    for j in [-2, -1]:
+        spec2mean_dir = mkdir(geodesic_dir, "{}_2_{}".format(spec_label[j], spec_label[i]))
+        curve_a = spec[j]
+        curve_b = spec[i]
+        geodesic_dist_a2b = compute_geodesic_dist_between_two_curves(curve_a, curve_b)
+        # num_step = int(geodesic_dist_a2b/0.5)
+        num_step = 10
+        print (spec_label[j], spec_label[i], " geodesic_dist_a2b: ", geodesic_dist_a2b)
+        shapes_along_geodesic  = compute_geodesic_shapes_between_two_curves(curve_a, curve_b, num_steps=num_step)
+        print ("shape_along_geodesic.shape:", shapes_along_geodesic.shape)
+        plot_curves_on_2d(curve_a, curve_b, shapes_along_geodesic, 
+                        spec2mean_dir+"geo_deformation.png")
+        spec_geo_srvf_res = all_srvf_pca.pca.transform((shapes_along_geodesic.reshape(len(shapes_along_geodesic),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
+        spec_geo_res = all_srvf_pca.pca.transform((spec.reshape(len(spec),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
+        fig = plt.figure(dpi=300, figsize=(6, 5))
+        ax1 = fig.add_subplot(111)
+        ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
+        ax1.scatter(spec_geo_srvf_res[:, 0], spec_geo_srvf_res[:, 1], c="b", alpha=0.9, marker='*', label='ShapesAlongGoed')
+
+        ax.grid(linestyle='--', linewidth=0.5)
+        plt.legend(loc='lower right')
+        plt.savefig(spec2mean_dir+"srvf_PCA_total_with_geo.png")
+        plt.close()
+        fig = plt.figure(dpi=300, figsize=(6, 5))
+        ax2 = fig.add_subplot(111)
+        ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
+        ax2.scatter(spec_geo_res[:, 0], spec_geo_res[:, 1], c="b", alpha=0.9, marker='*', label='ShapesAlongGoed')
+
+        ax2.grid(linestyle='--', linewidth=0.5)
+        plt.legend(loc='lower right')
+        plt.savefig(spec2mean_dir+"PCA_total_with_geo.png")
+        plt.close()
+
+
+spec_srvf_res = all_srvf_pca.pca.transform((spec.reshape(len(spec),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
+fig = plt.figure(dpi=300, figsize=(6, 5))
+ax1 = fig.add_subplot(111)
+ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
+ax1.scatter(spec_srvf_res[-1, 0], spec_srvf_res[-1, 1], c="r", alpha=0.9, marker='*', label='FrechetMean')
+ax1.scatter(spec_srvf_res[-2, 0], spec_srvf_res[-2, 1], c="dimgray", alpha=0.9, marker='*', label='ArithmeticMean')
+ax1.scatter(spec_srvf_res[:2, 0], spec_srvf_res[:2, 1], c="r", alpha=0.7, edgecolors='white', label='U')
+ax1.scatter(spec_srvf_res[2:4, 0], spec_srvf_res[2:4, 1], c="g", alpha=0.7, edgecolors='white', label='V')
+ax1.scatter(spec_srvf_res[4:6, 0], spec_srvf_res[4:6, 1], c="b", alpha=0.7, edgecolors='white', label='C')
+ax1.scatter(spec_srvf_res[6:8, 0], spec_srvf_res[6:8, 1], c="orange", alpha=0.7, edgecolors='white', label='S')
+ax1.grid(linestyle='--', linewidth=0.5)
+plt.legend(loc='lower right')
+plt.savefig(pca_anlysis_dir+"srvf_PCA_total_with_spec.png")
+plt.close()
+
+spec_res = all_pca.pca.transform((spec.reshape(len(spec),-1)-all_pca.train_mean)/all_pca.train_std)
+fig = plt.figure(dpi=300, figsize=(6, 5))
+ax2 = fig.add_subplot(111)
+ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
+ax2.scatter(spec_res[-1, 0], spec_res[-1, 1], c="r", alpha=0.9, marker='*', label='FrechetMean')
+ax2.scatter(spec_res[-2, 0], spec_res[-2, 1], c="dimgray", alpha=0.9, marker='*', label='ArithmeticMean')
+ax2.scatter(spec_res[:2, 0], spec_res[:2, 1], c="r", alpha=0.7, edgecolors='white', label='U')
+ax2.scatter(spec_res[2:4, 0], spec_res[2:4, 1], c="g", alpha=0.7, edgecolors='white', label='V')
+ax2.scatter(spec_res[4:6, 0], spec_res[4:6, 1], c="b", alpha=0.7, edgecolors='white', label='C')
+ax2.scatter(spec_res[6:8, 0], spec_res[6:8, 1], c="orange", alpha=0.7, edgecolors='white', label='S')
+ax2.grid(linestyle='--', linewidth=0.5)
+plt.legend()
+plt.savefig(pca_anlysis_dir+"PCA_total_with_spec.png")
+plt.close()
+
+
+# 计算所有曲线与FrechetMean和ArithmeticMean的测地线距离
+frechet_distances = [compute_geodesic_dist_between_two_curves(curve, FrechetMean) for curve in Procrustes_curves]
+arithmetic_distances = [compute_geodesic_dist_between_two_curves(curve, ArithmeticMean) for curve in Procrustes_curves]
+# 计算spec[:8]与Procrustes_curves中每条曲线的测地线距离
+spec_distances = [[compute_geodesic_dist_between_two_curves(s_curve, p_curve) for p_curve in Procrustes_curves] for s_curve in spec[:8]]
+# 整理数据为一个列表
+all_distances = [frechet_distances, arithmetic_distances] + spec_distances
+# 设定标签
+labels = ['Frechet Mean', 'Arithmetic Mean'] + spec_label[:8]
+
+# 使用boxplot展示结果
+fig = plt.figure(dpi=300, figsize=(6, 5))
+ax = fig.add_subplot(111)
+ax.boxplot(all_distances, vert=True, patch_artist=True, labels=labels)
+ax.set_ylabel('Geodesic Distance')
+ax.set_title('Boxplot of Geodesic Distances to Means and Spec')
+plt.xticks(rotation=45)  # Rotate x-axis labels for better visibility
+plt.grid(True, axis='y', linestyle='--', alpha=0.4)
+plt.tight_layout()
+plt.savefig(geodesic_dir+"boxplot_of_geodesic_distances_to_means_and_spec.png")
+plt.close()
 
 
 ### 

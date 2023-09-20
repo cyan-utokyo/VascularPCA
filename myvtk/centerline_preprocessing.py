@@ -157,6 +157,7 @@ def compute_geodesic_dist_between_two_curves(curve_A, curve_B):
     geodesic_distance = discrete_curves_space.metric.dist(curve_A, curve_B)
     return geodesic_distance
 
+
 def compute_geodesic_dist(curves, external=False, external_curve=None):
     geodesic_d = []
     if external == False:
@@ -199,4 +200,33 @@ def process_data_key(data_key, train_inverse, test_inverse, train_files, test_fi
     # print (train_inverse.shape, test_inverse.shape)
 
 
+def plot_curves_with_arrows(coord1, coord2, Procrustes_curves, Procs_srvf_curves, Typevalues, save_path):
+    fig, axs = plt.subplots(2, 2, figsize=(7, 10), dpi=300)
+    labels = ['C', 'U', 'S', 'V']
 
+    for index, label in enumerate(labels):
+        ax = axs.flatten()[index]
+
+        for i, type_value in enumerate(Typevalues):
+            if type_value == label:
+                # 绘制黑色的Procrustes_curves曲线
+                ax.plot(Procrustes_curves[i][:, coord1], Procrustes_curves[i][:, coord2], '-o', color='black')
+
+                # 在每个点上绘制红色箭头
+                for j in range(64):
+                    start_point = [Procrustes_curves[i][j, coord1], Procrustes_curves[i][j, coord2]]
+                    end_point_delta = [Procs_srvf_curves[i][j, coord1], Procs_srvf_curves[i][j, coord2]]
+                    end_point = [start_point[0] + end_point_delta[0] / 3, start_point[1] + end_point_delta[1] / 3]
+                    ax.annotate("", xy=end_point, xytext=start_point,
+                                arrowprops=dict(arrowstyle="->", color='red'))
+
+                # 为每种标签只绘制一条曲线，所以找到后立即退出循环
+                break 
+
+        ax.set_title(f'Type: {label}')
+        ax.grid(True)
+        ax.invert_yaxis()  # 这里颠倒y轴
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()

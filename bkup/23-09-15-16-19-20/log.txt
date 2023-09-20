@@ -1,0 +1,9 @@
+Start at: 23-09-15-16-19-20
+PCA_N_COMPONENTS:16
+Bootstrap
+sample size:6
+PCA standardization: 1
+PCA correlation matrix: 0.7175273257495274
+SRVF PCA correlation matrix: 0.9635253403350915
+SRVF PCA correlation matrix (synthetic) : 0.9696762351485458
+Non-SRVF PCA correlation matrix (synthetic) : 0.7587921265678444
