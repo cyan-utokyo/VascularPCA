@@ -51,6 +51,7 @@ import warnings
 from sklearn.metrics.pairwise import rbf_kernel
 from scipy.optimize import minimize
 from myvtk.mygeodesic_plot import *
+import platform
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
 
@@ -1188,7 +1189,20 @@ for i in range(len(Files)):
         if c in Files[i]:
             spec.append(Procrustes_curves[i])
 
-FrechetMean = compute_frechet_mean(Procrustes_curves)
+# FrechetMean = compute_frechet_mean(Procrustes_curves)
+system_name = platform.system()
+if system_name == "Windows":
+    FrechetMean = compute_frechet_mean(Procrustes_curves)
+    np.save("./FrechetMean.npy", FrechetMean)
+
+elif system_name == "Darwin":  # Mac OS的系统名称为'Darwin'
+    if os.path.exists("./FrechetMean.npy"):
+        FrechetMean = np.load("./FrechetMean.npy")
+    else:
+        raise ValueError("File './FrechetMean.npy' does not exist!")
+else:
+    print(f"Unsupported operating system: {system_name}")
+
 ArithmeticMean = np.mean(Procrustes_curves, axis=0)
 spec.append(FrechetMean)
 spec.append(ArithmeticMean)
