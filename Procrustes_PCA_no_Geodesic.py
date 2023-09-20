@@ -1242,8 +1242,11 @@ for i  in range(len(spec[:-2])):
         plt.savefig(spec2mean_dir+"PCA_total_with_geo.png")
         plt.close()
 
-
-spec_srvf_res = all_srvf_pca.pca.transform((spec.reshape(len(spec),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
+spec_srvf = []
+for i in range(len(spec)):
+    spec_srvf.append(calculate_srvf(spec[i]))
+spec_srvf = np.array(spec_srvf)
+spec_srvf_res = all_srvf_pca.pca.transform((spec_srvf.reshape(len(spec_srvf),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
 fig = plt.figure(dpi=300, figsize=(6, 5))
 ax1 = fig.add_subplot(111)
 ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
