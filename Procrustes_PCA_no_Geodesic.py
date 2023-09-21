@@ -848,37 +848,55 @@ plt.savefig(pca_anlysis_dir+"srvfPCA_total_Violinplot.png")
 plt.close()
 
 ####################为srvf PCA绘制QQplot####################
+from numpy.polynomial.polynomial import Polynomial
+
 unique_types = df['Type'].unique()
 colors = sns.color_palette(n_colors=len(unique_types))
 
-# 创建4x4的子图大图
-fig, axes = plt.subplots(4, 4, figsize=(20, 20))
+# Create a 4x4 subplot
+fig, axes = plt.subplots(4, 4, figsize=(20, 20),dpi=300)
 fig.suptitle('QQ plots: Types vs. Total')
 
-# 对于每个PC，进行QQ图分析
-for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
-    q = np.linspace(0, 1, 101)[1:-1]  # 从1%到99%
+# For each PC, conduct QQ plot analysis
+for pc in range(1, PCA_N_COMPONENTS+1):
+    q = np.linspace(0, 1, 101)[1:-1]  # From 1% to 99%
     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
     
-    # 定位子图的位置
+    # Locate the position of the subplot
     ax = axes[(pc-1)//4, (pc-1)%4]
     
-    # 为每个Type绘制QQ图
+    # For each Type, create a QQ plot
     for idx, type_value in enumerate(unique_types):
         type_data = df[df['Type'] == type_value][f'PC{pc}']
         quantiles_type = np.percentile(type_data, q*100)
+        
+        # Scatter plot
         ax.scatter(quantiles_total, quantiles_type, 
-                    label=type_value, 
+                   color=colors[idx],
+                   marker="x",
+                   s=40)
+        
+        # Fit a linear model and compute the least-squares error
+        p = Polynomial.fit(quantiles_total, quantiles_type, 1)
+        x_fit = np.linspace(min(quantiles_total), max(quantiles_total), 500)
+        y_fit = p(x_fit)
+        least_squares_error = np.sum((p(quantiles_total) - quantiles_type)**2)
+        
+        # Plot the linear fit
+        ax.plot(x_fit, y_fit, color=colors[idx], label=f'Error: {least_squares_error:.2f}', linestyle='dotted', alpha=.5)
+        
+        # Annotate with least-squares error
+        ax.annotate(f'Error {type_value}: {least_squares_error:.2f}', 
+                    xy=(0.05, 0.9 - idx*0.05), 
+                    xycoords='axes fraction', 
                     color=colors[idx],
-                    marker = "x",
-                    s=40)
+                    fontsize=14)
     
-    # 添加对角线
-    ax.plot([min(quantiles_total), max(quantiles_total)], [min(quantiles_total), max(quantiles_total)], linestyle='--',color="dimgray")
-    # ax.set_xlabel(f'Quantiles of Total Data (PC{pc})')
-    # ax.set_ylabel(f'Quantiles of Type Data (PC{pc})')
+    # Add diagonal line
+    ax.plot([min(quantiles_total), max(quantiles_total)], 
+            [min(quantiles_total), max(quantiles_total)], 
+            linestyle='--',color="dimgray")
     ax.set_title(f'PC{pc}')
-    ax.legend()
     ax.grid(True)
 
 plt.tight_layout()
@@ -886,6 +904,7 @@ plt.subplots_adjust(top=0.95)
 plt.savefig(pca_anlysis_dir + 'QQ_plots_combined_srvf.png')
 # plt.show()
 plt.close()
+
 
 
 # synthetics_from_kde = all_srvf_pca.train_kde.resample(5)
@@ -915,34 +934,55 @@ plt.tight_layout()
 plt.savefig(pca_anlysis_dir+"PCA_total_Violinplot.png")
 plt.close()
 ####################为坐标PCA绘制QQplot####################
-unique_types = df['Type'].unique()
-colors = sns.color_palette(n_colors=len(unique_types))
 # 对于每个PC，进行QQ图分析
 # 创建4x4的子图大图
-fig, axes = plt.subplots(4, 4, figsize=(20, 20))
+unique_types = df['Type'].unique()
+colors = sns.color_palette(n_colors=len(unique_types))
+
+# Create a 4x4 subplot
+fig, axes = plt.subplots(4, 4, figsize=(20, 20),dpi=300)
 fig.suptitle('QQ plots: Types vs. Total')
 
-# 对于每个PC，进行QQ图分析
-for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
-    q = np.linspace(0, 1, 101)[1:-1]  # 从1%到99%
+# For each PC, conduct QQ plot analysis
+for pc in range(1, PCA_N_COMPONENTS+1):
+    q = np.linspace(0, 1, 101)[1:-1]  # From 1% to 99%
     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
-    # 定位子图的位置
+    
+    # Locate the position of the subplot
     ax = axes[(pc-1)//4, (pc-1)%4]
-    # 为每个Type绘制QQ图
+    
+    # For each Type, create a QQ plot
     for idx, type_value in enumerate(unique_types):
         type_data = df[df['Type'] == type_value][f'PC{pc}']
         quantiles_type = np.percentile(type_data, q*100)
+        
+        # Scatter plot
         ax.scatter(quantiles_total, quantiles_type, 
-                   label=type_value, 
                    color=colors[idx],
                    marker="x",
                    s=40)
-    # 添加对角线
-    ax.plot([min(quantiles_total), max(quantiles_total)], [min(quantiles_total), max(quantiles_total)], linestyle='--',color="dimgray")
-    # ax.set_xlabel(f'Quantiles of Total Data (PC{pc})')
-    # ax.set_ylabel(f'Quantiles of Type Data (PC{pc})')
+        
+        # Fit a linear model and compute the least-squares error
+        p = Polynomial.fit(quantiles_total, quantiles_type, 1)
+        x_fit = np.linspace(min(quantiles_total), max(quantiles_total), 500)
+        y_fit = p(x_fit)
+        least_squares_error = np.sum((p(quantiles_total) - quantiles_type)**2)
+        
+        # Plot the linear fit
+        ax.plot(x_fit, y_fit, color=colors[idx], label=f'Error: {least_squares_error:.2f}', linestyle='dotted', alpha=.5)
+        
+        # Annotate with least-squares error
+        ax.annotate(f'Error {type_value}: {least_squares_error:.2f}', 
+                    xy=(0.05, 0.9 - idx*0.05), 
+                    xycoords='axes fraction', 
+                    color=colors[idx],
+                    fontsize=14)
+    
+    # Add diagonal line
+    ax.plot([min(quantiles_total), max(quantiles_total)], 
+            [min(quantiles_total), max(quantiles_total)], 
+            linestyle='--',color="dimgray")
     ax.set_title(f'PC{pc}')
-    ax.legend()
     ax.grid(True)
 
 plt.tight_layout()
