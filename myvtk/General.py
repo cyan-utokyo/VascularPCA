@@ -25,3 +25,6 @@ def open_folder_in_explorer(path):
         os.system(f'xdg-open "{path}"')
     else:
         print(f"{platform.system()} is not supported")
+
+def hash_function(i, j, max_val=7):
+    return i * (max_val + 1) + j  # 这将确保为每个(i, j)对生成一个唯一的值

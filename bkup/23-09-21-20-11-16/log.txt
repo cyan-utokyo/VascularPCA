@@ -1,0 +1,5 @@
+Start at: 23-09-21-20-11-16
+PCA_N_COMPONENTS:16
+Bootstrap
+sample size:6
+PCA standardization: 1

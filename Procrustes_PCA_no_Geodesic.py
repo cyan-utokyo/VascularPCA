@@ -54,6 +54,8 @@ from myvtk.mygeodesic_plot import *
 import platform
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
+warnings.filterwarnings("ignore", category=UserWarning, module="mygeodesic_plot")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="geometry")
 
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
@@ -415,8 +417,9 @@ for i in range(len(Procrustes_curves)):
 Procrustes_curves = np.array(Procrustes_curves)
 
 print (Procrustes_curves.shape)
-i=0
-j=1
+i=30 # U
+j=46 # S
+
 plot_curve_with_peaks_name = geometry_dir + "peak_of_{}_and_{}.png".format(i,j)
 plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsions, 
                        plot_curve_with_peaks_name, axes=(1,2), distance=30)
@@ -459,95 +462,6 @@ def compute_geod_dist_mat(weighted_procrustes_curves):
                                                                   weighted_procrustes_curves[j])
             geod_dist_mat[i, j] = geodesic_d
     return geod_dist_mat
-
-# # 优化的目标函数
-# def objective(landmark_w, Procrustes_curves, Curvatures, numeric_lst):
-#     # print ("numeric_lst:", numeric_lst)
-#     weighted_curves = compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w)
-#     geod_dist_mat = compute_geod_dist_mat(weighted_curves)
-
-#     # Check for NaN values in geod_dist_mat
-#     # if np.isnan(geod_dist_mat).any():
-#     #     return 1e10  # Return a large positive value
-
-#     # PCA处理
-#     geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-#     reduced_data,_,_ = geod_dist_pca.PCA_training_and_test()
-
-#     # 计算四个类别的中心点
-#     class_centers = []
-#     for label in [0, 1, 2, 3]:
-#         # indices = np.where(numeric_lst == label)[0]
-#         indices = np.where(np.array(numeric_lst) == label)[0]
-#         # print ("label:",label,"indices:",indices)
-#         class_center = np.mean(reduced_data[indices], axis=0)
-#         class_centers.append(class_center)
-    
-#     # 计算类别之间的距离
-#     distances = []
-#     for i in range(4):
-#         for j in range(i+1, 4):
-#             distances.append(np.linalg.norm(class_centers[i] - class_centers[j]))
-#     # 因为我们使用的是minimize函数，所以需要返回负的距离以实现最大化效果
-#     return -np.sum(distances)
-
-# initial_landmark_w = np.ones_like(Procrustes_curves[0,:,0])
-# random_vecs = []
-# random_dists = []
-# from tqdm import tqdm
-# for i in tqdm(range(1)):
-#     random_vector = np.random.rand(*initial_landmark_w.shape)
-#     random_dist = objective(random_vector, Procrustes_curves, Curvatures, numeric_lst)
-#     random_vecs.append(random_vector)
-#     random_dists.append(random_dist)
-# fig = plt.figure(dpi=300, figsize=(6, 4))
-# ax1 = fig.add_subplot(111)
-# ax1.hist(random_dists, bins=20, edgecolor='black', alpha=0.7)  # 可以修改bins的值来调整柱状的宽度
-# ax1.set_xlabel('Distance')
-# ax1.set_ylabel('Frequency')
-# ax1.set_title('Histogram of random_dists')
-# plt.tight_layout()
-# plt.savefig(bkup_dir+"random_dists_histogram.png")
-# plt.close()
-
-# # 获取最小值的索引
-# min_index = np.argmin(random_dists)
-
-# # 使用该索引获取对应的vector
-# optimized_landmark_w = random_vecs[min_index]
-# np.save(bkup_dir+"optimized_landmark_w.npy", optimized_landmark_w)
-# fig = plt.figure(dpi=300, figsize=(6, 4))
-# ax1 = fig.add_subplot(111)
-# ax1.plot(optimized_landmark_w)
-# ax1.set_xlabel('Index')
-# ax1.set_ylabel('Weight')
-# ax1.set_title('Optimized landmark weights')
-# plt.tight_layout()
-# plt.savefig(bkup_dir+"optimized_landmark_w.png")
-# plt.close()
-
-# landmark_w = optimized_landmark_w
-# interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
-# weighted_procrustes_curves = np.zeros_like(Procrustes_curves)
-# for i in range(len(Curvatures)):
-#     interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])), np.linspace(0, 1, len(Curvatures[i])), Curvatures[i])
-# for i in range(len(interpolated_curvatures)):
-#     for j in range(len(interpolated_curvatures[i])):
-#         weighted_procrustes_curves[i][j] = Procrustes_curves[i][j] * interpolated_curvatures[i][j] * landmark_w[j]
-
-# geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
-# for i in range(len(weighted_procrustes_curves)):
-#     for j in range(len(weighted_procrustes_curves)):
-#         geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i], weighted_procrustes_curves[j])
-#         geod_dist_mat[i, j] = geodesic_d
-
-# geod_dist_pca = PCAHandler(geod_dist_mat, None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-# geod_dist_pca.PCA_training_and_test()
-# fig = plt.figure(dpi=300, figsize=(6, 4))
-# ax1 = fig.add_subplot(111)
-# ax1.scatter(geod_dist_pca.train_res[:, 0], geod_dist_pca.train_res[:, 1], c=numeric_lst, cmap="turbo")
-# plt.savefig(bkup_dir + "geod_dist_pca.png")
-# plt.close()
 
 
 # SRVF计算
@@ -935,36 +849,44 @@ plt.close()
 
 ####################为srvf PCA绘制QQplot####################
 unique_types = df['Type'].unique()
-# 设置一个标记列表来区分每种类型
-markers = ['o', 's', '^', 'D', '*', 'P', 'X', 'v', '<', '>']  # ... you can extend this list if necessary
-# 保证类型的数量不超过我们为其定义的标记数量
-assert len(unique_types) <= len(markers), "Not enough markers defined!"
 colors = sns.color_palette(n_colors=len(unique_types))
+
+# 创建4x4的子图大图
+fig, axes = plt.subplots(4, 4, figsize=(20, 20))
+fig.suptitle('QQ plots: Types vs. Total')
+
 # 对于每个PC，进行QQ图分析
 for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
     q = np.linspace(0, 1, 101)[1:-1]  # 从1%到99%
     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
-    plt.figure(figsize=(8, 8))
+    
+    # 定位子图的位置
+    ax = axes[(pc-1)//4, (pc-1)%4]
+    
     # 为每个Type绘制QQ图
     for idx, type_value in enumerate(unique_types):
         type_data = df[df['Type'] == type_value][f'PC{pc}']
         quantiles_type = np.percentile(type_data, q*100)
-        # plt.scatter(quantiles_total, quantiles_type, label=type_value, color='black', marker=markers[idx])
-        plt.scatter(quantiles_total, quantiles_type, 
+        ax.scatter(quantiles_total, quantiles_type, 
                     label=type_value, 
                     color=colors[idx],
-                    # marker="${}$".format(type_value),
                     marker = "x",
                     s=40)
+    
     # 添加对角线
-    plt.plot([min(quantiles_total), max(quantiles_total)], [min(quantiles_total), max(quantiles_total)], linestyle='--',color="dimgray", label='y=x line')
-    plt.xlabel(f'Quantiles of Total Data (PC{pc})')
-    plt.ylabel(f'Quantiles of Type Data (PC{pc})')
-    plt.title(f'QQ plot: Types vs. Total for PC{pc}')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(pca_anlysis_dir+f'QQ_plot_for_srvf_PC{pc}.png')
-    plt.close()
+    ax.plot([min(quantiles_total), max(quantiles_total)], [min(quantiles_total), max(quantiles_total)], linestyle='--',color="dimgray")
+    # ax.set_xlabel(f'Quantiles of Total Data (PC{pc})')
+    # ax.set_ylabel(f'Quantiles of Type Data (PC{pc})')
+    ax.set_title(f'PC{pc}')
+    ax.legend()
+    ax.grid(True)
+
+plt.tight_layout()
+plt.subplots_adjust(top=0.95)
+plt.savefig(pca_anlysis_dir + 'QQ_plots_combined_srvf.png')
+# plt.show()
+plt.close()
+
 
 # synthetics_from_kde = all_srvf_pca.train_kde.resample(5)
 # synthetics = all_srvf_pca.pca.inverse_transform(synthetics_from_kde.T)*all_srvf_pca.train_std+all_srvf_pca.train_mean
@@ -994,36 +916,41 @@ plt.savefig(pca_anlysis_dir+"PCA_total_Violinplot.png")
 plt.close()
 ####################为坐标PCA绘制QQplot####################
 unique_types = df['Type'].unique()
-# 设置一个标记列表来区分每种类型
-markers = ['o', 's', '^', 'D', '*', 'P', 'X', 'v', '<', '>']  # ... you can extend this list if necessary
-# 保证类型的数量不超过我们为其定义的标记数量
-assert len(unique_types) <= len(markers), "Not enough markers defined!"
 colors = sns.color_palette(n_colors=len(unique_types))
+# 对于每个PC，进行QQ图分析
+# 创建4x4的子图大图
+fig, axes = plt.subplots(4, 4, figsize=(20, 20))
+fig.suptitle('QQ plots: Types vs. Total')
+
 # 对于每个PC，进行QQ图分析
 for pc in range(1, PCA_N_COMPONENTS+1):  # PC1 to PCn
     q = np.linspace(0, 1, 101)[1:-1]  # 从1%到99%
     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
-    plt.figure(figsize=(8, 8))
+    # 定位子图的位置
+    ax = axes[(pc-1)//4, (pc-1)%4]
     # 为每个Type绘制QQ图
     for idx, type_value in enumerate(unique_types):
         type_data = df[df['Type'] == type_value][f'PC{pc}']
         quantiles_type = np.percentile(type_data, q*100)
-        # plt.scatter(quantiles_total, quantiles_type, label=type_value, color='black', marker=markers[idx])
-        plt.scatter(quantiles_total, quantiles_type, 
-                    label=type_value, 
-                    color=colors[idx],
-                    # marker="${}$".format(type_value),
-                    marker = "x",
-                    s=40)
+        ax.scatter(quantiles_total, quantiles_type, 
+                   label=type_value, 
+                   color=colors[idx],
+                   marker="x",
+                   s=40)
     # 添加对角线
-    plt.plot([min(quantiles_total), max(quantiles_total)], [min(quantiles_total), max(quantiles_total)], linestyle='--',color="dimgray", label='y=x line')
-    plt.xlabel(f'Quantiles of Total Data (PC{pc})')
-    plt.ylabel(f'Quantiles of Type Data (PC{pc})')
-    plt.title(f'QQ plot: Types vs. Total for PC{pc}')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(pca_anlysis_dir+f'QQ_plot_for_PC{pc}.png')
-    plt.close()
+    ax.plot([min(quantiles_total), max(quantiles_total)], [min(quantiles_total), max(quantiles_total)], linestyle='--',color="dimgray")
+    # ax.set_xlabel(f'Quantiles of Total Data (PC{pc})')
+    # ax.set_ylabel(f'Quantiles of Type Data (PC{pc})')
+    ax.set_title(f'PC{pc}')
+    ax.legend()
+    ax.grid(True)
+
+plt.tight_layout()
+plt.subplots_adjust(top=0.95)
+plt.savefig(pca_anlysis_dir + 'QQ_plots_combined.png')
+# plt.show()
+plt.close()
+
 
 
 srvf_x_PC = 0
@@ -1072,132 +999,110 @@ plt.close()
 
 log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
 print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
-#
+###########################################
 
-###########################################################
-######### Kernel PCA.通过KernelPCA或其他核技术，自定义一个核，使数据在新的特征空间中更均匀地分布。
-# gamma=0.005
-# array_0 = np.zeros(1000)
-# array_1 = np.ones(1000)
-# array_2 = np.ones(1000) * 2
-# array_3 = np.ones(1000) * 3
+###########################################
+# 找出curvature和torsion分布最典型的曲线
+curvature_kdes = [U_curvatures_kde, V_curvatures_kde, C_curvatures_kde, S_curvatures_kde]
+torsion_kdes = [U_torsions_kde, V_torsions_kde, C_torsions_kde, S_torsions_kde]
+def compute_likelihood(kde, data):
+    log_likelihood = kde.score_samples(data)
+    return np.exp(log_likelihood)
 
-# final_array = np.concatenate([array_0, array_1, array_2, array_3])
-# kpca = KernelPCA(n_components=3, kernel='rbf', gamma=gamma)
-# K = rbf_kernel(srvf_synthetics, gamma=gamma)
-# eigenvalues = np.linalg.eigvalsh(K)
-# print("EIGENVALUES:", eigenvalues)
-# X_kpca = kpca.fit_transform(srvf_synthetics)
-# # 绘图
-# plt.figure(figsize=(8,6))
-# plt.scatter(X_kpca[:, 0], X_kpca[:, 2], c=final_array, alpha=1, cmap=plt.cm.get_cmap('rainbow', 4))
-# plt.title('Kernel PCA (gamma:{})'.format(gamma))
-# plt.xlabel('PC1')
-# plt.ylabel('PC2')
-# plt.legend()  # 添加图例
-# plt.savefig(pca_anlysis_dir+"srvf_kernel_PCA_total.png")
+def get_top_5_indices_for_label(curvatures, torsions, curvature_kde, torsion_kde):
+    curv_likelihoods = compute_likelihood(curvature_kde, curvatures)
+    tors_likelihoods = compute_likelihood(torsion_kde, torsions)
+    
+    combined_likelihoods = curv_likelihoods * tors_likelihoods
+    
+    # Get the indices of the top 5 likelihood values
+    top_5_indices = combined_likelihoods.argsort()[-5:][::-1]
+    return top_5_indices
 
-# gamma=0.01
-# kpca = KernelPCA(n_components=3, kernel='rbf', gamma=gamma)
-# K = rbf_kernel(non_srvf_synthetics , gamma=gamma)
-# eigenvalues = np.linalg.eigvalsh(K)
-# print("EIGENVALUES:", eigenvalues)
-# X_kpca = kpca.fit_transform(non_srvf_synthetics )
-# # 绘图
-# plt.figure(figsize=(8,6))
-# plt.scatter(X_kpca[:, 0], X_kpca[:, 2], c=final_array, alpha=1, cmap=plt.cm.get_cmap('rainbow', 4))
-# plt.title('Kernel PCA (gamma:{})'.format(gamma))
-# plt.xlabel('PC1')
-# plt.ylabel('PC2')
-# plt.legend()  # 添加图例
-# plt.savefig(pca_anlysis_dir+"kernel_PCA_total.png")
-#########
-###########################################################
+# Initialize result dictionary
+typical_param_results = {}
 
-# print ("开始计算geodesic距离")
-# total_geod_dist = []
-# total_type_pair = []
-# total_pca_dist  = []
-# total_srvf_pca_dist = []
-# for i in range(len(Procrustes_curves)):
-#     for j in range(i+1, len(Procrustes_curves)):
-#         geodesic_d = compute_geodesic_dist_between_two_curves(Procrustes_curves[i], Procrustes_curves[j])
-#         pca_dist = np.linalg.norm(all_pca.train_res[i]-all_pca.train_res[j])
-#         srvf_pca_dist = np.linalg.norm(all_srvf_pca.train_res[i]-all_srvf_pca.train_res[j])
-#         total_geod_dist.append(geodesic_d)
-#         total_type_pair.append([Typevalues[i], Typevalues[j]])
-#         total_pca_dist.append(pca_dist)
-#         total_srvf_pca_dist.append(srvf_pca_dist)
-# total_geod_dist = np.array(total_geod_dist)
-# total_pca_dist = np.array(total_pca_dist)
-# total_srvf_pca_dist = np.array(total_srvf_pca_dist)
+curv_likelihoods_data = {}
+tors_likelihoods_data = {}
+# Iterate over each unique label and compute likelihoods
+labels = ["U", "V", "C", "S"]
+for i, label in enumerate(labels):
+    indices_for_label = np.where(Typevalues == label)[0]
+    curvatures_for_label = Curvatures[indices_for_label]
+    torsions_for_label = Torsions[indices_for_label]
+    
+    curv_likelihoods = compute_likelihood(curvature_kdes[i], curvatures_for_label)
+    tors_likelihoods = compute_likelihood(torsion_kdes[i], torsions_for_label)
+    
+    curv_likelihoods_data[label] = curv_likelihoods
+    tors_likelihoods_data[label] = tors_likelihoods 
+      
+    top_5_indices = get_top_5_indices_for_label(curvatures_for_label, 
+                                               torsions_for_label, 
+                                               curvature_kdes[i], 
+                                               torsion_kdes[i])
+    
+    # Map the local indices back to global indices
+    global_indices = indices_for_label[top_5_indices]
+    typical_param_results[label] = global_indices
 
-# pca_correlation = np.corrcoef(total_pca_dist, total_geod_dist)[0,1] 
-# srvf_pca_correlation = np.corrcoef(total_srvf_pca_dist, total_geod_dist)[0,1]
-# log.write("PCA correlation matrix: "+ str(pca_correlation)+"\n")
-# log.write("SRVF PCA correlation matrix: "+str(srvf_pca_correlation)+"\n")
+xtick_labels = [f"{label} Curvature" for label in labels] + [f"{label} Torsion" for label in labels]
+# Plotting boxplots using seaborn
+plt.figure(figsize=(12, 6))
+sns.boxplot(data=[curv_likelihoods_data[label] for label in labels] + 
+                 [tors_likelihoods_data[label] for label in labels], 
+            orient='v')
+plt.xticks(list(range(8)), xtick_labels, rotation=45)  # Rotate the xtick labels for better readability
+plt.xlabel('Labels')
+plt.ylabel('Likelihoods')
+plt.title('Boxplot of curv_likelihoods and tors_likelihoods')
+plt.tight_layout()  # Ensure all labels fit well within the figure
+plt.savefig(geometry_dir + "curv_tors_likelihoods_boxplot.png")
+plt.close()
 
-# srvf_synthetic_geod_dist = []
-# srvf_pca_dist = []
-# sampling_range = np.concatenate([range(0,100), range(1000,1100), range(2000,2100), range(3000,3100)])
+# 找出curvature和torsion分布最典型的曲线
+###########################################
 
-# for i in sampling_range:
-#     for j in sampling_range:
-#         geodesic_d = compute_geodesic_dist_between_two_curves(srvf_recovers[i], srvf_recovers[j])
-#         pca_dist = np.linalg.norm(srvf_synthetics[i]-srvf_synthetics[j])
-#         srvf_synthetic_geod_dist.append(geodesic_d)
-#         srvf_pca_dist.append(pca_dist)
-# srvf_synthetic_geod_dist = np.array(srvf_synthetic_geod_dist)
-# srvf_pca_dist = np.array(srvf_pca_dist)
-# # print ("srvf synthetic geodesic distance shape: ", srvf_synthetic_geod_dist.shape)
-# # print ("srvf pca distance shape: ", srvf_pca_dist.shape)
-# srvf_pca_correlation = np.corrcoef(srvf_pca_dist, srvf_synthetic_geod_dist)[0,1]
-# log.write("SRVF PCA correlation matrix (synthetic) : "+str(srvf_pca_correlation)+"\n")
-
-# non_srvf_geod_dist = []
-# non_srvf_pca_dist = []
-# for i in sampling_range:
-#     for j in sampling_range:
-#         geodesic_d = compute_geodesic_dist_between_two_curves(non_srvf_pca_recovers[i], non_srvf_pca_recovers[j])
-#         pca_dist = np.linalg.norm(non_srvf_synthetics[i]-non_srvf_synthetics[j])
-#         non_srvf_geod_dist.append(geodesic_d)
-#         non_srvf_pca_dist.append(pca_dist)
-# non_srvf_geod_dist = np.array(non_srvf_geod_dist)
-# non_srvf_pca_dist = np.array(non_srvf_pca_dist)
-# # print ("non_srvf geodesic distance shape: ", non_srvf_geod_dist.shape)
-# # print ("non_srvf pca distance shape: ", non_srvf_pca_dist.shape)
-# non_srvf_pca_correlation = np.corrcoef(non_srvf_pca_dist, non_srvf_geod_dist)[0,1]
-# log.write("Non-SRVF PCA correlation matrix (synthetic) : "+str(non_srvf_pca_correlation)+"\n")
-
-
-##### 计算geodesic并评价线性相关性
 ##########################################
-spec = []
+##### 计算geodesic并评价线性相关性
+
 geodesic_dir = mkdir(bkup_dir, "geodesic")
 # U, U, V, V, C, C, S, S
-case_study = ['BG11_Left', 'BG18_Left',
-              'BH0031_Left', 'BH0017_Right',
-              'BH0006_Left', 'BH0003_Right',
-              'BH0012_Left', 'BH0016_Left']
+# case_study = ['BG11_Left', 'BG18_Left',
+#               'BH0031_Left', 'BH0017_Right',
+#               'BH0006_Left', 'BH0003_Right',
+#               'BH0012_Left', 'BH0016_Left']
+# for i in range(len(Files)):
+#     for c in case_study:
+#         if c in Files[i]:
+#             spec.append(Procrustes_curves[i])
 spec_label = ['U1','U2',
               'V1','V2',
               'C1','C2',
               'S1','S2',
               'FrechetMean', 'ArithmeticMean']
-for i in range(len(Files)):
-    for c in case_study:
-        if c in Files[i]:
-            spec.append(Procrustes_curves[i])
+
+pca_kdes = [U_kde, V_kde, C_kde, S_kde]
+srvf_pca_kdes = [U_srvf_kde, V_srvf_kde, C_srvf_kde, S_srvf_kde]
+
+case_study = []
+spec = []
+for key, values in typical_param_results.items():
+    print(key, ":", values[:2])
+    case_study.extend(values[:2])
+    spec.append(Procrustes_curves[values[0]])
+    spec.append(Procrustes_curves[values[1]])
+
 
 # FrechetMean = compute_frechet_mean(Procrustes_curves)
 system_name = platform.system()
 if system_name == "Windows":
     FrechetMean = compute_frechet_mean(Procrustes_curves)
-    np.save("./FrechetMean.npy", FrechetMean)
+    np.save("./bkup/FrechetMean.npy", FrechetMean)
 
 elif system_name == "Darwin":  # Mac OS的系统名称为'Darwin'
     if os.path.exists("./FrechetMean.npy"):
-        FrechetMean = np.load("./FrechetMean.npy")
+        FrechetMean = np.load("./bkup/FrechetMean.npy")
     else:
         # raise ValueError("File './FrechetMean.npy' does not exist!")
         FrechetMean = np.mean(Procrustes_curves, axis=0)
@@ -1209,40 +1114,118 @@ spec.append(FrechetMean)
 spec.append(ArithmeticMean)
 spec = np.array(spec)
 print ("spec.shape: ", spec.shape)
-for i  in range(len(spec[:-2])):
-    for j in [-2, -1]:
+print ("spec_label: ", len(spec_label))
+
+for j in [0, 1]:
+    for i in [0, 1, 2, 3, 4, 5, 6, 7]:
+        if i == j:
+            continue
         spec2mean_dir = mkdir(geodesic_dir, "{}_2_{}".format(spec_label[j], spec_label[i]))
         curve_a = spec[j]
         curve_b = spec[i]
         geodesic_dist_a2b = compute_geodesic_dist_between_two_curves(curve_a, curve_b)
         # num_step = int(geodesic_dist_a2b/0.5)
         num_step = 10
-        print (spec_label[j], spec_label[i], " geodesic_dist_a2b: ", geodesic_dist_a2b)
         shapes_along_geodesic  = compute_geodesic_shapes_between_two_curves(curve_a, curve_b, num_steps=num_step)
-        print ("shape_along_geodesic.shape:", shapes_along_geodesic.shape)
-        plot_curves_on_2d(curve_a, curve_b, shapes_along_geodesic, 
-                        spec2mean_dir+"geo_deformation.png")
-        spec_geo_srvf_res = all_srvf_pca.pca.transform((shapes_along_geodesic.reshape(len(shapes_along_geodesic),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
-        spec_geo_res = all_srvf_pca.pca.transform((spec.reshape(len(spec),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
+        shapes_along_geodesic = np.vstack(([curve_a], shapes_along_geodesic, [curve_b]))
+        shape_srvf_along_geodesic = []
+        for k in range(len(shapes_along_geodesic)):
+            shape_srvf_along_geodesic.append(calculate_srvf(shapes_along_geodesic[k]))
+        shape_srvf_along_geodesic = np.array(shape_srvf_along_geodesic)
+        spec_geo_res = all_pca.pca.transform((shapes_along_geodesic.reshape(len(shapes_along_geodesic),-1)-all_pca.train_mean)/all_pca.train_std)
+        spec_geo_srvf_res = all_srvf_pca.pca.transform((shape_srvf_along_geodesic.reshape(len(shape_srvf_along_geodesic),-1)-all_srvf_pca.train_mean)/all_srvf_pca.train_std)
+        pca_likelihood = []
+        for k in range(len(shapes_along_geodesic)):
+            seed_pca_density = pca_kdes[j//2].score_samples(spec_geo_res[k].reshape(1, -1))
+            seed_pca_likelihood = np.exp(seed_pca_density)
+            target_pca_density = pca_kdes[i//2].score_samples(spec_geo_res[k].reshape(1, -1))
+            target_pca_likelihood = np.exp(target_pca_density)
+            seed_srvf_pca_density = srvf_pca_kdes[j//2].score_samples(spec_geo_srvf_res[k].reshape(1, -1))
+            seed_srvf_pca_likelihood = np.exp(seed_srvf_pca_density)
+            target_srvf_pca_density = srvf_pca_kdes[i//2].score_samples(spec_geo_srvf_res[k].reshape(1, -1))
+            target_srvf_pca_likelihood = np.exp(target_srvf_pca_density)
+            pca_likelihood.append([seed_pca_likelihood, target_pca_likelihood, seed_srvf_pca_likelihood, target_srvf_pca_likelihood])
+        pca_likelihood = np.array(pca_likelihood)
         fig = plt.figure(dpi=300, figsize=(6, 5))
         ax1 = fig.add_subplot(111)
-        ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
-        ax1.scatter(spec_geo_srvf_res[:, 0], spec_geo_srvf_res[:, 1], c="b", alpha=0.9, marker='*', label='ShapesAlongGoed')
+        ax1.plot(pca_likelihood[:, 0], linestyle='solid', color="k",label="seed_pca")
+        ax1.plot(pca_likelihood[:, 1], linestyle='solid', color="r",label="target_pca")
+        ax1.plot(pca_likelihood[:, 2], linestyle='dashed', color="k", label="seed_srvf_pca")
+        ax1.plot(pca_likelihood[:, 3], linestyle="dashed", color="r",label="target_srvf_pca")
+        ax1.legend()
+        ax1.grid(linestyle='--', linewidth=0.5)
+        plt.savefig(spec2mean_dir+"pca_likelihood.png")
+        plt.close()
 
+        # 计算曲率和扭率
+        geod_curvature = []
+        geod_torsion = []
+        shape_likelihoods = []
+        for k in range(len(shapes_along_geodesic)):
+            spec_geo_curvatures, spec_geo_torsions = compute_curvature_and_torsion(shapes_along_geodesic[k])
+            sma_curv = np.convolve(spec_geo_curvatures, weights, 'valid')
+            geod_curvature.append(sma_curv)
+            sma_tors = np.convolve(spec_geo_torsions, weights, 'valid')
+            geod_torsion.append(sma_tors)
+            seed_curvature_log_density = curvature_kdes[j//2].score_samples(sma_curv.reshape(1, -1))
+            seed_curvature_density = np.exp(seed_curvature_log_density)
+            target_curvature_log_density = curvature_kdes[i//2].score_samples(sma_curv.reshape(1, -1))
+            target_curvature_density = np.exp(target_curvature_log_density)
+            seed_torsion_log_density = torsion_kdes[j//2].score_samples(sma_tors.reshape(1, -1))
+            seed_torsion_density = np.exp(seed_torsion_log_density)
+            target_torsion_log_density = torsion_kdes[i//2].score_samples(sma_tors.reshape(1, -1))
+            target_torsion_density = np.exp(target_torsion_log_density)
+            shape_likelihoods.append([seed_curvature_log_density, target_curvature_log_density, seed_torsion_log_density, target_torsion_log_density])
+        geod_curvature = np.array(geod_curvature)
+        geod_torsion = np.array(geod_torsion)
+        shape_likelihoods = np.array(shape_likelihoods)
+        plot_curvature_torsion_heatmaps(geod_curvature, geod_torsion, spec2mean_dir+"geo_curvature_torsion.png")
+        fig = plt.figure(dpi=300, figsize=(6, 5))
+        ax1 = fig.add_subplot(111)
+        ax1.plot(shape_likelihoods[:, 0], linestyle='solid', color="k",label="seed_curvature")
+        ax1.plot(shape_likelihoods[:, 1], linestyle='solid', color="r",label="target_curvature")
+        ax1.plot(shape_likelihoods[:, 2], linestyle='dashed', color="k", label="seed_torsion")
+        ax1.plot(shape_likelihoods[:, 3], linestyle="dashed", color="r",label="target_torsion")
+        ax1.legend()
+        ax1.grid(linestyle='--', linewidth=0.5)
+        plt.savefig(spec2mean_dir+"likelihood.png")
+        plt.close()
+
+        # 首先生成颜色映射
+        geod_cmap = sns.cubehelix_palette(start=.5, rot=-.5, as_cmap=True)
+        # 生成颜色值数组
+        # n_points = num_step
+        geod_colors = geod_cmap(np.linspace(0, 1, len(shapes_along_geodesic)))
+        plot_curves_on_2d(curve_a, curve_b, shapes_along_geodesic, 
+                        spec2mean_dir+"geo_deformation.png")
+
+        fig = plt.figure(dpi=300, figsize=(6, 5))
+        ax1 = fig.add_subplot(111)
+        ax1.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], c="white", alpha=0.3, edgecolors='dimgray')
+        ax1.scatter(spec_geo_srvf_res[1:-1, 0], spec_geo_srvf_res[1:-1, 1], c=geod_colors[1:-1], alpha=0.9, label='Shapes Along Geod')
+        ax1.scatter(spec_geo_srvf_res[0, 0], spec_geo_srvf_res[0, 1], c="k", alpha=0.9, label='Seed')
+        ax1.scatter(spec_geo_srvf_res[-1, 0], spec_geo_srvf_res[-1, 1], c="r", alpha=0.9, label='Target')
         ax.grid(linestyle='--', linewidth=0.5)
+        ax.set_xlabel("PC1")
+        ax.set_ylabel("PC2")
         plt.legend(loc='lower right')
         plt.savefig(spec2mean_dir+"srvf_PCA_total_with_geo.png")
         plt.close()
         fig = plt.figure(dpi=300, figsize=(6, 5))
         ax2 = fig.add_subplot(111)
-        ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c="white", alpha=0.7, edgecolors='dimgray')
-        ax2.scatter(spec_geo_res[:, 0], spec_geo_res[:, 1], c="b", alpha=0.9, marker='*', label='ShapesAlongGoed')
-
+        ax2.scatter(all_pca.train_res[:, 0], all_pca.train_res[:, 1], c="white", alpha=0.3, edgecolors='dimgray')
+        ax2.scatter(spec_geo_res[1:-1, 0], spec_geo_res[1:-1, 1], c=geod_colors[1:-1], alpha=0.9, label='Shapes Along Geod')
+        ax2.scatter(spec_geo_res[0, 0], spec_geo_res[0, 1], c="k", alpha=0.9, label='Seed')
+        ax2.scatter(spec_geo_res[-1, 0], spec_geo_res[-1, 1], c="r", alpha=0.9, label='Target')
+        ax2.set_xlabel("PC1")
+        ax2.set_ylabel("PC2")
         ax2.grid(linestyle='--', linewidth=0.5)
         plt.legend(loc='lower right')
         plt.savefig(spec2mean_dir+"PCA_total_with_geo.png")
         plt.close()
 
+#######################################
+# 每个type的最典形状在PCA空间中的分布
 spec_srvf = []
 for i in range(len(spec)):
     spec_srvf.append(calculate_srvf(spec[i]))
@@ -1258,10 +1241,9 @@ ax1.scatter(spec_srvf_res[2:4, 0], spec_srvf_res[2:4, 1], c="g", alpha=0.7, edge
 ax1.scatter(spec_srvf_res[4:6, 0], spec_srvf_res[4:6, 1], c="b", alpha=0.7, edgecolors='white', label='C')
 ax1.scatter(spec_srvf_res[6:8, 0], spec_srvf_res[6:8, 1], c="orange", alpha=0.7, edgecolors='white', label='S')
 ax1.grid(linestyle='--', linewidth=0.5)
-plt.legend(loc='lower right')
-plt.savefig(pca_anlysis_dir+"srvf_PCA_total_with_spec.png")
+plt.legend(loc='upper center')
+plt.savefig(geodesic_dir+"srvf_PCA_total_with_spec.png")
 plt.close()
-
 spec_res = all_pca.pca.transform((spec.reshape(len(spec),-1)-all_pca.train_mean)/all_pca.train_std)
 fig = plt.figure(dpi=300, figsize=(6, 5))
 ax2 = fig.add_subplot(111)
@@ -1274,10 +1256,12 @@ ax2.scatter(spec_res[4:6, 0], spec_res[4:6, 1], c="b", alpha=0.7, edgecolors='wh
 ax2.scatter(spec_res[6:8, 0], spec_res[6:8, 1], c="orange", alpha=0.7, edgecolors='white', label='S')
 ax2.grid(linestyle='--', linewidth=0.5)
 plt.legend()
-plt.savefig(pca_anlysis_dir+"PCA_total_with_spec.png")
+plt.savefig(geodesic_dir+"PCA_total_with_spec.png")
 plt.close()
+# 每个type的最典形状在PCA空间中的分布
+#######################################
 
-
+####################################################
 # 计算所有曲线与FrechetMean和ArithmeticMean的测地线距离
 frechet_distances = [compute_geodesic_dist_between_two_curves(curve, FrechetMean) for curve in Procrustes_curves]
 arithmetic_distances = [compute_geodesic_dist_between_two_curves(curve, ArithmeticMean) for curve in Procrustes_curves]
@@ -1299,6 +1283,8 @@ plt.grid(True, axis='y', linestyle='--', alpha=0.4)
 plt.tight_layout()
 plt.savefig(geodesic_dir+"boxplot_of_geodesic_distances_to_means_and_spec.png")
 plt.close()
+# 计算所有曲线与FrechetMean和ArithmeticMean的测地线距离
+####################################################
 
 
 ### 
