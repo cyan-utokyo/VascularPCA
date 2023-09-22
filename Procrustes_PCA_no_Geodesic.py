@@ -1170,6 +1170,7 @@ for j in [0, 1]:
         shapes_along_geodesic = np.vstack(([curve_a], shapes_along_geodesic, [curve_b]))
         shape_srvf_along_geodesic = []
         for k in range(len(shapes_along_geodesic)):
+            makeVtkFile(spec2mean_dir+"shape{}.vtk".format(k), shapes_along_geodesic[k], [],[])
             shape_srvf_along_geodesic.append(calculate_srvf(shapes_along_geodesic[k]))
         shape_srvf_along_geodesic = np.array(shape_srvf_along_geodesic)
         spec_geo_res = all_pca.pca.transform((shapes_along_geodesic.reshape(len(shapes_along_geodesic),-1)-all_pca.train_mean)/all_pca.train_std)
@@ -1325,6 +1326,61 @@ plt.savefig(geodesic_dir+"boxplot_of_geodesic_distances_to_means_and_spec.png")
 plt.close()
 # 计算所有曲线与FrechetMean和ArithmeticMean的测地线距离
 ####################################################
+
+C_synthetic_params = np.concatenate((C_synthetic_curvatures, C_synthetic_torsions), axis=1) # 长度为1000
+U_synthetic_params = np.concatenate((U_synthetic_curvatures, U_synthetic_torsions), axis=1) # 长度为1000
+V_synthetic_params = np.concatenate((V_synthetic_curvatures, V_synthetic_torsions), axis=1) # 长度为1000
+S_synthetic_params = np.concatenate((S_synthetic_curvatures, S_synthetic_torsions), axis=1) # 长度为1000
+C_srvf_synthetic_params = np.concatenate((C_srvf_synthetic_curvatures, C_srvf_synthetic_torsions), axis=1) # 长度为1000
+U_srvf_synthetic_params = np.concatenate((U_srvf_synthetic_curvatures, U_srvf_synthetic_torsions), axis=1) # 长度为1000
+V_srvf_synthetic_params = np.concatenate((V_srvf_synthetic_curvatures, V_srvf_synthetic_torsions), axis=1) # 长度为1000
+S_srvf_synthetic_params = np.concatenate((S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions), axis=1) # 长度为1000
+C_params = np.concatenate((C_curvatures, C_torsions), axis=1)# 长度为87
+U_params = np.concatenate((U_curvatures, U_torsions), axis=1)# 长度为87
+V_params = np.concatenate((V_curvatures, V_torsions), axis=1)# 长度为87
+S_params = np.concatenate((S_curvatures, S_torsions), axis=1)# 长度为87
+
+merged_params = np.concatenate((C_synthetic_params, U_synthetic_params, V_synthetic_params, S_synthetic_params,
+                                C_srvf_synthetic_params, U_srvf_synthetic_params, V_srvf_synthetic_params, S_srvf_synthetic_params,
+                                C_params, U_params, V_params, S_params), axis=0)
+
+color_labels = ['b'] * len(C_synthetic_params) + ['g'] * len(U_synthetic_params) + \
+['r'] * len(V_synthetic_params) + ['orange'] * len(S_synthetic_params) + \
+['b'] * len(C_srvf_synthetic_params) + ['g'] *len(U_srvf_synthetic_params) + \
+['r'] * len(V_srvf_synthetic_params) + ['orange'] * len(S_srvf_synthetic_params) +\
+['b'] * len(C_params) + ['g'] * len(U_params) + ['r'] * len(V_params) + ['orange'] * len(S_params)
+
+marker_labels = ['o'] * len(C_synthetic_params) + ['o'] * len(U_synthetic_params) +\
+['o'] * len(V_synthetic_params) + ['o'] * len(S_synthetic_params) +\
+['^'] * len(C_srvf_synthetic_params) + ['^'] * len(U_srvf_synthetic_params) +\
+['^'] * len(V_srvf_synthetic_params) + ['^'] * len(S_srvf_synthetic_params) +\
+['s'] * len(C_params) + ['s'] * len(U_params) + ['s'] * len(V_params) + ['s'] * len(S_params)
+
+
+# 此时，color_labels 和 marker_labels 分别为颜色和标记的标签列表，与 merged_params 长度相等。
+
+param_PCA = PCAHandler(merged_params, None, n_components=3, standardization=1)
+param_PCA.PCA_training_and_test()
+
+fig = plt.figure(dpi=100, figsize=(6, 5))
+ax = fig.add_subplot(111, projection='3d')
+# 迭代每一组数据并绘制散点图
+
+for i in range(len(color_labels)):
+    if i <8000:
+        ax.scatter(param_PCA.train_res[i,0], param_PCA.train_res[i, 1], param_PCA.train_res[i, 2],
+               c=color_labels[i], marker=marker_labels[i], alpha=0.7, edgecolors='white')
+    else:
+        ax.scatter(param_PCA.train_res[i,0], param_PCA.train_res[i, 1], param_PCA.train_res[i, 2],
+               c=color_labels[i], marker=marker_labels[i], alpha=0.7, edgecolors='black')    
+
+ax.set_xlabel("PC1")
+ax.set_ylabel("PC2")
+ax.grid(linestyle='--', linewidth=0.5)
+plt.tight_layout()
+# plt.savefig(geometry_dir+"PCA_total_with_params.png")
+# plt.close()
+plt.show()
 
 
 ### 
