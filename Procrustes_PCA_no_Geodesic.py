@@ -315,8 +315,9 @@ def compute_bootstrap_statistics(bootstrap_samples):
 means_overall_curvature, stds_overall_curvature = compute_bootstrap_statistics(bootstrap_samples_overall_curvature)
 means_overall_torsion, stds_overall_torsion = compute_bootstrap_statistics(bootstrap_samples_overall_torsion)
 
-fig, axes = plt.subplots(4, 2, dpi=300, figsize=(10, 8))
-def plot_with_shade(ax, data_samples,  title, ymin, ymax):
+# fig, axes = plt.subplots(4, 2, dpi=300, figsize=(10, 8))
+fig, axes = plt.subplots(1, 2, dpi=300, figsize=(8, 3))
+def plot_with_shade(ax, data_samples,  title, ymin, ymax, color="red"):
     if len(data_samples.shape) == 3:  # bootstrap samples
         x = range(data_samples.shape[2])
     else:  # means or stds
@@ -324,19 +325,19 @@ def plot_with_shade(ax, data_samples,  title, ymin, ymax):
     # x = range(data_samples.shape[2])
     # 定义箱型图样式参数
     box_properties = {
-        'color': 'dimgray',
+        'color': color,
         'linewidth': 1
     }
     whisker_properties = {
-        'color': 'dimgray',
+        'color': color,
         'linewidth': 1
     }
     cap_properties = {
-        'color': 'dimgray',
+        'color': color,
         'linewidth': 1
     }
     median_properties = {
-        'color': 'red',
+        'color': color,
         'linewidth': 1.5
     }
 
@@ -360,14 +361,14 @@ def plot_with_shade(ax, data_samples,  title, ymin, ymax):
 
 print ("compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0] shape:", compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0].shape)
 
-plot_with_shade(axes[0, 0], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0], "C - Means", 0, 0.6)
-plot_with_shade(axes[0, 1], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[1], "C - Stds", 0, 0.4)
-plot_with_shade(axes[1, 0], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[0], "S - Means", 0, 0.6)
-plot_with_shade(axes[1, 1], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[1], "S - Stds", 0, 0.4)
-plot_with_shade(axes[2, 0], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[0], "U - Means", 0, 0.6)
-plot_with_shade(axes[2, 1], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[1], "U - Stds", 0, 0.4)
-plot_with_shade(axes[3, 0], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[0], "V - Means", 0, 0.6)
-plot_with_shade(axes[3, 1], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[1], "V - Stds", 0, 0.4)
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0], "C - Means", 0, 0.6, color="blue")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[1], "C - Stds", 0, 0.4, color="blue")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[0], "S - Means", 0, 0.6, color="orange")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[1], "S - Stds", 0, 0.4, color="orange")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[0], "U - Means", 0, 0.6, color="red")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[1], "U - Stds", 0, 0.4, color="red")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[0], "V - Means", 0, 0.6, color="green")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[1], "V - Stds", 0, 0.4, color="green")
 
 
 plt.tight_layout()
@@ -375,15 +376,15 @@ plt.savefig(geometry_dir+"Bootstrap_Distributions_with_Global_Curvature.png")
 plt.close()
 
 
-fig, axes = plt.subplots(4, 2, dpi=300, figsize=(10, 8))
-plot_with_shade(axes[0, 0], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[0], "C - Means", -0.6, 0.6)
-plot_with_shade(axes[0, 1], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[1], "C - Stds", 0, 1.2)
-plot_with_shade(axes[1, 0], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[0], "S - Means", -0.6, 0.6)
-plot_with_shade(axes[1, 1], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[1], "S - Stds", 0, 1.2)
-plot_with_shade(axes[2, 0], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[0], "U - Means", -0.6, 0.6)
-plot_with_shade(axes[2, 1], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[1], "U - Stds", 0, 1.2)
-plot_with_shade(axes[3, 0], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[0], "V - Means", -0.6, 0.6)
-plot_with_shade(axes[3, 1], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[1], "V - Stds", 0, 1.2)
+fig, axes = plt.subplots(1, 2, dpi=300, figsize=(8, 3))
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[0], "C - Means", -0.6, 0.6, color="blue")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[1], "C - Stds", 0, 1.2, color="blue")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[0], "S - Means", -0.6, 0.6, color="orange")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[1], "S - Stds", 0, 1.2, color="orange")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[0], "U - Means", -0.6, 0.6, color="red")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[1], "U - Stds", 0, 1.2, color="red")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[0], "V - Means", -0.6, 0.6, color="green")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[1], "V - Stds", 0, 1.2, color="green")
 plt.tight_layout()
 plt.savefig(geometry_dir+"Bootstrap_Distributions_with_Global_Torsion.png")
 plt.close()
@@ -1378,9 +1379,9 @@ ax.set_xlabel("PC1")
 ax.set_ylabel("PC2")
 ax.grid(linestyle='--', linewidth=0.5)
 plt.tight_layout()
-# plt.savefig(geometry_dir+"PCA_total_with_params.png")
-# plt.close()
-plt.show()
+plt.savefig(geometry_dir+"PCA_total_with_params.png")
+plt.close()
+# plt.show()
 
 
 ### 
