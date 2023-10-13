@@ -60,6 +60,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="geometry")
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
+RECONSTRUCT_WITH_SRVF = True
 
 # 获取当前时间
 start_time = datetime.now()
@@ -77,8 +78,8 @@ log.write("PCA_N_COMPONENTS:"+str(PCA_N_COMPONENTS)+"\n")
 unaligned_curves = []
 Files = []
 radii = []
-Curvatures = []
-Torsions = []
+pre_Curvatures = []
+pre_Torsions = []
 Typevalues = [] 
 # window size
 window_size = 4
@@ -104,9 +105,9 @@ for idx in range(len(pre_files)):
     unaligned_curves.append(pt[::-1])
     radii.append(Radius[::-1])
     sma_curv = np.convolve(Curv, weights, 'valid')
-    Curvatures.append(sma_curv[::-1])
+    pre_Curvatures.append(sma_curv[::-1])
     sma_tors = np.convolve(Tors, weights, 'valid')
-    Torsions.append(sma_tors[::-1])
+    pre_Torsions.append(sma_tors[::-1])
 unaligned_curves = np.array(unaligned_curves)
 geometry_dir = mkdir(bkup_dir, "geometry")
 Typevalues = np.array(Typevalues)
@@ -131,10 +132,105 @@ Typevalues = np.array(Typevalues)
 if SCALETO1:
     for i in range(len(unaligned_curves)):
         unaligned_curves[i] = unaligned_curves[i]*(1.0/measure_length(unaligned_curves[i]))
-radii = np.array(radii)
-Curvatures = np.array(Curvatures)
-Torsions = np.array(Torsions)
 
+
+########################################
+
+print ("全データ（{}）を読み込みました。".format(len(pre_files)))
+print ("使用できるデータ：", len(Files))
+for i in range(len(Files)):
+    if "BH0017_R" in Files[i]:
+        base_id = i
+print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
+
+##################################################
+#  从这里开始是对齐。                             #
+#  To-Do: 需要保存Procrustes对齐后的              #
+#  曲线各一条，作为后续的曲线对齐的基准。           #
+##################################################
+
+a_curves = align_icp(unaligned_curves, base_id=base_id)
+print ("First alignment done.")
+Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
+print ("procrustes alignment done.")
+# for i in range(len(Procrustes_curves)):
+#     print ("length:", measure_length(Procrustes_curves[i]))
+parametrized_curves = np.zeros_like(Procrustes_curves)
+# aligned_curves = np.zeros_like(interpolated_curves)
+for i in range(len(Procrustes_curves)):
+    parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
+Procrustes_curves = np.array(Procrustes_curves)
+
+print (Procrustes_curves.shape)
+i=30 # U
+j=46 # S
+
+# plot_curve_with_peaks_name = geometry_dir + "peak_of_{}_and_{}.png".format(i,j)
+# plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsions, 
+#                        plot_curve_with_peaks_name, axes=(1,2), distance=30)
+
+
+# if SCALETO1:
+#     # 需要把长度还原到原始曲线或1
+#     for i in range(len(Procrustes_curves)):
+#         aligned_length = measure_length(Procrustes_curves[i])
+#         procrustes_length = measure_length(Procrustes_curves[i])
+#         Procrustes_curves[i] = Procrustes_curves[i] * (1.0/procrustes_length) # 这里是把长度还原到1
+# log.write("Scaled all curves to one.\n")
+
+# shape of Procrustes_curves: (87, 64, 3)
+# shape of Curvatures: (87, 61)
+# interpolate Curvatures to (87, 64)
+
+
+# SRVF计算
+Procs_srvf_curves = np.zeros_like(Procrustes_curves)
+for i in range(len(Procrustes_curves)):
+    Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
+
+makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
+mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
+makeVtkFile(bkup_dir+"mean_srvf.vtk", mean_srvf_inverse,[],[] )
+contains_nan = np.isnan(Procs_srvf_curves).any()
+
+print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
+#####
+
+# 绘制一个4子图的plot，有对齐后的4个类别的曲线和SRVF曲线标注
+plot_curves_with_arrows(1, 2, Procrustes_curves, Procs_srvf_curves, Typevalues, geometry_dir + "/Procrustes_curves_with_srvf.png")
+
+#####
+
+# frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
+# frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
+# 保存数据
+
+PCA_weight = np.mean(pre_Curvatures, axis=0)
+
+
+all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+all_srvf_pca.PCA_training_and_test()
+all_srvf_pca.compute_kde()
+joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
+np.save(bkup_dir+"pca_model_filename.npy",Files )
+all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+all_pca.PCA_training_and_test()
+all_pca.compute_kde()
+joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
+np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
+np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
+np.save(bkup_dir+"not_std_filenames.npy",Files)
+
+pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
+
+pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
+all_pca.visualize_results(pca_components_figname)
+srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
+all_srvf_pca.visualize_results(srvf_pca_components_figname)
+
+
+#################################
+# geometric parameters
 # 为每个不同的字母分配一个唯一的数字
 mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
 # 使用映射替换原始列表中的每个字母
@@ -143,7 +239,17 @@ numeric_lst = [mapping[letter] for letter in Typevalues]
 
 ########################################
 # plot各种type的平均曲率和扭率
-
+radii = np.array(radii)
+pre_Curvatures = np.array(pre_Curvatures)
+pre_Torsions = np.array(pre_Torsions)
+pre_C_curvatures = []
+pre_C_torsions = []
+pre_S_curvatures = []
+pre_S_torsions = []
+pre_U_curvatures = []
+pre_U_torsions = []
+pre_V_curvatures = []
+pre_V_torsions = []
 C_curvatures = []
 C_torsions = []
 S_curvatures = []
@@ -152,19 +258,50 @@ U_curvatures = []
 U_torsions = []
 V_curvatures = []
 V_torsions = []
+log.write("RECONSTRUCT_WITH_SRVF:"+str(RECONSTRUCT_WITH_SRVF)+"\n")
+if RECONSTRUCT_WITH_SRVF:
+    OG_data_inverse = all_srvf_pca.inverse_transform_from_loadings(all_srvf_pca.train_res).reshape(len(all_srvf_pca.train_res), -1, 3)
+    OG_data_inverse = recovered_curves(OG_data_inverse, True)
+else:
+    OG_data_inverse = all_pca.inverse_transform_from_loadings(all_pca.train_res).reshape(len(all_pca.train_res), -1, 3)
+    OG_data_inverse = recovered_curves(OG_data_inverse, False)
+
+geo_dist_OG_to_reverse = []
+for i in range(len(OG_data_inverse)):
+    geo_dist_OG_to_reverse.append(compute_geodesic_dist_between_two_curves(Procrustes_curves[i], OG_data_inverse[i]))
+log.write("MEAN geo_dist_OG_to_reverse:"+str(np.mean(geo_dist_OG_to_reverse))+"\n")
+log.write("STD geo_dist_OG_to_reverse:"+str(np.std(geo_dist_OG_to_reverse))+"\n")
+
+Curvatures, Torsions = compute_synthetic_curvature_and_torsion(OG_data_inverse,weights)
 for i in range(len(unaligned_curves)):
     if Typevalues[i] == "C":
+        pre_C_curvatures.append(pre_Curvatures[i])
+        pre_C_torsions.append(pre_Torsions[i])
         C_curvatures.append(Curvatures[i])
         C_torsions.append(Torsions[i])
     elif Typevalues[i] == "S":
+        pre_S_curvatures.append(pre_Curvatures[i])
+        pre_S_torsions.append(pre_Torsions[i])
         S_curvatures.append(Curvatures[i])
         S_torsions.append(Torsions[i])
     elif Typevalues[i] == "U":
+        pre_U_curvatures.append(pre_Curvatures[i])
+        pre_U_torsions.append(pre_Torsions[i])
         U_curvatures.append(Curvatures[i])
         U_torsions.append(Torsions[i])
     elif Typevalues[i] == "V":
+        pre_V_curvatures.append(pre_Curvatures[i])
+        pre_V_torsions.append(pre_Torsions[i])
         V_curvatures.append(Curvatures[i])
         V_torsions.append(Torsions[i])
+pre_C_curvatures = np.array(pre_C_curvatures)
+pre_C_torsions = np.array(pre_C_torsions)
+pre_U_curvatures = np.array(pre_U_curvatures)
+pre_U_torsions = np.array(pre_U_torsions)
+pre_V_curvatures = np.array(pre_V_curvatures)
+pre_V_torsions = np.array(pre_V_torsions)
+pre_S_curvatures = np.array(pre_S_curvatures)
+pre_S_torsions = np.array(pre_S_torsions)
 C_curvatures = np.array(C_curvatures)
 C_torsions = np.array(C_torsions)
 U_curvatures = np.array(U_curvatures)
@@ -174,8 +311,15 @@ V_torsions = np.array(V_torsions)
 S_curvatures = np.array(S_curvatures)
 S_torsions = np.array(S_torsions)
 print ("count CUVS: ")
-print (len(C_curvatures),len(U_curvatures),len(V_curvatures),len(S_curvatures))
+print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre_S_curvatures))
 
+# Curvatures = []
+# Torsions = []
+
+print ("pre_Curvature.shape:", pre_Curvatures.shape)
+print ("pre_Torsions.shape:", pre_Torsions.shape)
+print ("Curvatures.shape:", Curvatures.shape)
+print ("Torsions.shape:", Torsions.shape)
 
 
 def setup_axes(position, ymin, ymax):
@@ -361,14 +505,14 @@ def plot_with_shade(ax, data_samples,  title, ymin, ymax, color="red"):
 
 print ("compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0] shape:", compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0].shape)
 
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0], "C - Means", 0, 0.6, color="blue")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[1], "C - Stds", 0, 0.4, color="blue")
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[0], "S - Means", 0, 0.6, color="orange")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[1], "S - Stds", 0, 0.4, color="orange")
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[0], "U - Means", 0, 0.6, color="red")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[1], "U - Stds", 0, 0.4, color="red")
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[0], "V - Means", 0, 0.6, color="green")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[1], "V - Stds", 0, 0.4, color="green")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[0], "Means", 0, 0.6, color="blue")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_C_curvature)[1], "Stds", 0, 0.4, color="blue")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[0], "Means", 0, 0.6, color="orange")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_S_curvature)[1], "Stds", 0, 0.4, color="orange")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[0], "Means", 0, 0.6, color="red")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_U_curvature)[1], "Stds", 0, 0.4, color="red")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[0], "Means", 0, 0.6, color="green")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_V_curvature)[1], "Stds", 0, 0.4, color="green")
 
 
 plt.tight_layout()
@@ -377,111 +521,21 @@ plt.close()
 
 
 fig, axes = plt.subplots(1, 2, dpi=300, figsize=(8, 3))
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[0], "C - Means", -0.6, 0.6, color="blue")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[1], "C - Stds", 0, 1.2, color="blue")
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[0], "S - Means", -0.6, 0.6, color="orange")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[1], "S - Stds", 0, 1.2, color="orange")
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[0], "U - Means", -0.6, 0.6, color="red")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[1], "U - Stds", 0, 1.2, color="red")
-plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[0], "V - Means", -0.6, 0.6, color="green")
-plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[1], "V - Stds", 0, 1.2, color="green")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[0], "Means", -0.6, 0.6, color="blue")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_C_torsion)[1], "Stds", 0, 1.2, color="blue")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[0], "Means", -0.6, 0.6, color="orange")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_S_torsion)[1], "Stds", 0, 1.2, color="orange")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[0], "Means", -0.6, 0.6, color="red")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_U_torsion)[1], "Stds", 0, 1.2, color="red")
+plot_with_shade(axes[0], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[0], "Means", -0.6, 0.6, color="green")
+plot_with_shade(axes[1], compute_bootstrap_statistics(bootstrap_samples_V_torsion)[1], "Stds", 0, 1.2, color="green")
 plt.tight_layout()
 plt.savefig(geometry_dir+"Bootstrap_Distributions_with_Global_Torsion.png")
 plt.close()
 
 
-########################################
-
-print ("全データ（{}）を読み込みました。".format(len(pre_files)))
-print ("使用できるデータ：", len(Files))
-for i in range(len(Files)):
-    if "BH0017_R" in Files[i]:
-        base_id = i
-print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
-
-##################################################
-#  从这里开始是对齐。                             #
-#  To-Do: 需要保存Procrustes对齐后的              #
-#  曲线各一条，作为后续的曲线对齐的基准。           #
-##################################################
-
-a_curves = align_icp(unaligned_curves, base_id=base_id)
-print ("First alignment done.")
-Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
-print ("procrustes alignment done.")
-# for i in range(len(Procrustes_curves)):
-#     print ("length:", measure_length(Procrustes_curves[i]))
-parametrized_curves = np.zeros_like(Procrustes_curves)
-# aligned_curves = np.zeros_like(interpolated_curves)
-for i in range(len(Procrustes_curves)):
-    parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
-Procrustes_curves = np.array(Procrustes_curves)
-
-print (Procrustes_curves.shape)
-i=30 # U
-j=46 # S
-
-plot_curve_with_peaks_name = geometry_dir + "peak_of_{}_and_{}.png".format(i,j)
-plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsions, 
-                       plot_curve_with_peaks_name, axes=(1,2), distance=30)
-# if SCALETO1:
-#     # 需要把长度还原到原始曲线或1
-#     for i in range(len(Procrustes_curves)):
-#         aligned_length = measure_length(Procrustes_curves[i])
-#         procrustes_length = measure_length(Procrustes_curves[i])
-#         Procrustes_curves[i] = Procrustes_curves[i] * (1.0/procrustes_length) # 这里是把长度还原到1
-# log.write("Scaled all curves to one.\n")
-
-# shape of Procrustes_curves: (87, 64, 3)
-# shape of Curvatures: (87, 61)
-# interpolate Curvatures to (87, 64)
-
-
-
-
-# 给定landmark_w，计算加权的Procrustes_curves
-
-def compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w):
-    interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
-    multiplicative_factors = np.zeros_like(Procrustes_curves)
-
-    for i in range(len(Curvatures)):
-        interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])),
-                                               np.linspace(0, 1, len(Curvatures[i])),
-                                               Curvatures[i])
-        multiplicative_factors[i] = Procrustes_curves[i] * interpolated_curvatures[i][:, np.newaxis]
-
-    weighted_procrustes_curves = multiplicative_factors * landmark_w[:, np.newaxis]
-    return weighted_procrustes_curves
-
-# 根据weighted_procrustes_curves计算距离矩阵
-def compute_geod_dist_mat(weighted_procrustes_curves):
-    geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
-    for i in range(len(weighted_procrustes_curves)):
-        for j in range(len(weighted_procrustes_curves)):
-            geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i],
-                                                                  weighted_procrustes_curves[j])
-            geod_dist_mat[i, j] = geodesic_d
-    return geod_dist_mat
-
-
-# SRVF计算
-Procs_srvf_curves = np.zeros_like(Procrustes_curves)
-for i in range(len(Procrustes_curves)):
-    Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
-
-makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
-mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
-makeVtkFile(bkup_dir+"mean_srvf.vtk", mean_srvf_inverse,[],[] )
-contains_nan = np.isnan(Procs_srvf_curves).any()
-
-print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
-#####
-
-# 绘制一个4子图的plot，有对齐后的4个类别的曲线和SRVF曲线标注
-plot_curves_with_arrows(1, 2, Procrustes_curves, Procs_srvf_curves, Typevalues, geometry_dir + "/Procrustes_curves_with_srvf.png")
-
-#####
+# geometric parameters
+#################################
 
 C_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(C_curvatures)
 U_curvatures_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_curvatures)
@@ -492,33 +546,6 @@ U_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(U_torsions)
 S_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(S_torsions)
 V_torsions_kde = KernelDensity(kernel='gaussian', bandwidth=0.5).fit(V_torsions)
 
-# frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
-# frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
-# 保存数据
-
-PCA_weight = np.mean(Curvatures, axis=0)
-
-
-all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-all_srvf_pca.PCA_training_and_test()
-all_srvf_pca.compute_kde()
-joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
-np.save(bkup_dir+"pca_model_filename.npy",Files )
-all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-all_pca.PCA_training_and_test()
-all_pca.compute_kde()
-joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
-np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
-np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
-np.save(bkup_dir+"not_std_filenames.npy",Files)
-
-pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
-
-pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
-all_pca.visualize_results(pca_components_figname)
-srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
-all_srvf_pca.visualize_results(srvf_pca_components_figname)
-# Define a helper function to fit KernelDensity
 def fit_kde(data):
     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
     kde.fit(data)
@@ -646,20 +673,11 @@ print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
 srvf_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
 print ("srvf_recovers.shape: ", srvf_recovers.shape)
 
-def compute_synthetic_curvature_and_torsion(C_recovered):
-    C_srvf_synthetic_curvature = []
-    C_srvf_synthetic_torsion = []
-    for i in range(len(C_synthetic_inverse)):
-        C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
-        C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
-    C_srvf_synthetic_curvature = np.array(C_srvf_synthetic_curvature)
-    C_srvf_synthetic_torsion = np.array(C_srvf_synthetic_torsion)
-    return C_srvf_synthetic_curvature, C_srvf_synthetic_torsion
 
-C_srvf_synthetic_curvatures, C_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered)
-U_srvf_synthetic_curvatures, U_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered)
-V_srvf_synthetic_curvatures, V_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered)
-S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered)
+C_srvf_synthetic_curvatures, C_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered,weights)
+U_srvf_synthetic_curvatures, U_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered,weights)
+V_srvf_synthetic_curvatures, V_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered,weights)
+S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered,weights)
 
 ############
 # 绘制group内的曲率和扭率对比全体的偏离程度的散点图
@@ -790,10 +808,10 @@ print ("non_srvf_synthetics.shape: ", non_srvf_synthetics.shape)
 non_srvf_pca_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
 print ("non_srvf_recovers.shape: ", non_srvf_pca_recovers.shape)
 
-C_synthetic_curvatures, C_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered)
-U_synthetic_curvatures, U_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered)
-V_synthetic_curvatures, V_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered)
-S_synthetic_curvatures, S_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered)
+C_synthetic_curvatures, C_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered,weights)
+U_synthetic_curvatures, U_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered,weights)
+V_synthetic_curvatures, V_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered,weights)
+S_synthetic_curvatures, S_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered,weights)
 
 ############
 # 绘制group内的曲率和扭率对比全体的偏离程度的散点图

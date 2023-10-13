@@ -230,3 +230,29 @@ def plot_curves_with_arrows(coord1, coord2, Procrustes_curves, Procs_srvf_curves
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
+
+
+def compute_weighted_procrustes(Procrustes_curves, Curvatures, landmark_w):
+    # 这是个没用上的函数。
+    interpolated_curvatures = np.zeros((len(Curvatures), len(Procrustes_curves[0])))
+    multiplicative_factors = np.zeros_like(Procrustes_curves)
+
+    for i in range(len(Curvatures)):
+        interpolated_curvatures[i] = np.interp(np.linspace(0, 1, len(Procrustes_curves[i])),
+                                               np.linspace(0, 1, len(Curvatures[i])),
+                                               Curvatures[i])
+        multiplicative_factors[i] = Procrustes_curves[i] * interpolated_curvatures[i][:, np.newaxis]
+
+    weighted_procrustes_curves = multiplicative_factors * landmark_w[:, np.newaxis]
+    return weighted_procrustes_curves
+
+
+def compute_geod_dist_mat(weighted_procrustes_curves):
+    # 根据weighted_procrustes_curves计算距离矩阵
+    geod_dist_mat = np.zeros((len(weighted_procrustes_curves), len(weighted_procrustes_curves)))
+    for i in range(len(weighted_procrustes_curves)):
+        for j in range(len(weighted_procrustes_curves)):
+            geodesic_d = compute_geodesic_dist_between_two_curves(weighted_procrustes_curves[i],
+                                                                  weighted_procrustes_curves[j])
+            geod_dist_mat[i, j] = geodesic_d
+    return geod_dist_mat
