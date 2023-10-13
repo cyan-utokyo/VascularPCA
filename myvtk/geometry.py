@@ -67,6 +67,15 @@ def compute_curvature_and_torsion(curve):
 # print(curvature)
 # print(torsion)
 
+def compute_synthetic_curvature_and_torsion(C_recovered, weights):
+    C_srvf_synthetic_curvature = []
+    C_srvf_synthetic_torsion = []
+    for i in range(len(C_recovered)):
+        C_srvf_synthetic_curvature.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[0], weights, 'valid'))
+        C_srvf_synthetic_torsion.append(np.convolve(compute_curvature_and_torsion(C_recovered[i])[1], weights, 'valid'))
+    C_srvf_synthetic_curvature = np.array(C_srvf_synthetic_curvature)
+    C_srvf_synthetic_torsion = np.array(C_srvf_synthetic_torsion)
+    return C_srvf_synthetic_curvature, C_srvf_synthetic_torsion
 
 from scipy.signal import find_peaks
 
@@ -106,8 +115,6 @@ def determine_type(curve):
     curvature, torsion = compute_curvature_and_torsion(curve)
     scores = calculate_scores(curvature, torsion)
     return max(scores, key=scores.get)
-
-
 
 
 def plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsion, savepath, axes=(0,1), distance=5):
