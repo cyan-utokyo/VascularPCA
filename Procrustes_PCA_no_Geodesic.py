@@ -60,7 +60,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="geometry")
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
-RECONSTRUCT_WITH_SRVF = True
+RECONSTRUCT_WITH_SRVF = False
 
 # 获取当前时间
 start_time = datetime.now()
@@ -267,10 +267,14 @@ else:
     OG_data_inverse = recovered_curves(OG_data_inverse, False)
 
 geo_dist_OG_to_reverse = []
+length_reverse = []
 for i in range(len(OG_data_inverse)):
     geo_dist_OG_to_reverse.append(compute_geodesic_dist_between_two_curves(Procrustes_curves[i], OG_data_inverse[i]))
+    length_reverse.append(measure_length(OG_data_inverse[i]))
 log.write("MEAN geo_dist_OG_to_reverse:"+str(np.mean(geo_dist_OG_to_reverse))+"\n")
 log.write("STD geo_dist_OG_to_reverse:"+str(np.std(geo_dist_OG_to_reverse))+"\n")
+log.write("MEAN length_reverse:"+str(np.mean(length_reverse))+"\n")
+log.write("STD length_reverse:"+str(np.std(length_reverse))+"\n")
 
 Curvatures, Torsions = compute_synthetic_curvature_and_torsion(OG_data_inverse,weights)
 for i in range(len(unaligned_curves)):
