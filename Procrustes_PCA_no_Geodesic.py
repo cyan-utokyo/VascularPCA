@@ -1378,9 +1378,9 @@ ax.set_xlabel("PC1")
 ax.set_ylabel("PC2")
 ax.grid(linestyle='--', linewidth=0.5)
 plt.tight_layout()
-# plt.savefig(geometry_dir+"PCA_total_with_params.png")
-# plt.close()
-plt.show()
+plt.savefig(geometry_dir+"PCA_total_with_params.png")
+plt.close()
+# plt.show()
 
 
 ### 
