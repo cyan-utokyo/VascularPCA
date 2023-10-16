@@ -60,7 +60,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="geometry")
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
-RECONSTRUCT_WITH_SRVF = False
+RECONSTRUCT_WITH_SRVF = True
 
 # 获取当前时间
 start_time = datetime.now()
@@ -261,13 +261,16 @@ V_torsions = []
 log.write("RECONSTRUCT_WITH_SRVF:"+str(RECONSTRUCT_WITH_SRVF)+"\n")
 if RECONSTRUCT_WITH_SRVF:
     OG_data_inverse = all_srvf_pca.inverse_transform_from_loadings(all_srvf_pca.train_res).reshape(len(all_srvf_pca.train_res), -1, 3)
-    OG_data_inverse = recovered_curves(OG_data_inverse, True)
+    OG_data_inverse = recovered_curves(OG_data_inverse, RECONSTRUCT_WITH_SRVF)
 else:
     OG_data_inverse = all_pca.inverse_transform_from_loadings(all_pca.train_res).reshape(len(all_pca.train_res), -1, 3)
-    OG_data_inverse = recovered_curves(OG_data_inverse, False)
+    OG_data_inverse = recovered_curves(OG_data_inverse, RECONSTRUCT_WITH_SRVF)
 
 geo_dist_OG_to_reverse = []
 length_reverse = []
+
+print ("OG_data_inverse[0].shape:", OG_data_inverse[0].shape)
+
 for i in range(len(OG_data_inverse)):
     geo_dist_OG_to_reverse.append(compute_geodesic_dist_between_two_curves(Procrustes_curves[i], OG_data_inverse[i]))
     length_reverse.append(measure_length(OG_data_inverse[i]))
@@ -354,10 +357,10 @@ def plot_with_errorbars(ax, ax2, curv_data, tors_data, line_alpha=1, errorbar_al
 
 # 计算curvature统计
 fig = plt.figure(dpi=300, figsize=(10, 4))
-ax1 = setup_axes(221, 0, 1.2)
-ax2 = setup_axes(222, 0, 1.2)
-ax3 = setup_axes(223, 0, 1.2)
-ax4 = setup_axes(224, 0, 1.2)
+ax1 = setup_axes(221, 0, 0.75)
+ax2 = setup_axes(222, 0, 0.75)
+ax3 = setup_axes(223, 0, 0.75)
+ax4 = setup_axes(224, 0, 0.75)
 plot_with_errorbars(ax1, ax1, C_curvatures, Curvatures)
 plot_with_errorbars(ax2, ax2, S_curvatures, Curvatures)
 plot_with_errorbars(ax3, ax3, U_curvatures, Curvatures)
