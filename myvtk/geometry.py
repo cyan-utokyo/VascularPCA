@@ -59,6 +59,9 @@ def compute_curvature_and_torsion(curve):
     
     torsion_numerator = np.einsum('ij,ij->i', r_prime, np.cross(r_double_prime, r_triple_prime))
     torsion = np.where(cross_norm**2 > epsilon, torsion_numerator / (cross_norm ** 2), 0)
+
+    curvature = np.tanh(curvature)
+    torsion = np.tanh(torsion)
     
     return curvature, torsion
 

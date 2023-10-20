@@ -280,6 +280,7 @@ log.write("MEAN length_reverse:"+str(np.mean(length_reverse))+"\n")
 log.write("STD length_reverse:"+str(np.std(length_reverse))+"\n")
 
 Curvatures, Torsions = compute_synthetic_curvature_and_torsion(OG_data_inverse,weights)
+
 for i in range(len(unaligned_curves)):
     if Typevalues[i] == "C":
         pre_C_curvatures.append(pre_Curvatures[i])
@@ -318,15 +319,158 @@ V_torsions = np.array(V_torsions)
 S_curvatures = np.array(S_curvatures)
 S_torsions = np.array(S_torsions)
 print ("count CUVS: ")
-print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre_S_curvatures))
+# print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre_S_curvatures))
 
-# Curvatures = []
-# Torsions = []
+fig = plt.figure(dpi=300,figsize=(9,6))
+ax1 = fig.add_subplot(211)
+ax2 = fig.add_subplot(212)
+for i in range(len(C_curvatures)):
+    ax1.plot(C_curvatures[i],color="C0",alpha=0.5)
+    ax2.plot(C_torsions[i],color="C0",alpha=0.5)
+for i in range(len(U_curvatures)):
+    ax1.plot(U_curvatures[i],color="C1",alpha=0.5)
+    ax2.plot(U_torsions[i],color="C1",alpha=0.5)
+for i in range(len(S_curvatures)):
+    ax1.plot(S_curvatures[i],color="C2",alpha=0.5)
+    ax2.plot(S_torsions[i],color="C2",alpha=0.5)
+for i in range(len(V_curvatures)):
+    ax1.plot(V_curvatures[i],color="C3",alpha=0.5, linestyle="--"))
+    ax2.plot(V_torsions[i],color="C3",alpha=0.5, linestyle="--")
+ax1.set_title("Curvatures")
+ax2.set_title("Torsions")
+plt.savefig(geometry_dir+"/tanh_conv_Curvatures_and_Torsions.png")
+plt.close()
 
-print ("pre_Curvature.shape:", pre_Curvatures.shape)
-print ("pre_Torsions.shape:", pre_Torsions.shape)
-print ("Curvatures.shape:", Curvatures.shape)
-print ("Torsions.shape:", Torsions.shape)
+
+
+
+POWER_ENG_CURVATURE = 0.5
+POWER_ENG_TORSION = 0.5
+log.write("curvature POWER for Energy computing:"+str(POWER_ENG_CURVATURE)+"\n")
+log.write("torsion POWER for Energy computing:"+str(POWER_ENG_TORSION)+"\n")
+def compute_geometry_param_energy(curvature, torsion):
+    adjusted_torsion = np.tanh(torsion) * 0.5 + 0.5
+    curvature_energy = np.mean(np.power(curvature, POWER_ENG_CURVATURE))
+    torsion_energy = np.mean(np.power(adjusted_torsion, POWER_ENG_TORSION))
+    return curvature_energy, torsion_energy
+
+C_energy = []
+U_energy = []
+S_energy = []
+V_energy = []
+
+for i in range(len(C_curvatures)):
+    C_energy.append(compute_geometry_param_energy(C_curvatures[i], C_torsions[i]))
+for i in range(len(U_curvatures)):
+    U_energy.append(compute_geometry_param_energy(U_curvatures[i], U_torsions[i]))
+for i in range(len(S_curvatures)):
+    S_energy.append(compute_geometry_param_energy(S_curvatures[i], S_torsions[i]))
+for i in range(len(V_curvatures)):
+    V_energy.append(compute_geometry_param_energy(V_curvatures[i], V_torsions[i]))
+
+C_energy = np.array(C_energy)
+U_energy = np.array(U_energy)
+S_energy = np.array(S_energy)
+V_energy = np.array(V_energy)
+
+
+plt.figure(figsize=(12, 6))
+plt.subplot(111)
+plt.scatter(C_energy[:,0], C_energy[:,1], color="C0", label="C")
+plt.scatter(U_energy[:,0], U_energy[:,1], color="C1", label="U")
+plt.scatter(S_energy[:,0], S_energy[:,1], color="C2", label="S")
+plt.scatter(V_energy[:,0], V_energy[:,1], color="C3", label="V")
+plt.xlabel("Curvature Energy")
+plt.ylabel("Torsion Energy")
+# plt.ylim(0, 0.5)
+plt.legend()
+plt.title("Energy Distribution C:{} T:{}".format(POWER_ENG_CURVATURE, POWER_ENG_TORSION))
+plt.savefig(geometry_dir + "/Energy_Distribution.png")
+plt.close()
+
+# 画boxplot
+plt.figure(figsize=(12, 6))
+# 使用positions参数来设置每个boxplot的位置
+positions_C = [1, 2]
+positions_U = [4, 5]
+positions_S = [7, 8]
+positions_V = [10, 11]
+plt.boxplot([x[0] for x in C_energy], positions=[positions_C[0]], patch_artist=True, boxprops=dict(facecolor="C0"),showfliers=False)
+plt.boxplot([x[1] for x in C_energy], positions=[positions_C[1]], patch_artist=True, boxprops=dict(facecolor="C0"),showfliers=False)
+plt.boxplot([x[0] for x in U_energy], positions=[positions_U[0]], patch_artist=True, boxprops=dict(facecolor="C1"),showfliers=False)
+plt.boxplot([x[1] for x in U_energy], positions=[positions_U[1]], patch_artist=True, boxprops=dict(facecolor="C1"),showfliers=False)
+plt.boxplot([x[0] for x in S_energy], positions=[positions_S[0]], patch_artist=True, boxprops=dict(facecolor="C2"),showfliers=False)
+plt.boxplot([x[1] for x in S_energy], positions=[positions_S[1]], patch_artist=True, boxprops=dict(facecolor="C2"),showfliers=False)
+plt.boxplot([x[0] for x in V_energy], positions=[positions_V[0]], patch_artist=True, boxprops=dict(facecolor="C3"),showfliers=False)
+plt.boxplot([x[1] for x in V_energy], positions=[positions_V[1]], patch_artist=True, boxprops=dict(facecolor="C3"),showfliers=False)
+# 设置x轴标签
+plt.xticks([1.5, 4.5, 7.5, 10.5], ['C', 'U', 'S', 'V'])
+plt.ylabel('Energy Value')
+
+# 设置图例
+from matplotlib.lines import Line2D
+legend_elements = [Line2D([0], [0], color='C0', label='C energy'),
+                   Line2D([0], [0], color='C1', label='U energy'),
+                   Line2D([0], [0], color='C2', label='S energy'),
+                   Line2D([0], [0], color='C3', label='V energy')]
+plt.legend(handles=legend_elements)
+
+plt.title("Energy Distribution C:{} T:{}".format(POWER_ENG_CURVATURE, POWER_ENG_TORSION))
+plt.savefig(geometry_dir + "/Energy_Distribution_Boxplot.png")
+plt.close()
+
+def compute_L(a, b, curvature_energy, torsion_energy):
+    return a * curvature_energy + b * torsion_energy
+
+def objective(params, *args):
+    a, b = params
+    all_L_values = [compute_L(a, b, energy[0], energy[1]) for group in args for energy in group]
+
+    # Maximize between-group variance
+    between_group_variance = np.var([np.mean(compute_L(a, b, group[0], group[1])) for group in args])
+    
+    # Minimize within-group variance
+    within_group_variance = np.mean([np.var(compute_L(a, b, group[0], group[1])) for group in args])
+    
+    return within_group_variance - between_group_variance
+
+
+initial_guess = [1, 1]
+result = minimize(objective, initial_guess, args=(C_energy, U_energy, S_energy, V_energy))
+a_opt, b_opt = result.x
+
+
+print ("a_opt:", a_opt, "b_opt:", b_opt)
+log.write("a_opt:"+str(a_opt)+"\n")
+log.write("b_opt:"+str(b_opt)+"\n")
+
+C_E = []
+U_E = []
+S_E = []
+V_E = []
+for i in range(len(C_energy)):
+    C_E.append(compute_L(a_opt, b_opt,  C_energy[i][0], C_energy[i][1]))
+for i in range(len(U_energy)):
+    U_E.append(compute_L(a_opt, b_opt, U_energy[i][0], U_energy[i][1]))
+for i in range(len(S_energy)):
+    S_E.append(compute_L(a_opt, b_opt, S_energy[i][0], S_energy[i][1]))
+for i in range(len(V_energy)):
+    V_E.append(compute_L(a_opt, b_opt, V_energy[i][0], V_energy[i][1]))
+
+# Prepare data for boxplot
+data = [C_E, U_E, S_E, V_E]
+
+# Plotting
+plt.figure(figsize=(12, 6))
+plt.boxplot(data, vert=True, patch_artist=True, labels=['C_E', 'U_E', 'S_E', 'V_E'],showfliers=False)
+
+# Formatting
+plt.title("Distribution of Computed E values C:{} T:{}".format(POWER_ENG_CURVATURE, POWER_ENG_TORSION))
+plt.ylabel("E value")
+plt.xlabel("Groups")
+plt.savefig(geometry_dir + "/E_Distribution_Boxplot.png")
+plt.close()
+
 
 
 def setup_axes(position, ymin, ymax):
