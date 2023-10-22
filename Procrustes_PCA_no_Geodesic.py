@@ -52,10 +52,16 @@ from sklearn.metrics.pairwise import rbf_kernel
 from scipy.optimize import minimize
 from myvtk.mygeodesic_plot import *
 import platform
+from sklearn.svm import SVC
+from sklearn.feature_selection import RFE
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.feature_selection import RFECV
+from sklearn.model_selection import StratifiedKFold
 
-warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
-warnings.filterwarnings("ignore", category=UserWarning, module="mygeodesic_plot")
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="geometry")
+warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
+# warnings.filterwarnings("ignore", category=UserWarning, module="mygeodesic_plot")
+# warnings.filterwarnings("ignore", category=RuntimeWarning, module="geometry")
 
 PCA_N_COMPONENTS = 16
 SCALETO1 = False
@@ -319,7 +325,65 @@ V_torsions = np.array(V_torsions)
 S_curvatures = np.array(S_curvatures)
 S_torsions = np.array(S_torsions)
 print ("count CUVS: ")
-# print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre_S_curvatures))
+print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre_S_curvatures))
+
+
+# 数据整合
+C_data = np.hstack([C_curvatures, C_torsions])
+U_data = np.hstack([U_curvatures, U_torsions])
+S_data = np.hstack([S_curvatures, S_torsions])
+V_data = np.hstack([V_curvatures, V_torsions])
+
+X = np.vstack([C_data, U_data, S_data, V_data])
+y = np.array(['C']*len(C_data) + ['U']*len(U_data) + ['S']*len(S_data) + ['V']*len(V_data))
+
+# 划分训练集和测试集，按照各类型内的数量比例
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# 使用RFECV进行特征选择
+class_weight = {'C': 10, 'S': 5, 'U': 1, 'V': 5}
+estimator = SVC(kernel="linear", class_weight=class_weight)
+# 使用StratifiedKFold进行交叉验证，确保每个子集中各类别的样本比例与完整数据集中的相同
+cv = StratifiedKFold(5)
+selector = RFECV(estimator, step=4, cv=cv)
+selector = selector.fit(X_train_scaled, y_train)
+X_train_selected = X_train_scaled[:, selector.support_]
+X_test_selected = X_test_scaled[:, selector.support_]
+selected_indices = np.where(selector.support_)[0]
+log.write("Feature selection result:"+str(selected_indices)+"\n")
+# 使用所选特征初始化SVM模型
+svm_classifier = SVC(probability=True, class_weight=class_weight)
+
+# 使用cross-validation进行模型评估
+scores = cross_val_score(svm_classifier, X_train_selected, y_train, cv=3)
+log.write("Cross-validation scores after feature selection:"+str(scores)+"\n")
+log.write("Average score after feature selection:"+str(np.mean(scores))+"\n")
+
+# 训练模型
+svm_classifier.fit(X_train_selected, y_train)
+
+def score_data(data_point, model):
+    # 使用模型预测
+    probabilities = model.predict_proba([data_point])
+    class_labels = model.classes_
+    
+    # 返回每个类别的概率
+    scores = dict(zip(class_labels, probabilities[0]))
+    return scores
+
+for i in range(len(X_test_selected)):
+    data_sample_selected = X_test_selected[i]
+    actual_label = y_test[i]
+    # 打印实际标签
+    log.write("Actual label:"+actual_label+"\n")
+    scores = score_data(data_sample_selected, svm_classifier)
+    log.write(str(scores)+"\n")
 
 fig = plt.figure(dpi=300,figsize=(9,6))
 ax1 = fig.add_subplot(211)
@@ -334,144 +398,12 @@ for i in range(len(S_curvatures)):
     ax1.plot(S_curvatures[i],color="C2",alpha=0.5)
     ax2.plot(S_torsions[i],color="C2",alpha=0.5)
 for i in range(len(V_curvatures)):
-    ax1.plot(V_curvatures[i],color="C3",alpha=0.5, linestyle="--"))
-    ax2.plot(V_torsions[i],color="C3",alpha=0.5, linestyle="--")
+    ax1.plot(V_curvatures[i],color="C3",alpha=0.8, linestyle="--")
+    ax2.plot(V_torsions[i],color="C3",alpha=0.8, linestyle="--")
 ax1.set_title("Curvatures")
 ax2.set_title("Torsions")
 plt.savefig(geometry_dir+"/tanh_conv_Curvatures_and_Torsions.png")
 plt.close()
-
-
-
-
-POWER_ENG_CURVATURE = 0.5
-POWER_ENG_TORSION = 0.5
-log.write("curvature POWER for Energy computing:"+str(POWER_ENG_CURVATURE)+"\n")
-log.write("torsion POWER for Energy computing:"+str(POWER_ENG_TORSION)+"\n")
-def compute_geometry_param_energy(curvature, torsion):
-    adjusted_torsion = np.tanh(torsion) * 0.5 + 0.5
-    curvature_energy = np.mean(np.power(curvature, POWER_ENG_CURVATURE))
-    torsion_energy = np.mean(np.power(adjusted_torsion, POWER_ENG_TORSION))
-    return curvature_energy, torsion_energy
-
-C_energy = []
-U_energy = []
-S_energy = []
-V_energy = []
-
-for i in range(len(C_curvatures)):
-    C_energy.append(compute_geometry_param_energy(C_curvatures[i], C_torsions[i]))
-for i in range(len(U_curvatures)):
-    U_energy.append(compute_geometry_param_energy(U_curvatures[i], U_torsions[i]))
-for i in range(len(S_curvatures)):
-    S_energy.append(compute_geometry_param_energy(S_curvatures[i], S_torsions[i]))
-for i in range(len(V_curvatures)):
-    V_energy.append(compute_geometry_param_energy(V_curvatures[i], V_torsions[i]))
-
-C_energy = np.array(C_energy)
-U_energy = np.array(U_energy)
-S_energy = np.array(S_energy)
-V_energy = np.array(V_energy)
-
-
-plt.figure(figsize=(12, 6))
-plt.subplot(111)
-plt.scatter(C_energy[:,0], C_energy[:,1], color="C0", label="C")
-plt.scatter(U_energy[:,0], U_energy[:,1], color="C1", label="U")
-plt.scatter(S_energy[:,0], S_energy[:,1], color="C2", label="S")
-plt.scatter(V_energy[:,0], V_energy[:,1], color="C3", label="V")
-plt.xlabel("Curvature Energy")
-plt.ylabel("Torsion Energy")
-# plt.ylim(0, 0.5)
-plt.legend()
-plt.title("Energy Distribution C:{} T:{}".format(POWER_ENG_CURVATURE, POWER_ENG_TORSION))
-plt.savefig(geometry_dir + "/Energy_Distribution.png")
-plt.close()
-
-# 画boxplot
-plt.figure(figsize=(12, 6))
-# 使用positions参数来设置每个boxplot的位置
-positions_C = [1, 2]
-positions_U = [4, 5]
-positions_S = [7, 8]
-positions_V = [10, 11]
-plt.boxplot([x[0] for x in C_energy], positions=[positions_C[0]], patch_artist=True, boxprops=dict(facecolor="C0"),showfliers=False)
-plt.boxplot([x[1] for x in C_energy], positions=[positions_C[1]], patch_artist=True, boxprops=dict(facecolor="C0"),showfliers=False)
-plt.boxplot([x[0] for x in U_energy], positions=[positions_U[0]], patch_artist=True, boxprops=dict(facecolor="C1"),showfliers=False)
-plt.boxplot([x[1] for x in U_energy], positions=[positions_U[1]], patch_artist=True, boxprops=dict(facecolor="C1"),showfliers=False)
-plt.boxplot([x[0] for x in S_energy], positions=[positions_S[0]], patch_artist=True, boxprops=dict(facecolor="C2"),showfliers=False)
-plt.boxplot([x[1] for x in S_energy], positions=[positions_S[1]], patch_artist=True, boxprops=dict(facecolor="C2"),showfliers=False)
-plt.boxplot([x[0] for x in V_energy], positions=[positions_V[0]], patch_artist=True, boxprops=dict(facecolor="C3"),showfliers=False)
-plt.boxplot([x[1] for x in V_energy], positions=[positions_V[1]], patch_artist=True, boxprops=dict(facecolor="C3"),showfliers=False)
-# 设置x轴标签
-plt.xticks([1.5, 4.5, 7.5, 10.5], ['C', 'U', 'S', 'V'])
-plt.ylabel('Energy Value')
-
-# 设置图例
-from matplotlib.lines import Line2D
-legend_elements = [Line2D([0], [0], color='C0', label='C energy'),
-                   Line2D([0], [0], color='C1', label='U energy'),
-                   Line2D([0], [0], color='C2', label='S energy'),
-                   Line2D([0], [0], color='C3', label='V energy')]
-plt.legend(handles=legend_elements)
-
-plt.title("Energy Distribution C:{} T:{}".format(POWER_ENG_CURVATURE, POWER_ENG_TORSION))
-plt.savefig(geometry_dir + "/Energy_Distribution_Boxplot.png")
-plt.close()
-
-def compute_L(a, b, curvature_energy, torsion_energy):
-    return a * curvature_energy + b * torsion_energy
-
-def objective(params, *args):
-    a, b = params
-    all_L_values = [compute_L(a, b, energy[0], energy[1]) for group in args for energy in group]
-
-    # Maximize between-group variance
-    between_group_variance = np.var([np.mean(compute_L(a, b, group[0], group[1])) for group in args])
-    
-    # Minimize within-group variance
-    within_group_variance = np.mean([np.var(compute_L(a, b, group[0], group[1])) for group in args])
-    
-    return within_group_variance - between_group_variance
-
-
-initial_guess = [1, 1]
-result = minimize(objective, initial_guess, args=(C_energy, U_energy, S_energy, V_energy))
-a_opt, b_opt = result.x
-
-
-print ("a_opt:", a_opt, "b_opt:", b_opt)
-log.write("a_opt:"+str(a_opt)+"\n")
-log.write("b_opt:"+str(b_opt)+"\n")
-
-C_E = []
-U_E = []
-S_E = []
-V_E = []
-for i in range(len(C_energy)):
-    C_E.append(compute_L(a_opt, b_opt,  C_energy[i][0], C_energy[i][1]))
-for i in range(len(U_energy)):
-    U_E.append(compute_L(a_opt, b_opt, U_energy[i][0], U_energy[i][1]))
-for i in range(len(S_energy)):
-    S_E.append(compute_L(a_opt, b_opt, S_energy[i][0], S_energy[i][1]))
-for i in range(len(V_energy)):
-    V_E.append(compute_L(a_opt, b_opt, V_energy[i][0], V_energy[i][1]))
-
-# Prepare data for boxplot
-data = [C_E, U_E, S_E, V_E]
-
-# Plotting
-plt.figure(figsize=(12, 6))
-plt.boxplot(data, vert=True, patch_artist=True, labels=['C_E', 'U_E', 'S_E', 'V_E'],showfliers=False)
-
-# Formatting
-plt.title("Distribution of Computed E values C:{} T:{}".format(POWER_ENG_CURVATURE, POWER_ENG_TORSION))
-plt.ylabel("E value")
-plt.xlabel("Groups")
-plt.savefig(geometry_dir + "/E_Distribution_Boxplot.png")
-plt.close()
-
-
 
 def setup_axes(position, ymin, ymax):
     ax = fig.add_subplot(position)
