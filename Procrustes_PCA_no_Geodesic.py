@@ -57,6 +57,8 @@ from sklearn.feature_selection import RFE
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_selection import RFECV
 from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_curve, auc
+from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings("ignore")
 # warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in true_divide")
@@ -67,7 +69,8 @@ PCA_N_COMPONENTS = 16
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
 RECONSTRUCT_WITH_SRVF = True
-
+ORIGINAL_GEO_PARAM = False
+USE_REAL_DATA_FOR_GEO_PARAM = False
 # 获取当前时间
 start_time = datetime.now()
 smooth_scale = 0.01
@@ -285,7 +288,10 @@ log.write("STD geo_dist_OG_to_reverse:"+str(np.std(geo_dist_OG_to_reverse))+"\n"
 log.write("MEAN length_reverse:"+str(np.mean(length_reverse))+"\n")
 log.write("STD length_reverse:"+str(np.std(length_reverse))+"\n")
 
-Curvatures, Torsions = compute_synthetic_curvature_and_torsion(OG_data_inverse,weights)
+if ORIGINAL_GEO_PARAM:
+    Curvatures, Torsions = compute_synthetic_curvature_and_torsion(Procrustes_curves,weights)
+else:
+    Curvatures, Torsions = compute_synthetic_curvature_and_torsion(OG_data_inverse,weights)
 
 for i in range(len(unaligned_curves)):
     if Typevalues[i] == "C":
@@ -329,10 +335,12 @@ print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre
 
 
 # 数据整合
+
 C_data = np.hstack([C_curvatures, C_torsions])
 U_data = np.hstack([U_curvatures, U_torsions])
 S_data = np.hstack([S_curvatures, S_torsions])
 V_data = np.hstack([V_curvatures, V_torsions])
+
 
 X = np.vstack([C_data, U_data, S_data, V_data])
 y = np.array(['C']*len(C_data) + ['U']*len(U_data) + ['S']*len(S_data) + ['V']*len(V_data))
@@ -340,23 +348,24 @@ y = np.array(['C']*len(C_data) + ['U']*len(U_data) + ['S']*len(S_data) + ['V']*l
 # 划分训练集和测试集，按照各类型内的数量比例
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
 
-from sklearn.preprocessing import StandardScaler
+
 
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 # 使用RFECV进行特征选择
-class_weight = {'C': 10, 'S': 5, 'U': 1, 'V': 5}
+class_weight = "balanced"
 estimator = SVC(kernel="linear", class_weight=class_weight)
 # 使用StratifiedKFold进行交叉验证，确保每个子集中各类别的样本比例与完整数据集中的相同
 cv = StratifiedKFold(5)
-selector = RFECV(estimator, step=4, cv=cv)
+selector = RFECV(estimator, step=2, cv=cv)
 selector = selector.fit(X_train_scaled, y_train)
 X_train_selected = X_train_scaled[:, selector.support_]
 X_test_selected = X_test_scaled[:, selector.support_]
 selected_indices = np.where(selector.support_)[0]
 log.write("Feature selection result:"+str(selected_indices)+"\n")
+# https://chat.openai.com/c/6a8aac2a-a04b-4b10-ae1b-869167a76263
 # 使用所选特征初始化SVM模型
 svm_classifier = SVC(probability=True, class_weight=class_weight)
 
@@ -377,13 +386,51 @@ def score_data(data_point, model):
     scores = dict(zip(class_labels, probabilities[0]))
     return scores
 
-for i in range(len(X_test_selected)):
-    data_sample_selected = X_test_selected[i]
-    actual_label = y_test[i]
-    # 打印实际标签
-    log.write("Actual label:"+actual_label+"\n")
-    scores = score_data(data_sample_selected, svm_classifier)
-    log.write(str(scores)+"\n")
+# for i in range(len(X_test_selected)):
+#     data_sample_selected = X_test_selected[i]
+#     actual_label = y_test[i]
+#     # 打印实际标签
+#     log.write("Actual label:"+actual_label+"\n")
+#     scores = score_data(data_sample_selected, svm_classifier)
+#     log.write(str(scores)+"\n")
+
+# 获取测试集的预测概率
+y_prob = svm_classifier.predict_proba(X_test_selected)
+
+# 为每个类别计算ROC曲线和AUC
+fpr = dict()
+tpr = dict()
+roc_auc = dict()
+
+# 获取类别的真实标签和预测概率
+for i, label in enumerate(svm_classifier.classes_):
+    true_label = np.where(y_test == label, 1, 0)
+    prob = y_prob[:, i]
+    fpr[label], tpr[label], _ = roc_curve(true_label, prob)
+    roc_auc[label] = auc(fpr[label], tpr[label])
+
+# 绘制ROC曲线
+plt.figure(figsize=(10, 8))
+for label in svm_classifier.classes_:
+    plt.plot(fpr[label], tpr[label], label=f'ROC curve of class {label} (area = {roc_auc[label]:.2f})')
+    
+plt.plot([0, 1], [0, 1], 'k--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curves for Multi-class')
+plt.legend(loc="lower right")
+# plt.show()
+plt.savefig(geometry_dir+"ROC_Curves_for_Multi-class.png")
+plt.close()
+
+
+
+
+
+
+
 
 fig = plt.figure(dpi=300,figsize=(9,6))
 ax1 = fig.add_subplot(211)
@@ -500,6 +547,60 @@ for ax in [ax1, ax2]:
     ax.grid(linestyle=":", alpha=0.5)
 plt.savefig(geometry_dir + "/group_param_compare.png")
 plt.close()
+
+#################################
+# 绘制每条血管内的曲率和扭率对比全体的偏离程度的散点图
+
+fig = plt.figure(dpi=300, figsize=(9, 4))
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+
+# 计算所有数据的特征点均值的均值
+average_of_means_curvatures = np.mean([np.mean(curv) for curv in Curvatures])
+average_of_means_torsions = np.mean([np.mean(tors) for tors in Torsions])
+
+param_group = []
+for i in range(len(Curvatures)):
+    if np.mean(Curvatures[i]) > average_of_means_curvatures and np.mean(Torsions[i]) > average_of_means_torsions:
+        param_group.append('高曲率+高扭曲')
+        ax1.scatter(np.mean(Curvatures, axis=0), Curvatures[i], marker="o", color="red")
+        ax2.scatter(np.mean(Torsions, axis=0), Torsions[i], marker="o", color="red")
+    elif np.mean(Curvatures[i]) > average_of_means_curvatures and np.mean(Torsions[i]) <= average_of_means_torsions:
+        param_group.append('高曲率+低扭曲')
+        ax1.scatter(np.mean(Curvatures, axis=0), Curvatures[i], marker="o", color="green")
+        ax2.scatter(np.mean(Torsions, axis=0), Torsions[i], marker="o", color="green")
+    elif np.mean(Curvatures[i]) <= average_of_means_curvatures and np.mean(Torsions[i]) > average_of_means_torsions:
+        param_group.append('低曲率+高扭曲')
+        ax1.scatter(np.mean(Curvatures, axis=0), Curvatures[i], marker="o", color="blue")
+        ax2.scatter(np.mean(Torsions, axis=0), Torsions[i], marker="o", color="blue")
+    else:
+        param_group.append('低曲率+低扭曲')
+        ax1.scatter(np.mean(Curvatures, axis=0), Curvatures[i], marker="o", color="orange")
+        ax2.scatter(np.mean(Torsions, axis=0), Torsions[i], marker="o", color="orange")
+    print (param_group[-1], Typevalues[i])
+
+
+
+# 获取ax1的x轴和y轴范围
+x1_min, x1_max = ax1.get_xlim()
+y1_min, y1_max = ax1.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_1 = max(x1_min, y1_min)
+diag_max_1 = min(x1_max, y1_max)
+ax1.plot([diag_min_1, diag_max_1], [diag_min_1, diag_max_1], linestyle=":", color="k")
+# 获取ax2的x轴和y轴范围
+x2_min, x2_max = ax2.get_xlim()
+y2_min, y2_max = ax2.get_ylim()
+# 确保对角线从左下角连接到右上角
+diag_min_2 = max(x2_min, y2_min)
+diag_max_2 = min(x2_max, y2_max)
+ax2.plot([diag_min_2, diag_max_2], [diag_min_2, diag_max_2], linestyle=":", color="k")
+for ax in [ax1, ax2]:
+    ax.grid(linestyle=":", alpha=0.5)
+plt.savefig(geometry_dir + "/case_param_compare.png")
+plt.close()
+
+
 ####################################
 # Bootstrap
 log.write("Bootstrap\n")
@@ -649,78 +750,6 @@ V_synthetic = V_srvf_kde.sample(sample_num)
 C_synthetic = C_srvf_kde.sample(sample_num)
 S_synthetic = S_srvf_kde.sample(sample_num)
 # 定义一个函数来计算elbow值
-def compute_elbow(data, max_clusters=10):
-    wcss = []
-    for i in range(1, max_clusters+1):
-        kmeans = KMeans(n_clusters=i, init='k-means++', max_iter=300, n_init=10, random_state=0)
-        kmeans.fit(data)
-        wcss.append(kmeans.inertia_)
-    # 计算每个点和其前后点的斜率差值
-    slopes = [wcss[i] - wcss[i+1] for i in range(len(wcss)-1)]
-    slopes_diff = [slopes[i] - slopes[i+1] for i in range(len(slopes)-1)]
-    # 拐点是斜率变化最大的地方+2（因为数组从0开始并且我们要加上后一个点）
-    elbow = slopes_diff.index(max(slopes_diff)) + 2
-    return wcss, elbow
-U_wcss, U_elbow = compute_elbow(U_synthetic)
-V_wcss, V_elbow = compute_elbow(V_synthetic)
-C_wcss, C_elbow = compute_elbow(C_synthetic)
-S_wcss, S_elbow = compute_elbow(S_synthetic)
-# 绘制elbow图
-
-plt.figure()
-plt.plot(range(1, 11), U_wcss, marker='o', label='U_synthetic')
-plt.plot(range(1, 11), V_wcss, marker='o', label='V_synthetic')
-plt.plot(range(1, 11), C_wcss, marker='o', label='C_synthetic')
-plt.plot(range(1, 11), S_wcss, marker='o', label='S_synthetic')
-# 标记每个elbow点
-plt.scatter(U_elbow, U_wcss[U_elbow-1], s=150,  marker='*', label="Elbow U")
-plt.scatter(V_elbow, V_wcss[V_elbow-1], s=150, marker='*', label="Elbow V")
-plt.scatter(C_elbow, C_wcss[C_elbow-1], s=150,  marker='*', label="Elbow C")
-plt.scatter(S_elbow, S_wcss[S_elbow-1], s=150,  marker='*', label="Elbow S")
-plt.title('Elbow Method')
-plt.xlabel('Number of clusters')
-plt.ylabel('WCSS')
-plt.legend()
-plt.savefig(pca_anlysis_dir + "ELBOW_srvf_pca_synthetic.png")
-plt.close()
-
-# 用最佳的k值进行聚类
-kmeans_U = KMeans(n_clusters=U_elbow, n_init=10).fit(U_synthetic)
-kmeans_V = KMeans(n_clusters=V_elbow, n_init=10).fit(V_synthetic)
-kmeans_C = KMeans(n_clusters=C_elbow, n_init=10).fit(C_synthetic)
-kmeans_S = KMeans(n_clusters=S_elbow, n_init=10).fit(S_synthetic)
-labels_U = kmeans_U.labels_
-labels_V = kmeans_V.labels_
-labels_C = kmeans_C.labels_
-labels_S = kmeans_S.labels_
-def generate_palette(color_base, n_colors=5):
-    # 使用seaborn生成单色调色板，然后将颜色从RGB转换为十六进制格式
-    return [sns.desaturate(color, 0.8) for color in sns.color_palette(color_base, n_colors=n_colors)]
-
-synthetic_cluster_colors = {
-    "U": generate_palette("Reds_r",U_elbow),  # 5 shades of red for U
-    "V": generate_palette("Blues_r",V_elbow),  # 5 shades of blue for V
-    "C": generate_palette("Greens_r",C_elbow),  # 5 shades of green for C
-    "S": generate_palette("YlOrBr_r",S_elbow)   # 5 shades of yellow-orange-brown for S
-}
-
-def plot_synthetic_data(ax, all_data, synthetic_data, kmeans_labels, color_map, label):
-    ax.scatter(all_data[:, 0], all_data[:, 1], c='dimgray', s=50, marker="x")
-    for cluster_num in np.unique(kmeans_labels):
-        mask = kmeans_labels == cluster_num
-        ax.scatter(synthetic_data[mask, 0], synthetic_data[mask, 1], color=color_map[label][cluster_num], s=50, marker=f"${label}$")
-    ax.set_title(f'{label}_synthetic')
-    ax.set_xlabel('PC1')
-    ax.set_ylabel('PC2')
-
-fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-plot_synthetic_data(axs[0, 0], all_srvf_pca.train_res, U_synthetic, kmeans_U.labels_, synthetic_cluster_colors, 'U')
-plot_synthetic_data(axs[0, 1], all_srvf_pca.train_res, V_synthetic, kmeans_V.labels_, synthetic_cluster_colors, 'V')
-plot_synthetic_data(axs[1, 0], all_srvf_pca.train_res, C_synthetic, kmeans_C.labels_, synthetic_cluster_colors, 'C')
-plot_synthetic_data(axs[1, 1], all_srvf_pca.train_res, S_synthetic, kmeans_S.labels_, synthetic_cluster_colors, 'S')
-plt.tight_layout()
-plt.savefig(pca_anlysis_dir + "srvf_pca_synthetic_scatter.png")
-plt.close()
 
 
 ##############################
@@ -818,52 +847,6 @@ V_synthetic = V_kde.sample(sample_num)
 C_synthetic = C_kde.sample(sample_num)
 S_synthetic = S_kde.sample(sample_num)
 
-# 对于每个X_synthetic计算elbow值
-U_wcss, U_elbow = compute_elbow(U_synthetic)
-V_wcss, V_elbow = compute_elbow(V_synthetic)
-C_wcss, C_elbow = compute_elbow(C_synthetic)
-S_wcss, S_elbow = compute_elbow(S_synthetic)
-# 绘制elbow图
-plt.figure()
-plt.plot(range(1, 11), U_wcss, marker='o', label='U_synthetic')
-plt.plot(range(1, 11), V_wcss, marker='o', label='V_synthetic')
-plt.plot(range(1, 11), C_wcss, marker='o', label='C_synthetic')
-plt.plot(range(1, 11), S_wcss, marker='o', label='S_synthetic')
-# 标记每个elbow点
-plt.scatter(U_elbow, U_wcss[U_elbow-1], s=150,  marker='*', label="Elbow U")
-plt.scatter(V_elbow, V_wcss[V_elbow-1], s=150, marker='*', label="Elbow V")
-plt.scatter(C_elbow, C_wcss[C_elbow-1], s=150,  marker='*', label="Elbow C")
-plt.scatter(S_elbow, S_wcss[S_elbow-1], s=150,  marker='*', label="Elbow S")
-plt.title('Elbow Method')
-plt.xlabel('Number of clusters')
-plt.ylabel('WCSS')
-plt.legend()
-plt.savefig(pca_anlysis_dir + "ELBOW_pca_synthetic.png")
-plt.close()
-
-synthetic_cluster_colors = {
-    "U": generate_palette("Reds_r",U_elbow),  # 5 shades of red for U
-    "V": generate_palette("Blues_r",V_elbow),  # 5 shades of blue for V
-    "C": generate_palette("Greens_r",C_elbow),  # 5 shades of green for C
-    "S": generate_palette("YlOrBr_r",S_elbow)   # 5 shades of yellow-orange-brown for S
-}
-
-kmeans_U = KMeans(n_clusters=U_elbow, n_init=10).fit(U_synthetic)
-kmeans_V = KMeans(n_clusters=V_elbow, n_init=10).fit(V_synthetic)
-kmeans_C = KMeans(n_clusters=C_elbow, n_init=10).fit(C_synthetic)
-kmeans_S = KMeans(n_clusters=S_elbow, n_init=10).fit(S_synthetic)
-
-fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-
-plot_synthetic_data(axs[0, 0], all_pca.train_res, U_synthetic, kmeans_U.labels_, synthetic_cluster_colors, 'U')
-plot_synthetic_data(axs[0, 1], all_pca.train_res, V_synthetic, kmeans_V.labels_, synthetic_cluster_colors, 'V')
-plot_synthetic_data(axs[1, 0], all_pca.train_res, C_synthetic, kmeans_C.labels_, synthetic_cluster_colors, 'C')
-plot_synthetic_data(axs[1, 1], all_pca.train_res, S_synthetic, kmeans_S.labels_, synthetic_cluster_colors, 'S')
-
-plt.tight_layout()
-plt.savefig(pca_anlysis_dir + "pca_synthetic_scatter.png")
-plt.close()
-
 ##############################
 # 绘制合成曲线的curvature和torsion
 U_synthetic_inverse = all_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
@@ -930,8 +913,6 @@ for ax in [ax1, ax2]:
 plt.savefig(geometry_dir + "/group_param_compare_Synthetic.png")
 plt.close()
 
-# 绘制合成曲线的curvature和torsion
-##############################
 
 ####################为SRVF PCA绘制violinplot####################
 # 创建一个DataFrame
@@ -1008,18 +989,6 @@ plt.savefig(pca_anlysis_dir + 'QQ_plots_combined_srvf.png')
 plt.close()
 
 
-
-# synthetics_from_kde = all_srvf_pca.train_kde.resample(5)
-# synthetics = all_srvf_pca.pca.inverse_transform(synthetics_from_kde.T)*all_srvf_pca.train_std+all_srvf_pca.train_mean
-# synthetics = synthetics.reshape(5,64,3)
-# synthetic_curve = inverse_srvf(synthetics, np.zeros(3))
-# plt.scatter(all_srvf_pca.train_res[:, 0], all_srvf_pca.train_res[:, 1], color="k")
-# plt.scatter(synthetics_from_kde[:, 0], synthetics_from_kde[:, 1], color="r")
-# for i in range(len(synthetic_curve)):
-#     makeVtkFile(bkup_dir+"synthetic_curve{}.vtk".format(i), synthetic_curve[i], [],[])
-#     plt.annotate("synthetic_curve{}".format(i), (synthetics_from_kde[i, 0], synthetics_from_kde[i, 1]))
-# plt.savefig(pca_anlysis_dir+"synthetic_curve.png")
-
 ####################为坐标PCA绘制violinplot####################
 # 创建一个DataFrame
 df = pd.DataFrame(all_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
@@ -1093,51 +1062,6 @@ plt.savefig(pca_anlysis_dir + 'QQ_plots_combined.png')
 # plt.show()
 plt.close()
 
-
-
-srvf_x_PC = 0
-srvf_y_PC = 1 # 3
-x_PC = 0
-y_PC = 1 # 2
-
-def get_main_color(palette):
-    return palette[0]
-# 取主颜色
-main_colors = {key: get_main_color(value) for key, value in synthetic_cluster_colors.items()}
-# 使用这个dictionary将Typevalues转换为颜色列表
-color_values = [main_colors[t] for t in Typevalues]
-
-# 创建图例的 handles 和 labels
-legend_elements = [Line2D([0], [0], marker='o', color='w', 
-                          markerfacecolor=main_colors[t], markersize=10, 
-                          label=t) for t in ['U', 'C', 'V', 'S']]
-
-fig = plt.figure(dpi=300, figsize=(6, 5))
-ax1 = fig.add_subplot(111)
-sc1 = ax1.scatter(all_srvf_pca.train_res[:, srvf_x_PC], all_srvf_pca.train_res[:, srvf_y_PC],
-                  c=color_values,
-                  alpha=0.7,
-                  edgecolors='white')
-ax1.grid(linestyle='--', linewidth=0.5)
-ax1.set_xlabel("PC{}".format(srvf_x_PC+1))
-ax1.set_ylabel("PC{}".format(srvf_y_PC+1))
-ax1.legend(handles=legend_elements)  # 添加图例
-plt.savefig(pca_anlysis_dir+"srvf_PCA_total.png")
-plt.close()
-
-fig = plt.figure(dpi=300, figsize=(6, 5))
-ax2 = fig.add_subplot(111)
-sc2 = ax2.scatter(all_pca.train_res[:, x_PC], all_pca.train_res[:, y_PC],
-                  c=color_values,
-                  alpha=0.7,
-                  edgecolors='white')
-
-ax2.set_xlabel("PC{}".format(x_PC+1))
-ax2.set_ylabel("PC{}".format(y_PC+1))
-ax2.grid(linestyle='--', linewidth=0.5)
-ax2.legend(handles=legend_elements)  # 添加图例
-plt.savefig(pca_anlysis_dir+"PCA_total.png")
-plt.close()
 
 log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
 print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
@@ -1446,8 +1370,8 @@ merged_params = np.concatenate((C_synthetic_params, U_synthetic_params, V_synthe
                                 C_srvf_synthetic_params, U_srvf_synthetic_params, V_srvf_synthetic_params, S_srvf_synthetic_params,
                                 C_params, U_params, V_params, S_params), axis=0)
 
-color_labels = ['b'] * len(C_synthetic_params) + ['g'] * len(U_synthetic_params) + \
-['r'] * len(V_synthetic_params) + ['orange'] * len(S_synthetic_params) + \
+color_labels = ['w'] * len(C_synthetic_params) + ['w'] * len(U_synthetic_params) + \
+['w'] * len(V_synthetic_params) + ['w'] * len(S_synthetic_params) + \
 ['b'] * len(C_srvf_synthetic_params) + ['g'] *len(U_srvf_synthetic_params) + \
 ['r'] * len(V_srvf_synthetic_params) + ['orange'] * len(S_srvf_synthetic_params) +\
 ['b'] * len(C_params) + ['g'] * len(U_params) + ['r'] * len(V_params) + ['orange'] * len(S_params)
@@ -1465,15 +1389,15 @@ param_PCA = PCAHandler(merged_params, None, n_components=3, standardization=1)
 param_PCA.PCA_training_and_test()
 
 fig = plt.figure(dpi=100, figsize=(6, 5))
-ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(111)
 # 迭代每一组数据并绘制散点图
 
 for i in range(len(color_labels)):
     if i <8000:
-        ax.scatter(param_PCA.train_res[i,0], param_PCA.train_res[i, 1], param_PCA.train_res[i, 2],
+        ax.scatter(param_PCA.train_res[i,0], param_PCA.train_res[i, 1], 
                c=color_labels[i], marker=marker_labels[i], alpha=0.7, edgecolors='white')
     else:
-        ax.scatter(param_PCA.train_res[i,0], param_PCA.train_res[i, 1], param_PCA.train_res[i, 2],
+        ax.scatter(param_PCA.train_res[i,0], param_PCA.train_res[i, 1],
                c=color_labels[i], marker=marker_labels[i], alpha=0.7, edgecolors='black')    
 
 ax.set_xlabel("PC1")
@@ -1484,222 +1408,6 @@ plt.savefig(geometry_dir+"PCA_total_with_params.png")
 plt.close()
 # plt.show()
 
-
-### 
-"""
-for loop in range(1):
-    procrustes_curves = np.copy(Procrustes_curves)
-    procs_srvf_curves = np.copy(Procs_srvf_curves)
-    files = np.copy(Files)
-    curvatures = np.copy(Curvatures)
-    torsions = np.copy(Torsions)
-    # 创建一个随机排列的索引
-    indices = np.random.permutation(len(files))
-    # 使用这个索引来重新排列 srvf_curves 和 files
-
-    procrustes_curves = np.take(procrustes_curves, indices, axis=0)
-    procs_srvf_curves = np.take(procs_srvf_curves, indices, axis=0)
-    files = np.take(files, indices, axis=0)
-    curvatures = np.take(curvatures, indices, axis=0)
-    torsions = np.take(torsions, indices, axis=0)
-    # save_shuffled_path = mkdir(bkup_dir,"shuffled_srvf_curves")
-    save_shuffled_path = np.copy(bkup_dir)
-    
-    Scores = []
-
-    # 获取当前时间
-    now = datetime.now()
-
-    # 将时间格式化为 'yymmddhhmmss' 格式
-    formatted_time = now.strftime('%y%m%d%H%M%S')
-    save_new_shuffle = mkdir(bkup_dir,formatted_time)
-    loop_log = open(save_new_shuffle+"log.md", "w")
-
-    np.save(save_new_shuffle + "file_indice.npy",files, allow_pickle=True)
-    np.save(save_new_shuffle + "procrustes_curves.npy",procrustes_curves, allow_pickle=True)
-    np.save(save_new_shuffle + "procs_srvf_curves.npy",procs_srvf_curves, allow_pickle=True)
-    np.save(save_new_shuffle + "curvatures.npy",curvatures, allow_pickle=True)
-    np.save(save_new_shuffle + "torsions.npy",torsions, allow_pickle=True)
-    inverse_data_dir = mkdir(save_new_shuffle, "inverse_data")
-    train_num = int(len(files)*0.75)
-    test_num = int(len(files)-train_num)
-    loop_log.write("# Train and test dataset split\n")
-    loop_log.write("- train_num: {}\n".format(train_num))
-    loop_log.write("- test_num: {}\n".format(test_num))
-    train_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[:train_num])
-    test_procrustes_geodesic_d = compute_geodesic_dist(procrustes_curves[train_num:], True, np.mean(procrustes_curves[:train_num], axis=0))
-    train_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[:train_num])
-    test_srvf_procrustes_geo_d = compute_geodesic_dist(procs_srvf_curves[train_num:],True, np.mean(procs_srvf_curves[:train_num], axis=0))
-    train_files = files[:train_num]
-    test_files = files[train_num:]
-
-    # To-Do:Standardization
-    data_dict = {
-        'Procrustes_aligned': [procrustes_curves[:train_num], procrustes_curves[train_num:]],
-        'Procrustes_aligned_SRVF': [procs_srvf_curves[:train_num], procs_srvf_curves[train_num:]]
-    }
-    param_dict = {
-        'Curvature': [curvatures[:train_num], curvatures[train_num:]],
-        'Torsion': [torsions[:train_num], torsions[train_num:]],
-    }
-    dist_dict = {
-    'Procrustes_geodesic_dist': [train_procrustes_geodesic_d, test_procrustes_geodesic_d],
-    'SRVF_Procrustes_geodesic_dist': [train_srvf_procrustes_geo_d, test_srvf_procrustes_geo_d]
-    }
-    
-
-    loop_log.write("***\n")
-    ###############################################
-    # PCA
-    loop_log.write("np.corrcoef is Pearson Correlation Coefficient which measures linear correlation.\n")
-    loop_log.write("# coord PCA\n")
-    coord_PCAs = []
-    for data_key, data_values in data_dict.items():
-        loop_log.write("## "+data_key+"\n")
-        loop_log.write("- PCA_training_and_test will standardize data automatically.")
-        train_data, test_data = data_values  # 取出列表中的两个值
-        train_data=train_data.reshape(train_num,-1)
-        test_data=test_data.reshape(test_num,-1)
-        coord_PCAs.append(PCAHandler(train_data, test_data,standardization=PCA_STANDARDIZATION))
-        coord_PCAs[-1].PCA_training_and_test()
-        components_figname = save_new_shuffle+"coord_componentse_{}.png".format(data_key)
-        coord_PCAs[-1].visualize_results(components_figname)
-        loading_figname = "coord_{}.png".format(data_key)
-        loop_log.write("![coord_{}]({})\n".format(data_key,"./"+loading_figname))
-        loop_log.write("![coord_{}]({})\n".format(data_key,"./"+components_figname))
-        coord_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-        train_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].train_res).reshape(train_num, -1, 3)
-        test_inverse = coord_PCAs[-1].inverse_transform_from_loadings(coord_PCAs[-1].test_res).reshape(test_num, -1, 3)
-        process_data_key(data_key, train_inverse, test_inverse, train_files, test_files, inverse_data_dir)
-        coord_PCAs[-1].plot_scatter_kde(save_new_shuffle+"coord_scatter_kde_{}.png".format(data_key))
-        coord_PCAs[-1].compute_kde()
-        print ("Coords,", data_key, "JS divergence:", coord_PCAs[-1].compute_train_test_js_divergence())
-        for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=coord_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name="Coords"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=coord_PCAs[-1].test_res, train=0))
-            
-    loop_log.write("***\n")
-
-    ###############################################
-    # separate x, y, z coordinates
-    loop_log.write("***\n")
-    loop_log.write("# United PCA\n")
-    # xyz =["x", "y", "z"]
-    united_PCAs = []
-    for data_key, data_values in data_dict.items():
-        loop_log.write("## "+data_key+"\n")
-        train_data, test_data = data_values  # 取出列表中的两个值
-        train_res = []
-        test_res = []
-        united_internal_PCAs = []
-        for i in range(3):
-            united_internal_PCAs.append(PCAHandler(train_data[:,:,i], test_data[:,:,i],standardization=PCA_STANDARDIZATION))
-            united_internal_PCAs[-1].PCA_training_and_test()
-            train_res_temp, test_res_temp = united_internal_PCAs[-1].train_res, united_internal_PCAs[-1].test_res
-            train_res.append(train_res_temp)
-            test_res.append(test_res_temp)
-        train_data = np.array(train_res).transpose(1,0,2).reshape(train_num, -1)
-        test_data = np.array(test_res).transpose(1,0,2).reshape(test_num, -1)
-        united_PCAs.append(PCAHandler(train_data, test_data, standardization=PCA_STANDARDIZATION))
-        united_PCAs[-1].PCA_training_and_test()
-        components_figname = save_new_shuffle+"united_componentse_{}.png".format(data_key)
-        united_PCAs[-1].visualize_results(components_figname)
-        loading_figname = "united_{}.png".format(data_key)
-        loop_log.write("![united_{}]({})\n".format(data_key,"./"+loading_figname))
-        loop_log.write("![united_{}]({})\n".format(data_key,"./"+components_figname))
-        united_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-        train_inverse_large = united_PCAs[-1].inverse_transform_from_loadings(united_PCAs[-1].train_res)
-        test_inverse_large = united_PCAs[-1].inverse_transform_from_loadings(united_PCAs[-1].test_res)
-        train_inverse_parts = np.split(train_inverse_large, 3, axis=1)  # 分解为三个部分
-        test_inverse_parts = np.split(test_inverse_large, 3, axis=1)  # 分解为三个部分
-        train_inverse = []
-        test_inverse = []
-        for i in range(3):
-            train_inverse_temp = united_internal_PCAs[i].inverse_transform_from_loadings(train_inverse_parts[i])
-            test_inverse_temp = united_internal_PCAs[i].inverse_transform_from_loadings(test_inverse_parts[i])
-            train_inverse.append(train_inverse_temp)
-            test_inverse.append(test_inverse_temp)
-        train_data_inverse = np.array(train_inverse).transpose(1,2,0)
-        test_data_inverse = np.array(test_inverse).transpose(1,2,0)
-        train_data_inverse = recovered_curves(train_data_inverse,"SRVF" in data_key)
-        inverse_dir = mkdir(inverse_data_dir, "united_"+data_key)
-        write_curves_to_vtk(train_data_inverse, train_files, inverse_dir+"train_inverse_{}.vtk".format(data_key))
-        write_curves_to_vtk(test_data_inverse, test_files, inverse_dir+"test_inverse_{}.vtk".format(data_key))
-        united_PCAs[-1].plot_scatter_kde(save_new_shuffle+"united_scatter_kde_{}.png".format(data_key))
-        united_PCAs[-1].compute_kde()
-        print ("United,",data_key, "JS divergence:", united_PCAs[-1].compute_train_test_js_divergence())
-        for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=united_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name="United_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=united_PCAs[-1].test_res, train=0))
-
-    ###############################################
-    loop_log.write("# Geometric param PCA\n")
-    param_PCAs = []
-    for data_key, data_values in param_dict.items():
-        loop_log.write("## "+data_key+"\n")
-        train_data, test_data = data_values  # 取出列表中的两个值
-        train_data = train_data + np.random.normal(0, smooth_scale, train_data.shape)
-        test_data = test_data + np.random.normal(0, smooth_scale, test_data.shape)
-        loop_log.write("- PCA_training_and_test will standardize data automatically.\n")
-        loop_log.write("- PCA_training_and_test will add a small amount of noise to the data.\n")
-        param_PCAs.append(PCAHandler(train_data, test_data,standardization=PCA_STANDARDIZATION))
-        param_PCAs[-1].PCA_training_and_test()
-        components_figname = save_new_shuffle+"param_componentse_{}.png".format(data_key)
-        param_PCAs[-1].visualize_results(components_figname)
-        loading_figname = "param_{}.png".format(data_key)
-        loop_log.write("![param_{}]({})\n".format(data_key,"./"+loading_figname))
-        loop_log.write("![param_{}]({})\n".format(data_key,"./"+components_figname))
-        param_PCAs[-1].visualize_loadings(dist_dict = dist_dict, save_path=save_new_shuffle+loading_figname)
-        param_PCAs[-1].plot_scatter_kde(save_new_shuffle+"param_scatter_kde_{}.png".format(data_key))
-        param_PCAs[-1].compute_kde()
-        print ("Param,",data_key, "JS divergence:", param_PCAs[-1].compute_train_test_js_divergence())
-        for dist_key, dist_values in dist_dict.items():
-            Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[0], pca_result=param_PCAs[-1].train_res, train=1))
-            Scores.append(ScoreHandler(data_name="Param_"+data_key, dist_name=dist_key, dist=dist_values[1], pca_result=param_PCAs[-1].test_res, train=0))
-    loop_log.write("***\n")
-
-    ###############################################
-    loop_log.write("***\n")
-    loop_log.close()
-
-    score_file = open(save_new_shuffle+"scores.csv", "w")
-    for i in range(0, len(Scores), 2): # 2是为了区别test和train
-        score_file.write("Train,")
-        for score_name, score_value in Scores[i].score.items():
-            score_file.write("{},".format(score_value))
-        score_file.write("\n")
-        score_file.write("Test,")
-        for score_name, score_value in Scores[i+1].score.items():
-            score_file.write("{},".format(score_value))
-        score_file.write("\n")
-
-    score_file.close()
-
-
-score_files = glob.glob(bkup_dir+"shuffled_srvf_curves/*/scores.csv")
-# 定义一个列表来存储每个文件的内容
-all_lines = []
-# 遍历score_files中的每个文件路径
-for file_path in score_files:
-    # 打开文件，读取每一行的内容并将其存储在列表中
-    with open(file_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-        all_lines.append(lines)
-
-# 检查所有文件的行数是否相等
-if len(set(len(lines) for lines in all_lines)) > 1:
-    print('所有文件的行数不等，不能合并。')
-    exit()
-
-# 创建一个新的文件来存储合并后的内容
-with open(bkup_dir+'merged_file.csv', 'w', encoding='utf-8') as mf:
-    # 获取all_lines的转置，这样我们可以每次迭代一行，而不是一个文件
-    for lines in zip(*all_lines):
-        # 删除每一行末尾的换行符，然后将所有行内容合并，并在其后添加一个换行符
-        merged_line = ''.join(line.rstrip('\n') for line in lines) + '\n'
-        # 将合并后的行写入新的文件中
-        mf.write(merged_line)
-"""
 end_time = datetime.now()
 total_time = end_time - start_time
 print(dir_formatted_time, "is done in", total_time.seconds, "seconds.")
