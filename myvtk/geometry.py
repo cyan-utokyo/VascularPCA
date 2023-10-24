@@ -59,6 +59,9 @@ def compute_curvature_and_torsion(curve):
     
     torsion_numerator = np.einsum('ij,ij->i', r_prime, np.cross(r_double_prime, r_triple_prime))
     torsion = np.where(cross_norm**2 > epsilon, torsion_numerator / (cross_norm ** 2), 0)
+
+    curvature = np.tanh(curvature)
+    torsion = np.tanh(torsion)
     
     return curvature, torsion
 
@@ -149,3 +152,10 @@ def plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsion, savepat
 # # 示例
 # i, j = 0, 1  # 按需要更改
 # plot_curves_with_peaks(i, j, Procrustes_curves, Curvatures, Torsion)
+
+
+def compute_geometry_param_energy(curvature, torsion, POWER_ENG_CURVATURE=2, POWER_ENG_TORSION=2):
+    # adjusted_torsion = np.tanh(torsion) * 0.5 + 0.5
+    curvature_energy = np.mean(np.power(curvature, POWER_ENG_CURVATURE))
+    torsion_energy = np.mean(np.power(torsion, POWER_ENG_TORSION))
+    return np.array([curvature_energy,torsion_energy])
