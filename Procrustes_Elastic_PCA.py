@@ -374,23 +374,6 @@ colors = {
     label: plt.cm.jet(i/len(param_group_unique_labels)) for i, label in enumerate(param_group_unique_labels)
 }
 
-# 创建一个图形和轴
-fig, ax = plt.subplots(dpi=300)
-# 绘制散点图
-for label in param_group_unique_labels:
-    energies = param_dict[label]['Energy']
-    curvatures, torsions = zip(*energies)  # 将能量值分解为曲率和扭矩
-    
-    ax.scatter(curvatures, torsions, color=colors[label], label=label, alpha=0.6)
-# 显示图形
-ax.set_xlabel('Curvature Energy')
-ax.set_ylabel('Torsion Energy')
-ax.set_title('Energy Scatter Plot by Label')
-ax.legend()
-plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
-plt.close()
-
-
 
 # 数据拆分
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=12, stratify=y)
@@ -409,7 +392,7 @@ param_grid = {
     'probability': [True]  # 设置为True以便后续使用predict_proba
 }
 svm = SVC()
-grid_search = GridSearchCV(svm, param_grid, cv=5, verbose=2)
+grid_search = GridSearchCV(svm, param_grid, cv=10, verbose=2)
 grid_search.fit(X_train_scaled, y_train)
 
 # 训练与评估
@@ -421,7 +404,6 @@ print(classification_report(y, y_pred))
 
 # 获取预测概率
 y_prob = best_svm.predict_proba(X_scaled)
-
 # Create a figure and axis layout
 fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(10, 8))
 # Flatten the axes for easy iteration
@@ -435,7 +417,48 @@ for idx, ax in enumerate(axes):
     ax.set_xlim(0, 1)
 # Adjust layout and show the plot
 plt.tight_layout()
-plt.show()
+plt.savefig(bkup_dir+"y_prob_histogram.png")
+plt.close()
+
+y_prob_max = np.max(y_prob, axis=1)
+print ("y_prob_max.shape:", y_prob_max.shape)
+# 创建一个图形和轴
+
+# 创建一个图形和轴
+fig, ax = plt.subplots(dpi=300)
+
+# 初始化一个索引来跟踪y_prob_max中的当前位置
+index = 0
+
+# 绘制散点图
+for label in param_group_unique_labels:
+    energies = param_dict[label]['Energy']
+    curvatures, torsions = zip(*energies)
+    
+    # 获取当前标签对应的大小值
+    sizes_for_label = y_prob_max[index : index + len(energies)]
+    
+    ax.scatter(curvatures, torsions, 
+               color=colors[label], 
+               label=label, 
+               alpha=0.6, 
+               s=sizes_for_label*sizes_for_label*75)  # 我乘以50是为了放大点的大小，您可以根据需要调整这个值
+    
+    # 更新索引
+    index += len(energies)
+
+# 显示图形
+ax.set_xlabel('Curvature Energy')
+ax.set_ylabel('Torsion Energy')
+ax.set_title('Energy Scatter Plot by Label')
+ax.legend()
+plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
+plt.close()
+
+
+
+
+
 
 
 
@@ -488,12 +511,14 @@ for i in range(4):
             prob_data = y_prob[:, m]
             
             # Filter data points where y value is less than 0.1
-            mask = prob_data >= 0.1
+            mask = prob_data >= 0.3
             feature_data = feature_data[mask]
             prob_data = prob_data[mask]
+            prob_data = np.power(prob_data, 2)
             
             # 画散点图
             ax.scatter(feature_data, prob_data, color=colors[label], alpha=0.6, label=label)
+            # 需要多求几个PC，让n_components=0.95，然后从里面挑16个。
             
             # 线性拟合
             if len(feature_data) > 1:  # Ensure there are at least 2 points for linear regression
