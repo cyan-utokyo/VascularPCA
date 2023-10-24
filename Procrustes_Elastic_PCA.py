@@ -61,6 +61,9 @@ from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 from scipy.stats import chi2_contingency
 from collections import defaultdict
+from collections import Counter
+
+
 warnings.filterwarnings("ignore")
 
 PCA_N_COMPONENTS = 16
@@ -224,34 +227,34 @@ else:
 
 # average_of_means_torsions = np.mean([np.mean(tors) for tors in Torsions])
 average_of_means_torsions = np.mean([np.mean(np.abs(tors)) for tors in Torsions])
+average_of_std_torsions = np.mean([np.std(tors) for tors in Torsions])
 
-print ("average_of_means_torsions:", average_of_means_torsions)
-param_group_T = []
+torsion_param_group = []
+param_group = []
 HT_group = []
 LT_group = []
-
-def count_sign_flips(vector):
-    # 计算每对相邻元素的乘积
-    products = vector[:-1] * vector[1:]
-    # 检查乘积是否为负值，表示存在符号反转
-    flips = np.where(products < 0)[0]
-    return len(flips)
-
 for i in range(len(Torsions)):
-    if np.mean(np.abs(Torsions[i])) > average_of_means_torsions:
-        param_group_T.append('HT')
+    if np.mean(np.abs(Torsions[i])) > average_of_means_torsions and np.std(Torsions[i]) > average_of_std_torsions:
+        torsion_param_group.append("HMHS")
+        param_group.append("HT")
         HT_group.append(i)
-    else:
-        param_group_T.append('LT')
+    elif np.mean(np.abs(Torsions[i])) > average_of_means_torsions and np.std(Torsions[i]) <= average_of_std_torsions:
+        torsion_param_group.append("HMLS")
+        param_group.append("HT")
+        HT_group.append(i)
+    elif np.mean(np.abs(Torsions[i])) <= average_of_means_torsions and np.std(Torsions[i]) > average_of_std_torsions:
+        torsion_param_group.append("LMHS")
+        param_group.append("LT")
+        LT_group.append(i)
+    elif np.mean(np.abs(Torsions[i])) <= average_of_means_torsions and np.std(Torsions[i]) <= average_of_std_torsions:
+        torsion_param_group.append("LMLS")
+        param_group.append("LT")
         LT_group.append(i)
 
-# 使用上述函数统计HT和LT组中Torsion[i]的反转次数
-HT_flips = [count_sign_flips(Torsions[i]) for i in HT_group]
-LT_flips = [count_sign_flips(Torsions[i]) for i in LT_group]
-
-print ("len(HT_flips):", len(HT_flips))
-print ("len(LT_flips):", len(LT_flips))
-
+# 输出结果
+for label, count in Counter(torsion_param_group).items():
+    print(f"{label}: {count}")
+print ("average_of_means_torsions:", average_of_means_torsions)
 
 LT_curvatures = Curvatures[LT_group]
 HT_curvatures = Curvatures[HT_group]
@@ -263,22 +266,57 @@ print ("average_of_LT_curvature:", average_of_LT_curvature)
 print ("average_of_HT_curvature:", average_of_HT_curvature)
 
 for i in range(len(Curvatures)):
-    if param_group_T[i] == 'LT' and np.mean(Curvatures[i]) > average_of_LT_curvature:
-        param_group_T[i] = 'LTHC'
-    elif param_group_T[i] == 'HT' and np.mean(Curvatures[i]) > average_of_HT_curvature:
-        param_group_T[i] = 'HTHC'
-    elif param_group_T[i] == 'LT' and np.mean(Curvatures[i]) <= average_of_LT_curvature:
-        param_group_T[i] = 'LTLC'
-    elif param_group_T[i] == 'HT' and np.mean(Curvatures[i]) <= average_of_HT_curvature:
-        param_group_T[i] = 'HTLC'
+    curvature_mean = np.mean(Curvatures[i])
+    if param_group[i] == 'LT':
+        threshold = average_of_LT_curvature
+    elif param_group[i] == 'HT':
+        threshold = average_of_HT_curvature
+    if curvature_mean > threshold:
+        param_group[i] = torsion_param_group[i] + 'HC'
+    else:
+        param_group[i] = torsion_param_group[i] + 'LC'
 
-from sklearn.metrics import confusion_matrix
-matrix = confusion_matrix(Typevalues, param_group_T)
-unique_typevalues = np.unique(Typevalues)
-unique_param_group_T = np.unique(param_group_T)
-print("Rows correspond to:", unique_typevalues)
-print("Columns correspond to:", unique_param_group_T)
-print ("matrix:", matrix)
+
+import matplotlib.pyplot as plt
+from collections import defaultdict
+
+# 给定的代码
+counter = defaultdict(lambda: defaultdict(int))
+overall_counter = defaultdict(int)
+
+# 遍历每个数据点并更新计数器
+for type_val, param in zip(Typevalues, param_group):
+    counter[type_val][param] += 1
+    overall_counter[param] += 1
+
+# 绘制柱状图
+labels = list(counter.keys())
+labels.append("Overall")
+type_vals = sorted(list({tv for inner_dict in counter.values() for tv in inner_dict.keys()}))
+
+bar_width = 0.05  # 使柱子更细
+num_types = len(type_vals)
+spacing = 0.7  # 增加每组柱子之间的距离
+positions = [pos * spacing for pos in range(len(labels))]
+fig = plt.figure(dpi=300)
+ax = fig.add_subplot(111)
+# 每个 Typevalue 的柱子位置
+for idx, tv in enumerate(type_vals):
+    counts = [counter[label][tv] for label in labels[:-1]]
+    counts.append(overall_counter[tv])  # 添加全体数据的计数
+    ax.bar([pos + idx * bar_width for pos in positions], counts, width=bar_width, label=tv)
+
+
+plt.legend(title="Typevalues")
+plt.title("Param Group vs Typevalues")
+plt.ylabel("Count")
+plt.xlabel("Param Group")
+plt.xticks([pos + bar_width * (num_types / 2) for pos in positions], labels)
+plt.tight_layout()
+plt.savefig(bkup_dir+"Param_Group_vs_Typevalues.png")
+plt.close()
+
+print (set(param_group)))
 #
 """
 #################################
