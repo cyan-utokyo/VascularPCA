@@ -158,4 +158,4 @@ def compute_geometry_param_energy(curvature, torsion, POWER_ENG_CURVATURE=2, POW
     # adjusted_torsion = np.tanh(torsion) * 0.5 + 0.5
     curvature_energy = np.mean(np.power(curvature, POWER_ENG_CURVATURE))
     torsion_energy = np.mean(np.power(torsion, POWER_ENG_TORSION))
-    return curvature_energy, torsion_energy
+    return np.array([curvature_energy,torsion_energy])
