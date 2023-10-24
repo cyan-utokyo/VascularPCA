@@ -220,6 +220,15 @@ all_srvf_pca.visualize_results(srvf_pca_components_figname)
 log.write("RECONSTRUCT_WITH_SRVF:"+str(1)+"\n")
 OG_data_inverse = all_srvf_pca.inverse_transform_from_loadings(all_srvf_pca.train_res).reshape(len(all_srvf_pca.train_res), -1, 3)
 OG_data_inverse = recovered_curves(OG_data_inverse, 1)
+geo_dist_OG_to_reverse = []
+length_reverse = []
+for i in range(len(OG_data_inverse)):
+    geo_dist_OG_to_reverse.append(compute_geodesic_dist_between_two_curves(Procrustes_curves[i], OG_data_inverse[i]))
+    length_reverse.append(measure_length(OG_data_inverse[i]))
+log.write("MEAN geo_dist_OG_to_reverse:"+str(np.mean(geo_dist_OG_to_reverse))+"\n")
+log.write("STD geo_dist_OG_to_reverse:"+str(np.std(geo_dist_OG_to_reverse))+"\n")
+log.write("MEAN length_reverse:"+str(np.mean(length_reverse))+"\n")
+log.write("STD length_reverse:"+str(np.std(length_reverse))+"\n")
 if ORIGINAL_GEO_PARAM:
     Curvatures, Torsions = compute_synthetic_curvature_and_torsion(Procrustes_curves,weights)
 else:
@@ -265,6 +274,8 @@ average_of_HT_curvature = np.mean([np.mean(curv) for curv in HT_curvatures])
 print ("average_of_LT_curvature:", average_of_LT_curvature)
 print ("average_of_HT_curvature:", average_of_HT_curvature)
 
+
+quad_param_group = []
 for i in range(len(Curvatures)):
     curvature_mean = np.mean(Curvatures[i])
     if param_group[i] == 'LT':
@@ -272,8 +283,10 @@ for i in range(len(Curvatures)):
     elif param_group[i] == 'HT':
         threshold = average_of_HT_curvature
     if curvature_mean > threshold:
+        quad_param_group.append(param_group[i] + 'HC')
         param_group[i] = torsion_param_group[i] + 'HC'
     else:
+        quad_param_group.append(param_group[i] + 'LC')
         param_group[i] = torsion_param_group[i] + 'LC'
 
 
@@ -316,124 +329,75 @@ plt.tight_layout()
 plt.savefig(bkup_dir+"Param_Group_vs_Typevalues.png")
 plt.close()
 
-print (set(param_group)))
-#
-"""
-#################################
-# geometric parameters
-# 为每个不同的字母分配一个唯一的数字
-mapping = {letter: i for i, letter in enumerate(set(Typevalues))}
-# 使用映射替换原始列表中的每个字母
-numeric_lst = [mapping[letter] for letter in Typevalues]
-# print(numeric_lst)
+# 生成一个包含所有独特标签的列表
+param_group_unique_labels = list(set(quad_param_group))
 
-########################################
-# plot各种type的平均曲率和扭率
-radii = np.array(radii)
-pre_Curvatures = np.array(pre_Curvatures)
-pre_Torsions = np.array(pre_Torsions)
-pre_C_curvatures = []
-pre_C_torsions = []
-pre_S_curvatures = []
-pre_S_torsions = []
-pre_U_curvatures = []
-pre_U_torsions = []
-pre_V_curvatures = []
-pre_V_torsions = []
-C_curvatures = []
-C_torsions = []
-S_curvatures = []
-S_torsions = []
-U_curvatures = []
-U_torsions = []
-V_curvatures = []
-V_torsions = []
+# 使用字典来保存每个标签与其对应的numpy array
+param_group_Torsions = {}
+param_group_Curvatures = {}
+param_group_Merge = {}
 
+for label in param_group_unique_labels:
+    # 使用布尔索引来选择与当前标签对应的数据
+    selected_data_torsion = [Torsions[i] for i, tag in enumerate(quad_param_group) if tag == label]
+    selected_data_curvature = [Curvatures[i] for i, tag in enumerate(quad_param_group) if tag == label]
+    selected_data_merge = np.hstack([selected_data_curvature, selected_data_torsion])
+    
+    # 将选择的数据转换为numpy array并保存到字典中
+    param_group_Torsions[label] = np.array(selected_data_torsion)
+    param_group_Curvatures[label] = np.array(selected_data_curvature)
+    param_group_Merge[label] = np.array(selected_data_merge)
 
-geo_dist_OG_to_reverse = []
-length_reverse = []
+# 现在，label_to_data字典中的每个键是一个标签，其对应的值是一个numpy array，该数组包含与该标签对应的数据。
+print ("len(param_group_Torsions):", len(param_group_Torsions))
+print ("len(param_group_Curvatures):", len(param_group_Curvatures))
+for label, data in param_group_Merge.items():
+    print (label, data.shape)
 
-print ("OG_data_inverse[0].shape:", OG_data_inverse[0].shape)
+X = []  # 用于存储数据
+y = []  # 用于存储标签
 
-for i in range(len(OG_data_inverse)):
-    geo_dist_OG_to_reverse.append(compute_geodesic_dist_between_two_curves(Procrustes_curves[i], OG_data_inverse[i]))
-    length_reverse.append(measure_length(OG_data_inverse[i]))
-log.write("MEAN geo_dist_OG_to_reverse:"+str(np.mean(geo_dist_OG_to_reverse))+"\n")
-log.write("STD geo_dist_OG_to_reverse:"+str(np.std(geo_dist_OG_to_reverse))+"\n")
-log.write("MEAN length_reverse:"+str(np.mean(length_reverse))+"\n")
-log.write("STD length_reverse:"+str(np.std(length_reverse))+"\n")
+# 遍历字典中的每个键-值对
+for label, data in param_group_Merge.items():
+    # 将数据添加到X中
+    X.append(data)
+    
+    # 为每一个数据生成对应的标签
+    y.extend([label] * data.shape[0])
 
+# 将X转换为一个大的numpy数组
+X = np.vstack(X)
 
-
-for i in range(len(unaligned_curves)):
-    if Typevalues[i] == "C":
-        pre_C_curvatures.append(pre_Curvatures[i])
-        pre_C_torsions.append(pre_Torsions[i])
-        C_curvatures.append(Curvatures[i])
-        C_torsions.append(Torsions[i])
-    elif Typevalues[i] == "S":
-        pre_S_curvatures.append(pre_Curvatures[i])
-        pre_S_torsions.append(pre_Torsions[i])
-        S_curvatures.append(Curvatures[i])
-        S_torsions.append(Torsions[i])
-    elif Typevalues[i] == "U":
-        pre_U_curvatures.append(pre_Curvatures[i])
-        pre_U_torsions.append(pre_Torsions[i])
-        U_curvatures.append(Curvatures[i])
-        U_torsions.append(Torsions[i])
-    elif Typevalues[i] == "V":
-        pre_V_curvatures.append(pre_Curvatures[i])
-        pre_V_torsions.append(pre_Torsions[i])
-        V_curvatures.append(Curvatures[i])
-        V_torsions.append(Torsions[i])
-pre_C_curvatures = np.array(pre_C_curvatures)
-pre_C_torsions = np.array(pre_C_torsions)
-pre_U_curvatures = np.array(pre_U_curvatures)
-pre_U_torsions = np.array(pre_U_torsions)
-pre_V_curvatures = np.array(pre_V_curvatures)
-pre_V_torsions = np.array(pre_V_torsions)
-pre_S_curvatures = np.array(pre_S_curvatures)
-pre_S_torsions = np.array(pre_S_torsions)
-C_curvatures = np.array(C_curvatures)
-C_torsions = np.array(C_torsions)
-U_curvatures = np.array(U_curvatures)
-U_torsions = np.array(U_torsions)
-V_curvatures = np.array(V_curvatures)
-V_torsions = np.array(V_torsions)
-S_curvatures = np.array(S_curvatures)
-S_torsions = np.array(S_torsions)
-print ("count CUVS: ")
-print (len(pre_C_curvatures),len(pre_U_curvatures),len(pre_V_curvatures),len(pre_S_curvatures))
-
-
-# 数据整合
-C_data = np.hstack([C_curvatures, C_torsions])
-U_data = np.hstack([U_curvatures, U_torsions])
-S_data = np.hstack([S_curvatures, S_torsions])
-V_data = np.hstack([V_curvatures, V_torsions])
-
-X = np.vstack([C_data, U_data, S_data, V_data])
-y = np.array(['C']*len(C_data) + ['U']*len(U_data) + ['S']*len(S_data) + ['V']*len(V_data))
+print ("X.shape:", X.shape)
+print ("len(y):", len(y))
 
 # 划分训练集和测试集，按照各类型内的数量比例
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=16, stratify=y)
 
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
+
+# 使用PCA进行降维
+pca = PCA(n_components=0.95)  # 保留95%的方差，你可以调整这个值
+X_train_pca = pca.fit_transform(X_train_scaled)
+X_test_pca = pca.transform(X_test_scaled)
+
 # 使用RFECV进行特征选择
 class_weight = "balanced"
 estimator = SVC(kernel="linear", class_weight=class_weight)
+
 # 使用StratifiedKFold进行交叉验证，确保每个子集中各类别的样本比例与完整数据集中的相同
 cv = StratifiedKFold(5)
-selector = RFECV(estimator, step=2, cv=cv)
-selector = selector.fit(X_train_scaled, y_train)
-X_train_selected = X_train_scaled[:, selector.support_]
-X_test_selected = X_test_scaled[:, selector.support_]
+selector = RFECV(estimator, step=10, cv=cv)
+selector = selector.fit(X_train_pca, y_train)
+
+X_train_selected = X_train_pca[:, selector.support_]
+X_test_selected = X_test_pca[:, selector.support_]
 selected_indices = np.where(selector.support_)[0]
 log.write("Feature selection result:"+str(selected_indices)+"\n")
-# https://chat.openai.com/c/6a8aac2a-a04b-4b10-ae1b-869167a76263
+
 # 使用所选特征初始化SVM模型
 svm_classifier = SVC(probability=True, class_weight=class_weight)
 
@@ -454,51 +418,47 @@ def score_data(data_point, model):
     scores = dict(zip(class_labels, probabilities[0]))
     return scores
 
-# for i in range(len(X_test_selected)):
-#     data_sample_selected = X_test_selected[i]
-#     actual_label = y_test[i]
-#     # 打印实际标签
-#     log.write("Actual label:"+actual_label+"\n")
-#     scores = score_data(data_sample_selected, svm_classifier)
-#     log.write(str(scores)+"\n")
+for i in range(len(X_test_selected)):
+    data_sample_selected = X_test_selected[i]
+    actual_label = y_test[i]
+    # 打印实际标签
+    log.write("Actual label:"+actual_label+"\n")
+    scores = score_data(data_sample_selected, svm_classifier)
+    log.write(str(scores)+"\n")
 
 # 获取测试集的预测概率
-y_prob = svm_classifier.predict_proba(X_test_selected)
+# y_prob = svm_classifier.predict_proba(X_test_selected)
 
-# 为每个类别计算ROC曲线和AUC
-fpr = dict()
-tpr = dict()
-roc_auc = dict()
+# # 为每个类别计算ROC曲线和AUC
+# fpr = dict()
+# tpr = dict()
+# roc_auc = dict()
 
-# 获取类别的真实标签和预测概率
-for i, label in enumerate(svm_classifier.classes_):
-    true_label = np.where(y_test == label, 1, 0)
-    prob = y_prob[:, i]
-    fpr[label], tpr[label], _ = roc_curve(true_label, prob)
-    roc_auc[label] = auc(fpr[label], tpr[label])
+# # 获取类别的真实标签和预测概率
+# for i, label in enumerate(svm_classifier.classes_):
+#     true_label = np.where(y_test == label, 1, 0)
+#     prob = y_prob[:, i]
+#     fpr[label], tpr[label], _ = roc_curve(true_label, prob)
+#     roc_auc[label] = auc(fpr[label], tpr[label])
 
-# 绘制ROC曲线
-plt.figure(figsize=(10, 8))
-for label in svm_classifier.classes_:
-    plt.plot(fpr[label], tpr[label], label=f'ROC curve of class {label} (area = {roc_auc[label]:.2f})')
+# # 绘制ROC曲线
+# plt.figure(figsize=(10, 8))
+# for label in svm_classifier.classes_:
+#     plt.plot(fpr[label], tpr[label], label=f'ROC curve of class {label} (area = {roc_auc[label]:.2f})')
     
-plt.plot([0, 1], [0, 1], 'k--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('ROC Curves for Multi-class')
-plt.legend(loc="lower right")
-# plt.show()
-plt.savefig(geometry_dir+"ROC_Curves_for_Multi-class.png")
-plt.close()
+# plt.plot([0, 1], [0, 1], 'k--')
+# plt.xlim([0.0, 1.0])
+# plt.ylim([0.0, 1.05])
+# plt.xlabel('False Positive Rate')
+# plt.ylabel('True Positive Rate')
+# plt.title('ROC Curves for Multi-class')
+# plt.legend(loc="lower right")
+# # plt.show()
+# plt.savefig(geometry_dir+"ROC_Curves_for_Multi-class.png")
+# plt.close()
 
-
-
-
-
-
-
+# 
+"""
 
 fig = plt.figure(dpi=300,figsize=(9,6))
 ax1 = fig.add_subplot(211)
