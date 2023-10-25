@@ -24,7 +24,7 @@ from scipy import interpolate
 import matplotlib
 import matplotlib.cm as cm
 from scipy.spatial.distance import euclidean
-from myvtk.customize_pca import *
+from myvtk.Mypca import *
 # from myvtk.make_fig import *
 import shutil
 import os

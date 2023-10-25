@@ -24,7 +24,7 @@ import matplotlib.cm as cm
 # from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 from myvtk.dynamic_time_warp import *
-from myvtk.customize_pca import *
+from myvtk.Mypca import *
 from myvtk.make_fig import *
 
 
