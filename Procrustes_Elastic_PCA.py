@@ -375,6 +375,11 @@ colors = {
 }
 
 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
 # 数据拆分
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=12, stratify=y)
 
@@ -384,26 +389,27 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 X_scaled = scaler.transform(X)
 
-# 交叉验证与参数优化
-param_grid = {
-    'C': [0.1, 1, 10, 100],
-    'gamma': [1, 0.1, 0.01, 0.001],
-    'kernel': ['rbf', 'linear'],
-    'probability': [True]  # 设置为True以便后续使用predict_proba
-}
-svm = SVC()
-grid_search = GridSearchCV(svm, param_grid, cv=10, verbose=2)
-grid_search.fit(X_train_scaled, y_train)
+# 定义Random Forests分类器
+rf_clf = RandomForestClassifier(n_estimators=100, random_state=12)  # n_estimators代表决策树的数量
 
-# 训练与评估
-best_svm = grid_search.best_estimator_
-y_pred = best_svm.predict(X_scaled)
+# 训练分类器
+rf_clf.fit(X_train_scaled, y_train)
+
+# 预测
+y_pred = rf_clf.predict(X_scaled)
 
 print("Classification Report:")
 print(classification_report(y, y_pred))
 
 # 获取预测概率
-y_prob = best_svm.predict_proba(X_scaled)
+y_prob = rf_clf.predict_proba(X_scaled)
+
+
+
+
+
+
+
 # Create a figure and axis layout
 fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(10, 8))
 # Flatten the axes for easy iteration
@@ -456,50 +462,53 @@ plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 plt.close()
 
 
+markers = ['o', 's']
+linestyles = [':', '--']
+fig, axes = plt.subplots(4, 4, dpi=300, figsize=(17, 15))
+for i in range(4):
+    for j in range(4):
+        ax = axes[i][j]
+        ax.tick_params(axis='both', which='major', labelsize=5)
+        for tag in param_dict.keys():
+            indices = [i for i, label in enumerate(quad_param_group) if label == tag]
+            selected_data = np.array([all_srvf_pca.train_res[i] for i in indices])
+            # print (tag, np.array(selected_data).shape)
+            # print (np.array(param_dict[tag]["Energy"]).shape)
+            for q in [0, 1]:
+                ax.scatter(selected_data[:,4*i+j],np.array(param_dict[tag]["Energy"])[:,q],
+                           color=colors[tag],
+                           alpha=0.6, 
+                           marker=markers[q],
+                           s=15)
+                model = np.polyfit(selected_data[:,4*i+j], np.array(param_dict[tag]["Energy"])[:,q], 1)
+                predicted = np.poly1d(model)
+                print ((selected_data[:,4*i+j]).shape)
+                ax.plot(selected_data[:,4*i+j], 
+                        predicted(selected_data[:,4*i+j]), 
+                        color=colors[tag], 
+                        linewidth=1.0, 
+                        linestyle=linestyles[q])
+            print ('----')
 
+        # if j == 0:
+        #     ax.set_ylabel(f'Row {i+1}')
+        # if i == 3:
+        #     ax.set_xlabel(f'Feature {4*i+j+1}')
 
+# plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.3))
+plt.tight_layout()
+plt.subplots_adjust(top=0.9)
 
-
-
-
-
-# Binarize the output labels for multi-class ROC
-y_bin = label_binarize(y, classes=param_group_unique_labels)
-y_train_bin = label_binarize(y_train, classes=param_group_unique_labels)
-y_test_bin = label_binarize(y, classes=param_group_unique_labels)
-
-n_classes = y_bin.shape[1]
-
-# Get the predicted probabilities from the SVM
-y_score = best_svm.decision_function(X_scaled)
-
-# Compute ROC curve and ROC area for each class
-fpr = dict()
-tpr = dict()
-roc_auc = dict()
-
-for i in range(n_classes):
-    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-    roc_auc[i] = auc(fpr[i], tpr[i])
-
-# Plot the ROC curves for each class
-plt.figure(figsize=(10, 7))
-for i, label in enumerate(param_group_unique_labels):
-    plt.plot(fpr[i], tpr[i], label=f'ROC curve of class {label} (area = {roc_auc[i]:.2f})', color=colors[label])
-
-plt.plot([0, 1], [0, 1], 'k--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver Operating Characteristic (ROC)')
-plt.legend(loc="lower right")
-plt.savefig(bkup_dir+"ROC.png")
+plt.savefig(pca_anlysis_dir+"energyVSpcs.png")
 plt.close()
+
+
+
+
+
 
 # y_prob 和 all_srvf_pca.train_res 的相关性分析
 fig, axes = plt.subplots(4, 4, figsize=(15, 15))
-
 # 遍历all_srvf_pca.train_res的每一个特征
 for i in range(4):
     for j in range(4):
@@ -511,10 +520,10 @@ for i in range(4):
             prob_data = y_prob[:, m]
             
             # Filter data points where y value is less than 0.1
-            mask = prob_data >= 0.3
-            feature_data = feature_data[mask]
-            prob_data = prob_data[mask]
-            prob_data = np.power(prob_data, 2)
+            # mask = prob_data >= 0.3
+            # feature_data = feature_data[mask]
+            # prob_data = prob_data[mask]
+            # prob_data = np.power(prob_data, 2)
             
             # 画散点图
             ax.scatter(feature_data, prob_data, color=colors[label], alpha=0.6, label=label)
@@ -534,6 +543,7 @@ for i in range(4):
 plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.3))
 plt.tight_layout()
 plt.subplots_adjust(top=0.9)
+plt.grid(linestyle='--')
 plt.savefig(pca_anlysis_dir+"y_prob_vs_all_srvf_pca_train_res.png")
 plt.close()
 
