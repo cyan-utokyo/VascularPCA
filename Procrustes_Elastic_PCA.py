@@ -319,12 +319,21 @@ spacing = 0.7  # 增加每组柱子之间的距离
 positions = [pos * spacing for pos in range(len(labels))]
 fig = plt.figure(dpi=300)
 ax = fig.add_subplot(111)
+# 数据存储的列表
+param2cusv_data_list = []
+
 # 每个 Typevalue 的柱子位置
 for idx, tv in enumerate(type_vals):
     counts = [counter[label][tv] for label in labels[:-1]]
     counts.append(overall_counter[tv])  # 添加全体数据的计数
     ax.bar([pos + idx * bar_width for pos in positions], counts, width=bar_width, label=tv)
+    param2cusv_data_list.append(counts)
 
+# 将数据转化为 DataFrame
+param2cusv_df = pd.DataFrame(param2cusv_data_list, columns=labels, index=type_vals)
+
+# 将数据保存为CSV文件
+param2cusv_df.to_csv(bkup_dir+"param2cusv.csv")
 
 plt.legend(title="Typevalues")
 plt.title("Param Group vs Typevalues")
