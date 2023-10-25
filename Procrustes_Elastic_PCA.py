@@ -22,7 +22,7 @@ from scipy import interpolate
 import matplotlib
 import matplotlib.cm as cm
 from scipy.spatial.distance import euclidean
-from myvtk.customize_pca import *
+from myvtk.Mypca import *
 import shutil
 import os
 from sklearn.metrics.pairwise import cosine_similarity
@@ -67,10 +67,12 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import classification_report
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
+from sklearn.ensemble import RandomForestClassifier
+
 
 warnings.filterwarnings("ignore")
 
-PCA_N_COMPONENTS = 16
+PCA_N_COMPONENTS = 32
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
 ORIGINAL_GEO_PARAM = False
@@ -204,17 +206,17 @@ all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-all_pca.PCA_training_and_test()
-all_pca.compute_kde()
-joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
-np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
-np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
-np.save(bkup_dir+"not_std_filenames.npy",Files)
-
+# all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+# all_pca.PCA_training_and_test()
+# all_pca.compute_kde()
+# joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
+# np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
+# np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
+# np.save(bkup_dir+"not_std_filenames.npy",Files)
+log.write("CCR:"+str(np.sum(all_srvf_pca.pca.explained_variance_ratio_))+"\n")
 pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
 pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
-all_pca.visualize_results(pca_components_figname)
+# all_pca.visualize_results(pca_components_figname)
 srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
 all_srvf_pca.visualize_results(srvf_pca_components_figname)
 
@@ -371,14 +373,9 @@ for label in param_group_unique_labels:
 
 # 定义颜色映射
 colors = {
-    label: plt.cm.jet(i/len(param_group_unique_labels)) for i, label in enumerate(param_group_unique_labels)
+    label: plt.cm.rainbow((i)/(len(param_group_unique_labels))) for i, label in enumerate(param_group_unique_labels)
 }
 
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 # 数据拆分
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=12, stratify=y)
@@ -448,7 +445,7 @@ for label in param_group_unique_labels:
                color=colors[label], 
                label=label, 
                alpha=0.6, 
-               s=sizes_for_label*sizes_for_label*75)  # 我乘以50是为了放大点的大小，您可以根据需要调整这个值
+               s=sizes_for_label*sizes_for_label*75)  
     
     # 更新索引
     index += len(energies)
@@ -461,35 +458,37 @@ ax.legend()
 plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 plt.close()
 
-
-markers = ['o', 's']
-linestyles = [':', '--']
-fig, axes = plt.subplots(4, 4, dpi=300, figsize=(17, 15))
-for i in range(4):
+slopes = []
+print ("(PCA_N_COMPONENTS//4):",(PCA_N_COMPONENTS//4))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, dpi=300, figsize=(16, 13))
+for i in range(PCA_N_COMPONENTS//4):
     for j in range(4):
         ax = axes[i][j]
-        ax.tick_params(axis='both', which='major', labelsize=5)
+        ax.tick_params(axis='both', which='major', labelsize=8)
         for tag in param_dict.keys():
-            indices = [i for i, label in enumerate(quad_param_group) if label == tag]
-            selected_data = np.array([all_srvf_pca.train_res[i] for i in indices])
-            # print (tag, np.array(selected_data).shape)
-            # print (np.array(param_dict[tag]["Energy"]).shape)
-            for q in [0, 1]:
-                ax.scatter(selected_data[:,4*i+j],np.array(param_dict[tag]["Energy"])[:,q],
+            indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
+            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+            param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
+
+            ax.scatter(selected_data[:,4*i+j], param_feature,
                            color=colors[tag],
                            alpha=0.6, 
-                           marker=markers[q],
-                           s=15)
-                model = np.polyfit(selected_data[:,4*i+j], np.array(param_dict[tag]["Energy"])[:,q], 1)
-                predicted = np.poly1d(model)
-                print ((selected_data[:,4*i+j]).shape)
-                ax.plot(selected_data[:,4*i+j], 
-                        predicted(selected_data[:,4*i+j]), 
+                           s=25)
+            model = np.polyfit(selected_data[:,4*i+j], param_feature, 1)
+            slope = model[0]
+            slopes.append(slope)
+            # print (tag," PC", 4*i+j, " slope:", slope)
+            if abs(slope) > 0.022:
+                linestyle = '-'
+            else:
+                linestyle = ':'
+            predicted = np.poly1d(model)
+            predict_range = np.linspace(np.min(all_srvf_pca.train_res[:,4*i+j]), np.max(all_srvf_pca.train_res[:,4*i+j]), 10)
+            ax.plot(predict_range, 
+                        predicted(predict_range), 
                         color=colors[tag], 
-                        linewidth=1.0, 
-                        linestyle=linestyles[q])
-            print ('----')
-
+                        linewidth=2,
+                        linestyle=linestyle)
         # if j == 0:
         #     ax.set_ylabel(f'Row {i+1}')
         # if i == 3:
@@ -499,54 +498,52 @@ for i in range(4):
 plt.tight_layout()
 plt.subplots_adjust(top=0.9)
 
-plt.savefig(pca_anlysis_dir+"energyVSpcs.png")
+plt.savefig(pca_anlysis_dir+"energy_VS_PCs.png")
 plt.close()
 
-
-
-
-
+print ("energy平均斜率：",np.mean(np.abs(slopes)))
+print ("energy斜率标准差：",np.std(slopes))
 
 # y_prob 和 all_srvf_pca.train_res 的相关性分析
-fig, axes = plt.subplots(4, 4, figsize=(15, 15))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(15, 15))
 # 遍历all_srvf_pca.train_res的每一个特征
-for i in range(4):
+for i in range(PCA_N_COMPONENTS//4):
     for j in range(4):
         ax = axes[i][j]
-        
-        # 遍历y_prob的每一个标签
-        for m, label in enumerate(param_group_unique_labels):
-            feature_data = all_srvf_pca.train_res[:, 4*i+j]
-            prob_data = y_prob[:, m]
-            
-            # Filter data points where y value is less than 0.1
-            # mask = prob_data >= 0.3
-            # feature_data = feature_data[mask]
-            # prob_data = prob_data[mask]
-            # prob_data = np.power(prob_data, 2)
-            
-            # 画散点图
-            ax.scatter(feature_data, prob_data, color=colors[label], alpha=0.6, label=label)
-            # 需要多求几个PC，让n_components=0.95，然后从里面挑16个。
-            
-            # 线性拟合
-            if len(feature_data) > 1:  # Ensure there are at least 2 points for linear regression
-                model = np.polyfit(feature_data, prob_data, 1)
-                predicted = np.poly1d(model)
-                ax.plot(feature_data, predicted(feature_data), color=colors[label])
-            
-        if j == 0:
-            ax.set_ylabel(f'Row {i+1}')
-        if i == 3:
-            ax.set_xlabel(f'Feature {4*i+j+1}')
+        ax.tick_params(axis='both', which='major', labelsize=8)
+        for tag in param_dict.keys():
+            indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
+            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+            prob_feature = y_prob[indices, 0] # [数据的tag,分数的tag]
+
+            ax.scatter(selected_data[:,4*i+j],prob_feature,
+                           color=colors[tag],
+                           alpha=0.6, 
+                           s=25)
+            model = np.polyfit(selected_data[:,4*i+j], prob_feature, 1)
+            slope = model[0]
+            slopes.append(slope)
+            # print (tag," PC", 4*i+j, " slope:", slope)
+            if abs(slope) > 0.036:
+                linestyle = '-'
+            else:
+                linestyle = ':'
+            predicted = np.poly1d(model)
+            predict_range = np.linspace(np.min(all_srvf_pca.train_res[:,4*i+j]), np.max(all_srvf_pca.train_res[:,4*i+j]), 10)
+            ax.plot(predict_range, 
+                        predicted(predict_range), 
+                        color=colors[tag], 
+                        linewidth=2,
+                        linestyle=linestyle)
+
 
 plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.3))
 plt.tight_layout()
 plt.subplots_adjust(top=0.9)
-plt.grid(linestyle='--')
 plt.savefig(pca_anlysis_dir+"y_prob_vs_all_srvf_pca_train_res.png")
 plt.close()
-
+print ("score平均斜率：",np.mean(np.abs(slopes)))
+print ("score斜率标准差：",np.std(slopes))
 
 # def fit_kde(data):
 #     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
@@ -614,12 +611,12 @@ plt.close()
 df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = quad_param_group
 # 创建一个4x4的子图网格
-fig, axes = plt.subplots(4, 4, figsize=(20, 20))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(20, 20))
 # 为每个主成分绘制violinplot
 for i in range(PCA_N_COMPONENTS):
     ax = axes[i // 4, i % 4]
-    sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile')  # inner='quartile' 在violin内部显示四分位数
-    ax.set_title(f'Violinplot for Principal Component {i+1}')
+    sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
+    ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
 plt.tight_layout()
 plt.savefig(pca_anlysis_dir+"srvfPCA_total_Violinplot.png")

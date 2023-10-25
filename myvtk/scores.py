@@ -23,7 +23,7 @@ import matplotlib
 import matplotlib.cm as cm
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean,pdist, squareform
-from myvtk.customize_pca import *
+from myvtk.Mypca import *
 from myvtk.make_fig import *
 import shutil
 import os
