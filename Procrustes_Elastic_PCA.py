@@ -72,7 +72,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 warnings.filterwarnings("ignore")
 
-PCA_N_COMPONENTS = 32
+PCA_N_COMPONENTS = 64
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
 ORIGINAL_GEO_PARAM = False
@@ -313,37 +313,18 @@ labels = list(counter.keys())
 labels.append("Overall")
 type_vals = sorted(list({tv for inner_dict in counter.values() for tv in inner_dict.keys()}))
 
-bar_width = 0.05  # 使柱子更细
-num_types = len(type_vals)
-spacing = 0.7  # 增加每组柱子之间的距离
-positions = [pos * spacing for pos in range(len(labels))]
-fig = plt.figure(dpi=300)
-ax = fig.add_subplot(111)
 # 数据存储的列表
 param2cusv_data_list = []
-
 # 每个 Typevalue 的柱子位置
 for idx, tv in enumerate(type_vals):
     counts = [counter[label][tv] for label in labels[:-1]]
     counts.append(overall_counter[tv])  # 添加全体数据的计数
-    ax.bar([pos + idx * bar_width for pos in positions], counts, width=bar_width, label=tv)
     param2cusv_data_list.append(counts)
 
 # 将数据转化为 DataFrame
 param2cusv_df = pd.DataFrame(param2cusv_data_list, columns=labels, index=type_vals)
-
 # 将数据保存为CSV文件
 param2cusv_df.to_csv(bkup_dir+"param2cusv.csv")
-
-plt.legend(title="Typevalues")
-plt.title("Param Group vs Typevalues")
-plt.ylabel("Count")
-plt.xlabel("Param Group")
-plt.xticks([pos + bar_width * (num_types / 2) for pos in positions], labels)
-plt.tight_layout()
-plt.savefig(bkup_dir+"Param_Group_vs_Typevalues.png")
-plt.close()
-
 
 param_group_unique_labels = list(set(quad_param_group))
 # 初始化字典
@@ -387,7 +368,7 @@ colors = {
 
 
 # 数据拆分
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=12, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=12, stratify=y)
 
 # 特征缩放
 scaler = StandardScaler()
@@ -402,10 +383,10 @@ rf_clf = RandomForestClassifier(n_estimators=100, random_state=12)  # n_estimato
 rf_clf.fit(X_train_scaled, y_train)
 
 # 预测
-y_pred = rf_clf.predict(X_scaled)
+y_pred = rf_clf.predict(X_test_scaled)
 
 print("Classification Report:")
-print(classification_report(y, y_pred))
+print(classification_report(y_test, y_pred))
 
 # 获取预测概率
 y_prob = rf_clf.predict_proba(X_scaled)
@@ -464,6 +445,7 @@ ax.set_xlabel('Curvature Energy')
 ax.set_ylabel('Torsion Energy')
 ax.set_title('Energy Scatter Plot by Label')
 ax.legend()
+ax.grid(linestyle='--', alpha=0.5)
 plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 plt.close()
 
@@ -479,11 +461,11 @@ for i in range(PCA_N_COMPONENTS//4):
             selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
             param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
 
-            ax.scatter(selected_data[:,4*i+j], param_feature,
+            ax.scatter(param_feature,selected_data[:,4*i+j],
                            color=colors[tag],
                            alpha=0.6, 
                            s=25)
-            model = np.polyfit(selected_data[:,4*i+j], param_feature, 1)
+            model = np.polyfit(param_feature, selected_data[:,4*i+j], 1)
             slope = model[0]
             slopes.append(slope)
             # print (tag," PC", 4*i+j, " slope:", slope)
@@ -492,7 +474,7 @@ for i in range(PCA_N_COMPONENTS//4):
             else:
                 linestyle = ':'
             predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(all_srvf_pca.train_res[:,4*i+j]), np.max(all_srvf_pca.train_res[:,4*i+j]), 10)
+            predict_range = np.linspace(np.min(param_feature), np.max(param_feature), 10)
             ax.plot(predict_range, 
                         predicted(predict_range), 
                         color=colors[tag], 
@@ -512,7 +494,13 @@ plt.close()
 
 print ("energy平均斜率：",np.mean(np.abs(slopes)))
 print ("energy斜率标准差：",np.std(slopes))
+slopes = np.array(slopes).reshape(-1,4)
+print ("slopes.shape:", slopes.shape)
+for i , tag in enumerate(param_dict.keys()):
+    print (tag, "的支配性PC是:", np.max(np.abs(slopes[:,i])), np.argmax(np.abs(slopes[:,i])), "其平均绝对斜率是:",np.mean(np.abs(slopes[:,i])))
 
+
+slopes = []
 # y_prob 和 all_srvf_pca.train_res 的相关性分析
 fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(15, 15))
 # 遍历all_srvf_pca.train_res的每一个特征
@@ -535,21 +523,21 @@ for i in range(PCA_N_COMPONENTS//4):
 
             # 如果你只关心每个样本的最大差异，可以这样得到
             prob_feature = np.max(difference, axis=1)
-            print ("prob_feature.shape:", prob_feature.shape)
-            ax.scatter(selected_data[:,4*i+j],prob_feature,
+            # print ("prob_feature.shape:", prob_feature.shape)
+            ax.scatter(prob_feature,selected_data[:,4*i+j],
                            color=colors[tag],
                            alpha=0.6, 
                            s=25)
-            model = np.polyfit(selected_data[:,4*i+j], prob_feature, 1)
+            model = np.polyfit(prob_feature, selected_data[:,4*i+j],  1)
             slope = model[0]
             slopes.append(slope)
             # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.036:
+            if abs(slope) > 0.018:
                 linestyle = '-'
             else:
                 linestyle = ':'
             predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(all_srvf_pca.train_res[:,4*i+j]), np.max(all_srvf_pca.train_res[:,4*i+j]), 10)
+            predict_range = np.linspace(np.min(prob_feature), np.max(prob_feature), 10)
             ax.plot(predict_range, 
                         predicted(predict_range), 
                         color=colors[tag], 
@@ -564,6 +552,28 @@ plt.savefig(pca_anlysis_dir+"y_prob_vs_all_srvf_pca_train_res.png")
 plt.close()
 print ("score平均斜率：",np.mean(np.abs(slopes)))
 print ("score斜率标准差：",np.std(slopes))
+
+
+fig, axes = plt.subplots((PCA_N_COMPONENTS//8), 4, figsize=(15, 15))
+for i in  range(PCA_N_COMPONENTS//8):
+    for j in range(4):
+        ax = axes[i][j]
+        for tag in param_dict.keys():
+            indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
+            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+            # prob_feature= np.max(y_prob[indices, :], axis=1)
+            ax.scatter(selected_data[:,8*i+j],selected_data[:,8*i+j+1],color=colors[tag],alpha=0.6,label=tag)
+
+
+# ax.set_xlabel('PC1')
+# ax.set_ylabel('PC2')
+# ax.set_title('PC1 VS PC2')
+# ax.legend()
+
+plt.savefig(pca_anlysis_dir+"PC1_VS_PC2.png")
+plt.close()
+
+
 
 # def fit_kde(data):
 #     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
