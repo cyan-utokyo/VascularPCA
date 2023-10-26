@@ -72,7 +72,8 @@ from sklearn.ensemble import RandomForestClassifier
 
 warnings.filterwarnings("ignore")
 
-PCA_N_COMPONENTS = 64
+PCA_N_COMPONENTS = 16
+Multi_plot_rows = 4
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
 ORIGINAL_GEO_PARAM = False
@@ -190,10 +191,10 @@ contains_nan = np.isnan(Procs_srvf_curves).any()
 print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
 #####
 # 绘制一个4子图的plot，有对齐后的4个类别的曲线和SRVF曲线标注
-plot_curves_with_arrows(1, 2, Procrustes_curves, 
-                        Procs_srvf_curves, 
-                        Typevalues, 
-                        geometry_dir + "/Procrustes_curves_with_srvf.png")
+# plot_curves_with_arrows(1, 2, Procrustes_curves, 
+#                         Procs_srvf_curves, 
+#                         Typevalues, 
+#                         geometry_dir + "/Procrustes_curves_with_srvf.png")
 #####
 
 #################################
@@ -206,19 +207,104 @@ all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-# all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-# all_pca.PCA_training_and_test()
-# all_pca.compute_kde()
-# joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
-# np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
-# np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
-# np.save(bkup_dir+"not_std_filenames.npy",Files)
+print ("saved pca model to", bkup_dir + 'srvf_pca_model.pkl')
 log.write("CCR:"+str(np.sum(all_srvf_pca.pca.explained_variance_ratio_))+"\n")
 pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
 pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
 # all_pca.visualize_results(pca_components_figname)
 srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
 all_srvf_pca.visualize_results(srvf_pca_components_figname)
+print ("debug1")
+
+
+#################################
+# 在合理范围内，每个mode变化时，曲线上的哪些landmark的欧几里得距离变化最大
+# 同样，哪些landmark的curvature和torsion变化最大
+# 显然landmark欧几里得距离的变化应当是线性的，但curvature torsion则未必
+
+FrechetMean = compute_frechet_mean(Procrustes_curves)
+# print ("FrechetMean.shape:", FrechetMean.shape)
+FrechetMean_srvf = calculate_srvf(FrechetMean)
+# print ("FrechetMean_srvf.shape:", FrechetMean_srvf.shape)
+flatten_FrechetMean_srvf = FrechetMean_srvf.reshape(-1, ).reshape(1, 192)
+flatten_FrechetMean_srvf_normalized = (flatten_FrechetMean_srvf - all_srvf_pca.train_mean) / all_srvf_pca.train_std
+frechet_feature = all_srvf_pca.pca.transform(flatten_FrechetMean_srvf_normalized)
+print ("frechet_feature:", frechet_feature)
+# 日后这个初始位置还要变化，看在不同点上变化规律是否一致
+
+
+fig1, axes1 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+fig2, axes2 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+fig3, axes3 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+for pc in range(PCA_N_COMPONENTS):
+    i = pc // Multi_plot_rows
+    j = pc % Multi_plot_rows
+    ax1 = axes1[i][j]
+    ax2 = axes2[i][j]
+    ax3 = axes3[i][j]
+    delta_shapes =[]
+    # for delta in np.linspace(-1, 1, 11):
+    print ("!!!!shape:", all_srvf_pca.train_res[:,pc].shape)
+    delta_range = np.linspace(-np.std(all_srvf_pca.train_res[:, pc]),np.std(all_srvf_pca.train_res[:, pc]), 10)
+    total_delta_dist = []
+    total_delta_curvatures = []
+    total_delta_torsions = []
+    for delta in delta_range:
+        new_frechet_feature = copy.deepcopy(frechet_feature)
+        new_frechet_feature[0][pc] += delta
+        new_frechet_srvf = all_srvf_pca.inverse_transform_from_loadings(new_frechet_feature).reshape(1, -1, 3)
+        new_frechet =recovered_curves(new_frechet_srvf, True)[0]
+        d_curvature, d_torsion = compute_curvature_and_torsion(new_frechet)
+        delta_dist = np.zeros(len(new_frechet))
+
+        # print ("delta_dist.shape:", delta.shape)
+        if len(delta_shapes)>1:
+            for lm in range(len(new_frechet)):
+                # print (new_frechet[lm], delta_shapes[-1][lm])
+                delta_dist[lm] = np.linalg.norm(new_frechet[lm] - delta_shapes[-1][lm])
+            # print ("PC{}, delta:{}, mean_delta_dist:{}, std_delta_dist:{}".format(pc, delta, np.mean(delta_dist),np.std(delta_dist)))
+            # print ("argmax:", np.argsort(delta_dist)[-10:][::-1])
+            # print (delta_dist[np.argsort(delta_dist)[-10:][::-1]])
+            # ax.plot(delta_dist, label="PC{}:{}".format(pc, delta))
+            total_delta_dist.append(delta_dist)
+        total_delta_curvatures.append(d_curvature)
+        total_delta_torsions.append(d_torsion)
+        delta_shapes.append(new_frechet)
+    total_delta_dist = np.array(total_delta_dist)
+    total_delta_curvatures = np.array(total_delta_curvatures)
+    total_delta_torsions = np.array(total_delta_torsions)
+    sns.heatmap(total_delta_dist, cmap="YlGnBu", ax=ax1,cbar=False,vmax=2,vmin=0)
+    sns.heatmap(total_delta_curvatures, cmap="YlGnBu", ax=ax2,cbar=False,vmax=1,vmin=0)
+    sns.heatmap(total_delta_torsions, cmap="YlGnBu", ax=ax3,cbar=False,vmax=1,vmin=-1)
+    ax1.set_title("PC{}".format(pc))
+    ax2.set_title("PC{}".format(pc))
+    ax3.set_title("PC{}".format(pc))
+fig1.savefig(geometry_dir+"delta_dist(coordinates)_pc.png")
+fig2.savefig(geometry_dir+"delta_dist(curvature)_pc.png")
+fig3.savefig(geometry_dir+"delta_dist(torsion)_pc.png")
+plt.close(fig1)
+plt.close(fig2)
+plt.close(fig3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ###############
@@ -340,6 +426,46 @@ for label in param_group_unique_labels:
     param_dict[label]['Torsion'] = np.array(selected_data_torsion)
     param_dict[label]['Curvature'] = np.array(selected_data_curvature)
 
+
+
+def fit_kde(data):
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
+    kde.fit(data)
+    return kde
+
+
+# 用smote法制造一些合成数据用来训练分类器
+Synthetic_data = []
+Synthetic_X = []
+Synthetic_y = []
+for tag in param_dict.keys():
+    indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
+    group_feature = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+    # print ("group_feature.shape:", group_feature.shape)
+    group_kde = fit_kde(group_feature)
+    sample_num = 1000
+    synthetic_feature = group_kde.sample(sample_num)
+    synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(synthetic_feature).reshape(sample_num, -1, 3)
+    synthetic_recovered = recovered_curves(synthetic_inverse, True)
+    Synthetic_data.extend(synthetic_recovered)
+    synthetic_curvatures,synthetic_torsions = compute_synthetic_curvature_and_torsion(synthetic_recovered, weights)
+    # print ("synthetic_curvatures.shape:", synthetic_curvatures.shape)
+    # print ("synthetic_torsions.shape:", synthetic_torsions.shape)
+    for torsion, curvature in zip(synthetic_torsions, synthetic_curvatures):
+        c_energy, t_energy = compute_geometry_param_energy(curvature,torsion)
+        # print ("c_energy:", c_energy, "t_energy:", t_energy)
+        Synthetic_X.append([c_energy, t_energy])
+    Synthetic_y.extend([tag] * sample_num)
+    
+Synthetic_data = np.array(Synthetic_data)
+Synthetic_X = np.array(Synthetic_X)
+Synthetic_y = np.array(Synthetic_y)
+print ("Synthetic_data.shape:", Synthetic_data.shape)
+print ("Synthetic_X.shape:", Synthetic_X.shape)
+print ("Synthetic_y.shape:", Synthetic_y.shape)
+
+
+
 # 对于每个标签，为其下的所有数据计算能量
 # 准备数据
 X = []  # 用于存储所有的能量值
@@ -368,7 +494,7 @@ colors = {
 
 
 # 数据拆分
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=12, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(Synthetic_X, Synthetic_y, test_size=0.3, random_state=12, stratify=Synthetic_y)
 
 # 特征缩放
 scaler = StandardScaler()
@@ -377,7 +503,7 @@ X_test_scaled = scaler.transform(X_test)
 X_scaled = scaler.transform(X)
 
 # 定义Random Forests分类器
-rf_clf = RandomForestClassifier(n_estimators=100, random_state=12)  # n_estimators代表决策树的数量
+rf_clf = RandomForestClassifier(n_estimators=10, random_state=12)  # n_estimators代表决策树的数量
 
 # 训练分类器
 rf_clf.fit(X_train_scaled, y_train)
@@ -388,13 +514,8 @@ y_pred = rf_clf.predict(X_test_scaled)
 print("Classification Report:")
 print(classification_report(y_test, y_pred))
 
-# 获取预测概率
+# 获取预测概率(分数)
 y_prob = rf_clf.predict_proba(X_scaled)
-
-
-
-
-
 
 
 # Create a figure and axis layout
@@ -449,11 +570,13 @@ ax.grid(linestyle='--', alpha=0.5)
 plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 plt.close()
 
+
+
 slopes = []
 print ("(PCA_N_COMPONENTS//4):",(PCA_N_COMPONENTS//4))
-fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, dpi=300, figsize=(16, 13))
-for i in range(PCA_N_COMPONENTS//4):
-    for j in range(4):
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
+for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
+    for j in range(Multi_plot_rows):
         ax = axes[i][j]
         ax.tick_params(axis='both', which='major', labelsize=8)
         for tag in param_dict.keys():
@@ -461,24 +584,29 @@ for i in range(PCA_N_COMPONENTS//4):
             selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
             param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
 
-            ax.scatter(param_feature,selected_data[:,4*i+j],
+            # std_selected_data = selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j])
+            std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
+
+            ax.scatter(std_selected_data,param_feature,
                            color=colors[tag],
                            alpha=0.6, 
                            s=25)
-            model = np.polyfit(param_feature, selected_data[:,4*i+j], 1)
+            model = np.polyfit(std_selected_data, param_feature, 1)
             slope = model[0]
             slopes.append(slope)
             # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.022:
+            if abs(slope) > 0.03:
                 linestyle = '-'
+                linewidth = 2
             else:
                 linestyle = ':'
+                linewidth = 1
             predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(param_feature), np.max(param_feature), 10)
+            predict_range = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
             ax.plot(predict_range, 
                         predicted(predict_range), 
                         color=colors[tag], 
-                        linewidth=2,
+                        linewidth=linewidth,
                         linestyle=linestyle)
         # if j == 0:
         #     ax.set_ylabel(f'Row {i+1}')
@@ -502,15 +630,17 @@ for i , tag in enumerate(param_dict.keys()):
 
 slopes = []
 # y_prob 和 all_srvf_pca.train_res 的相关性分析
-fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(15, 15))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
 # 遍历all_srvf_pca.train_res的每一个特征
-for i in range(PCA_N_COMPONENTS//4):
-    for j in range(4):
+for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
+    for j in range(Multi_plot_rows):
         ax = axes[i][j]
         ax.tick_params(axis='both', which='major', labelsize=8)
         for tag in param_dict.keys():
             indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
             selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+            # std_selected_data = selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j])
+            std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
             # prob_feature= np.max(y_prob[indices, :], axis=1)
             # prob_feature = y_prob[indices, ] # [数据的tag,分数的tag]
             # 初始化一个和y_prob形状相同的数组
@@ -524,24 +654,26 @@ for i in range(PCA_N_COMPONENTS//4):
             # 如果你只关心每个样本的最大差异，可以这样得到
             prob_feature = np.max(difference, axis=1)
             # print ("prob_feature.shape:", prob_feature.shape)
-            ax.scatter(prob_feature,selected_data[:,4*i+j],
+            ax.scatter(std_selected_data,prob_feature,
                            color=colors[tag],
                            alpha=0.6, 
                            s=25)
-            model = np.polyfit(prob_feature, selected_data[:,4*i+j],  1)
+            model = np.polyfit(std_selected_data, prob_feature, 1)
             slope = model[0]
             slopes.append(slope)
             # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.018:
+            if abs(slope) > 0.02:
                 linestyle = '-'
+                linewidth = 2
             else:
                 linestyle = ':'
+                linewidth = 1
             predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(prob_feature), np.max(prob_feature), 10)
+            predict_range = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
             ax.plot(predict_range, 
                         predicted(predict_range), 
                         color=colors[tag], 
-                        linewidth=2,
+                        linewidth=linewidth,
                         linestyle=linestyle)
 
 
@@ -552,6 +684,10 @@ plt.savefig(pca_anlysis_dir+"y_prob_vs_all_srvf_pca_train_res.png")
 plt.close()
 print ("score平均斜率：",np.mean(np.abs(slopes)))
 print ("score斜率标准差：",np.std(slopes))
+slopes = np.array(slopes).reshape(-1,4)
+print ("slopes.shape:", slopes.shape)
+for i , tag in enumerate(param_dict.keys()):
+    print (tag, "的支配性PC是:", np.max(np.abs(slopes[:,i])), np.argmax(np.abs(slopes[:,i])), "其平均绝对斜率是:",np.mean(np.abs(slopes[:,i])))
 
 
 fig, axes = plt.subplots((PCA_N_COMPONENTS//8), 4, figsize=(15, 15))
@@ -573,28 +709,6 @@ for i in  range(PCA_N_COMPONENTS//8):
 plt.savefig(pca_anlysis_dir+"PC1_VS_PC2.png")
 plt.close()
 
-
-
-# def fit_kde(data):
-#     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
-#     kde.fit(data)
-#     return kde
-# # Extracting data based on type
-# C_srvf_data = all_srvf_pca.train_res[Typevalues == 'C']
-# U_srvf_data = all_srvf_pca.train_res[Typevalues == 'U']
-# S_srvf_data = all_srvf_pca.train_res[Typevalues == 'S']
-# V_srvf_data = all_srvf_pca.train_res[Typevalues == 'V']
-# # Compute KDEs using sklearn's KernelDensity
-# C_srvf_kde = fit_kde(C_srvf_data)
-# U_srvf_kde = fit_kde(U_srvf_data)
-# S_srvf_kde = fit_kde(S_srvf_data)
-# V_srvf_kde = fit_kde(V_srvf_data)
-# sample_num = 1000
-# U_synthetic = U_srvf_kde.sample(sample_num)
-# V_synthetic = V_srvf_kde.sample(sample_num)
-# C_synthetic = C_srvf_kde.sample(sample_num)
-# S_synthetic = S_srvf_kde.sample(sample_num)
-# # 定义一个函数来计算elbow值
 
 
 # ##############################
@@ -637,14 +751,16 @@ plt.close()
 # S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered,weights)
 
 ####################为SRVF PCA绘制violinplot####################
+
+
 # 创建一个DataFrame
 df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = quad_param_group
 # 创建一个4x4的子图网格
-fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(20, 20))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(20, 20))
 # 为每个主成分绘制violinplot
 for i in range(PCA_N_COMPONENTS):
-    ax = axes[i // 4, i % 4]
+    ax = axes[i // Multi_plot_rows, i % Multi_plot_rows]
     sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
     ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁

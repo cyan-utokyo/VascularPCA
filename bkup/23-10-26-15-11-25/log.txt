@@ -1,0 +1,9 @@
+Start at: 23-10-26-15-11-25
+PCA_N_COMPONENTS:64
+CCR:0.9990474968666642
+RECONSTRUCT_WITH_SRVF:1
+MEAN geo_dist_OG_to_reverse:1.0181798493524834
+STD geo_dist_OG_to_reverse:0.17785492713826115
+MEAN length_reverse:63.0
+STD length_reverse:2.526544314984703e-15
+PCA standardization: 1
