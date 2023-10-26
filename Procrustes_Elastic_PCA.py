@@ -227,7 +227,8 @@ print ("debug1")
 
 flatten_curvatures = []
 flatten_torsions = []
-for FrechetMean in p[FrechetMean]:
+for _ in [0]:
+    FrechetMean = compute_frechet_mean(Procrustes_curves)
     FrechetMean_srvf = calculate_srvf(FrechetMean)
     # print ("FrechetMean_srvf.shape:", FrechetMean_srvf.shape)
     flatten_FrechetMean_srvf = FrechetMean_srvf.reshape(-1, ).reshape(1, 192)
@@ -239,6 +240,7 @@ for FrechetMean in p[FrechetMean]:
     fig1, axes1 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
     fig2, axes2 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
     fig3, axes3 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+    fig4, axes4 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
 
     # 用于存储所有形状的列表
     all_delta_shapes = []
@@ -249,6 +251,7 @@ for FrechetMean in p[FrechetMean]:
         ax1 = axes1[i][j]
         ax2 = axes2[i][j]
         ax3 = axes3[i][j]
+        ax4 = axes4[i][j]
         delta_range = np.linspace(-np.std(all_srvf_pca.train_res[:, pc]), np.std(all_srvf_pca.train_res[:, pc]), 11)
 
         # 用于临时存储当前 PC 的所有形状
@@ -277,8 +280,13 @@ for FrechetMean in p[FrechetMean]:
         prev_curvature = None
         prev_torsion = None
 
+        total_curvature_energy = []
+        total_torsion_energy = []
         for idx, shape in enumerate(aligned_shapes):
             d_curvature, d_torsion = compute_curvature_and_torsion(shape)
+            d_energy_curvature, d_energy_torsion = compute_geometry_param_energy(d_curvature, d_torsion)
+            total_curvature_energy.append(d_energy_curvature)
+            total_torsion_energy.append(d_energy_torsion)
             delta_dist = np.zeros(len(shape))
 
             if idx > 0:
@@ -305,6 +313,8 @@ for FrechetMean in p[FrechetMean]:
         sns.heatmap(total_delta_dist, cmap="mako", ax=ax1, cbar=True)
         sns.heatmap(total_delta_curvatures, cmap="mako", ax=ax2, cbar=True)
         sns.heatmap(total_delta_torsions, cmap="mako", ax=ax3, cbar=True)
+        ax4.plot(total_curvature_energy, label="curvature", linestyle="-",color="k")
+        ax4.plot(total_torsion_energy, label="torsion", linestyle="--",color="k")
 
         ax1.set_title(f"PC{pc}")
         ax2.set_title(f"PC{pc}")
@@ -315,10 +325,12 @@ for FrechetMean in p[FrechetMean]:
     fig1.savefig(geometry_dir + "delta_dist(coordinates)_pc.png")
     fig2.savefig(geometry_dir + "delta_dist(curvature)_pc.png")
     fig3.savefig(geometry_dir + "delta_dist(torsion)_pc.png")
+    fig4.savefig(geometry_dir + "delta_dist(energy)_pc.png")
 
     plt.close(fig1)
     plt.close(fig2)
     plt.close(fig3)
+    plt.close(fig4)
 
 fig1 = plt.figure(figsize=(15, 15))
 fig2 = plt.figure(figsize=(15, 15))
