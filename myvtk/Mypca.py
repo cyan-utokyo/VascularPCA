@@ -121,8 +121,6 @@ def plot_scatter_loadings(train_res, test_res, dist_dict, save_path_prefix):
         fig_count += 1
 
 
-
-
 class PCAHandler:
     def __init__(self, train_data, test_data, n_components=16,standardization=1):
         self.train_data = train_data

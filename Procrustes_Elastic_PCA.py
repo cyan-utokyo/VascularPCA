@@ -70,9 +70,11 @@ from sklearn.preprocessing import label_binarize
 from sklearn.ensemble import RandomForestClassifier
 
 
+
 warnings.filterwarnings("ignore")
 
-PCA_N_COMPONENTS = 64
+PCA_N_COMPONENTS = 16
+Multi_plot_rows = 4
 SCALETO1 = False
 PCA_STANDARDIZATION = 1
 ORIGINAL_GEO_PARAM = False
@@ -190,10 +192,10 @@ contains_nan = np.isnan(Procs_srvf_curves).any()
 print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
 #####
 # 绘制一个4子图的plot，有对齐后的4个类别的曲线和SRVF曲线标注
-plot_curves_with_arrows(1, 2, Procrustes_curves, 
-                        Procs_srvf_curves, 
-                        Typevalues, 
-                        geometry_dir + "/Procrustes_curves_with_srvf.png")
+# plot_curves_with_arrows(1, 2, Procrustes_curves, 
+#                         Procs_srvf_curves, 
+#                         Typevalues, 
+#                         geometry_dir + "/Procrustes_curves_with_srvf.png")
 #####
 
 #################################
@@ -206,20 +208,161 @@ all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
 joblib.dump(all_srvf_pca.pca, bkup_dir + 'srvf_pca_model.pkl')
 np.save(bkup_dir+"pca_model_filename.npy",Files )
-# all_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-# all_pca.PCA_training_and_test()
-# all_pca.compute_kde()
-# joblib.dump(all_pca.pca, bkup_dir + 'pca_model.pkl')
-# np.save(bkup_dir+"not_std_curves.npy", all_pca.train_data)
-# np.save(bkup_dir+"not_std_srvf.npy", all_srvf_pca.train_data)
-# np.save(bkup_dir+"not_std_filenames.npy",Files)
+print ("saved pca model to", bkup_dir + 'srvf_pca_model.pkl')
 log.write("CCR:"+str(np.sum(all_srvf_pca.pca.explained_variance_ratio_))+"\n")
 pca_anlysis_dir = mkdir(bkup_dir, "pca_analysis")
 pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
 # all_pca.visualize_results(pca_components_figname)
 srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
 all_srvf_pca.visualize_results(srvf_pca_components_figname)
+print ("debug1")
 
+
+#################################
+# 在合理范围内，每个mode变化时，曲线上的哪些landmark的欧几里得距离变化最大
+# 同样，哪些landmark的curvature和torsion变化最大
+# 显然landmark欧几里得距离的变化应当是线性的，但curvature torsion则未必
+
+# FrechetMean = compute_frechet_mean(Procrustes_curves)
+# print ("FrechetMean.shape:", FrechetMean.shape)
+system_name = platform.system()
+if system_name == "Windows":
+    FrechetMean = compute_frechet_mean(Procrustes_curves)
+    np.save("./bkup/FrechetMean.npy", FrechetMean)
+
+elif system_name == "Darwin":  # Mac OS的系统名称为'Darwin'
+    if os.path.exists("./FrechetMean.npy"):
+        FrechetMean = np.load("./bkup/FrechetMean.npy")
+        print("Loaded FrechetMean from './FrechetMean.npy'.")
+    else:
+        # raise ValueError("File './FrechetMean.npy' does not exist!")
+        FrechetMean = np.mean(Procrustes_curves, axis=0)
+else:
+    print(f"Unsupported operating system: {system_name}")
+
+flatten_curvatures = []
+flatten_torsions = []
+for _ in [0]:
+    # FrechetMean = compute_frechet_mean(Procrustes_curves)
+    #Frechetmean = compute_frechet_mean(Procrustes_curves)
+    # Frechetmean =np.array(Procrustes_curves[0])
+    FrechetMean_srvf = calculate_srvf(FrechetMean)
+    # print ("FrechetMean_srvf.shape:", FrechetMean_srvf.shape)
+    flatten_FrechetMean_srvf = FrechetMean_srvf.reshape(-1, ).reshape(1, 192)
+    flatten_FrechetMean_srvf_normalized = (flatten_FrechetMean_srvf - all_srvf_pca.train_mean) / all_srvf_pca.train_std
+    frechet_feature = all_srvf_pca.pca.transform(flatten_FrechetMean_srvf_normalized)
+    print ("frechet_feature:", frechet_feature)
+    # 日后这个初始位置还要变化，看在不同点上变化规律是否一致
+
+    fig1, axes1 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+    fig2, axes2 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+    fig3, axes3 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+    fig4, axes4 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+
+    # 用于存储所有形状的列表
+    all_delta_shapes = []
+
+    for pc in range(PCA_N_COMPONENTS):
+        i = pc // Multi_plot_rows
+        j = pc % Multi_plot_rows
+        ax1 = axes1[i][j]
+        ax2 = axes2[i][j]
+        ax3 = axes3[i][j]
+        ax4 = axes4[i][j]
+        ax1.tick_params(axis='both', which='major', labelsize=8)
+        ax2.tick_params(axis='both', which='major', labelsize=8)
+        ax3.tick_params(axis='both', which='major', labelsize=8)
+        ax4.tick_params(axis='both', which='major', labelsize=8)
+        delta_range = np.linspace(-np.std(all_srvf_pca.train_res[:, pc]), np.std(all_srvf_pca.train_res[:, pc]), 11)
+
+        # 用于临时存储当前 PC 的所有形状
+        temp_delta_shapes = []
+
+        for delta in delta_range:
+            new_frechet_feature = copy.deepcopy(frechet_feature)
+            new_frechet_feature[0][pc] += delta
+            new_frechet_srvf = all_srvf_pca.inverse_transform_from_loadings(new_frechet_feature).reshape(1, -1, 3)
+            new_frechet = recovered_curves(new_frechet_srvf, True)[0]
+            temp_delta_shapes.append(new_frechet)
+
+        # 对齐所有形状
+        a_curves = align_icp(temp_delta_shapes, base_id=0)
+        Procrustes_delta_curves = align_procrustes(a_curves, base_id=0)
+        parametrized_curves = np.zeros_like(Procrustes_delta_curves)
+        for i in range(len(Procrustes_delta_curves)):
+            parametrized_curves[i] = arc_length_parametrize(Procrustes_delta_curves[i])
+        aligned_shapes = np.array(parametrized_curves)
+
+        # 计算距离，曲率和扭率
+        total_delta_dist = []
+        total_delta_curvatures = []
+        total_delta_torsions = []
+
+        prev_curvature = None
+        prev_torsion = None
+
+        total_curvature_energy = []
+        total_torsion_energy = []
+        for idx, shape in enumerate(aligned_shapes):
+            d_curvature, d_torsion = compute_curvature_and_torsion(shape)
+            d_energy_curvature, d_energy_torsion = compute_geometry_param_energy(d_curvature, d_torsion)
+            total_curvature_energy.append(d_energy_curvature)
+            total_torsion_energy.append(d_energy_torsion)
+            delta_dist = np.zeros(len(shape))
+
+            if idx > 0:
+                for lm in range(len(shape)):
+                    delta_dist[lm] = np.linalg.norm(shape[lm] - aligned_shapes[idx - 1][lm])
+                total_delta_dist.append(delta_dist)
+
+                # 计算曲率和扭率的差
+                delta_curvature = d_curvature - prev_curvature
+                delta_torsion = d_torsion - prev_torsion
+                total_delta_curvatures.append(delta_curvature)
+                total_delta_torsions.append(delta_torsion)
+
+            prev_curvature = d_curvature
+            prev_torsion = d_torsion
+
+        # 将形状添加到总列表
+        all_delta_shapes.extend(aligned_shapes)
+
+        total_delta_dist = np.array(total_delta_dist)
+        total_delta_curvatures = np.array(total_delta_curvatures)
+        total_delta_torsions = np.array(total_delta_torsions)
+
+        sns.heatmap(total_delta_dist, cmap="mako", ax=ax1, cbar=True)
+        sns.heatmap(total_delta_curvatures, cmap="mako", ax=ax2, cbar=True)
+        sns.heatmap(total_delta_torsions, cmap="mako", ax=ax3, cbar=True)
+        ax4.plot(total_curvature_energy, label="curvature", linestyle="-",color="k")
+        ax4.plot(total_torsion_energy, label="torsion", linestyle="--",color="k")
+
+        ax1.set_title(f"PC{pc}")
+        ax2.set_title(f"PC{pc}")
+        ax3.set_title(f"PC{pc}")
+        flatten_curvatures.append(total_delta_curvatures.flatten())
+        flatten_torsions.append(total_delta_torsions.flatten())
+
+    fig1.savefig(geometry_dir + "delta_dist(coordinates)_pc.png")
+    fig2.savefig(geometry_dir + "delta_dist(curvature)_pc.png")
+    fig3.savefig(geometry_dir + "delta_dist(torsion)_pc.png")
+    fig4.savefig(geometry_dir + "delta_dist(energy)_pc.png")
+
+    plt.close(fig1)
+    plt.close(fig2)
+    plt.close(fig3)
+    plt.close(fig4)
+
+# fig1 = plt.figure(figsize=(15, 15))
+# fig2 = plt.figure(figsize=(15, 15))
+# ax1 = fig1.add_subplot(111)
+# ax2 = fig2.add_subplot(111)
+# for i in range(len(flatten_curvatures)):
+#     ax1.plot(flatten_curvatures[i], label=f"C{i}",linewidth=0.5)
+#     ax2.plot(flatten_torsions[i], label=f"T{i}",linewidth=0.5)
+#     # plt.plot(flatten_torsions[i], label=f"T{i}")
+# fig1.savefig(geometry_dir + "delta_dist(curvature)_all.png")
+# fig2.savefig(geometry_dir + "delta_dist(torsion)_all.png")
 
 ###############
 
@@ -340,6 +483,42 @@ for label in param_group_unique_labels:
     param_dict[label]['Torsion'] = np.array(selected_data_torsion)
     param_dict[label]['Curvature'] = np.array(selected_data_curvature)
 
+
+def fit_kde(data):
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
+    kde.fit(data)
+    return kde
+
+# 用smote法制造一些合成数据用来训练分类器
+Synthetic_data = []
+Synthetic_X = []
+Synthetic_y = []
+for tag in param_dict.keys():
+    indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
+    group_feature = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+    # print ("group_feature.shape:", group_feature.shape)
+    group_kde = fit_kde(group_feature)
+    sample_num = 1000
+    synthetic_feature = group_kde.sample(sample_num)
+    synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(synthetic_feature).reshape(sample_num, -1, 3)
+    synthetic_recovered = recovered_curves(synthetic_inverse, True)
+    Synthetic_data.extend(synthetic_recovered)
+    synthetic_curvatures,synthetic_torsions = compute_synthetic_curvature_and_torsion(synthetic_recovered, weights)
+    # print ("synthetic_curvatures.shape:", synthetic_curvatures.shape)
+    # print ("synthetic_torsions.shape:", synthetic_torsions.shape)
+    for torsion, curvature in zip(synthetic_torsions, synthetic_curvatures):
+        c_energy, t_energy = compute_geometry_param_energy(curvature,torsion)
+        # print ("c_energy:", c_energy, "t_energy:", t_energy)
+        Synthetic_X.append([c_energy, t_energy])
+    Synthetic_y.extend([tag] * sample_num)
+    
+Synthetic_data = np.array(Synthetic_data)
+Synthetic_X = np.array(Synthetic_X)
+Synthetic_y = np.array(Synthetic_y)
+print ("Synthetic_data.shape:", Synthetic_data.shape)
+print ("Synthetic_X.shape:", Synthetic_X.shape)
+print ("Synthetic_y.shape:", Synthetic_y.shape)
+
 # 对于每个标签，为其下的所有数据计算能量
 # 准备数据
 X = []  # 用于存储所有的能量值
@@ -368,7 +547,7 @@ colors = {
 
 
 # 数据拆分
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=12, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(Synthetic_X, Synthetic_y, test_size=0.3, random_state=12, stratify=Synthetic_y)
 
 # 特征缩放
 scaler = StandardScaler()
@@ -377,7 +556,7 @@ X_test_scaled = scaler.transform(X_test)
 X_scaled = scaler.transform(X)
 
 # 定义Random Forests分类器
-rf_clf = RandomForestClassifier(n_estimators=100, random_state=12)  # n_estimators代表决策树的数量
+rf_clf = RandomForestClassifier(n_estimators=10, random_state=12)  # n_estimators代表决策树的数量
 
 # 训练分类器
 rf_clf.fit(X_train_scaled, y_train)
@@ -388,13 +567,8 @@ y_pred = rf_clf.predict(X_test_scaled)
 print("Classification Report:")
 print(classification_report(y_test, y_pred))
 
-# 获取预测概率
+# 获取预测概率(分数)
 y_prob = rf_clf.predict_proba(X_scaled)
-
-
-
-
-
 
 
 # Create a figure and axis layout
@@ -449,11 +623,13 @@ ax.grid(linestyle='--', alpha=0.5)
 plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 plt.close()
 
+
+
 slopes = []
 print ("(PCA_N_COMPONENTS//4):",(PCA_N_COMPONENTS//4))
-fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, dpi=300, figsize=(16, 13))
-for i in range(PCA_N_COMPONENTS//4):
-    for j in range(4):
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
+for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
+    for j in range(Multi_plot_rows):
         ax = axes[i][j]
         ax.tick_params(axis='both', which='major', labelsize=8)
         for tag in param_dict.keys():
@@ -461,24 +637,29 @@ for i in range(PCA_N_COMPONENTS//4):
             selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
             param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
 
-            ax.scatter(param_feature,selected_data[:,4*i+j],
+            # std_selected_data = selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j])
+            std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
+
+            ax.scatter(std_selected_data,param_feature,
                            color=colors[tag],
                            alpha=0.6, 
                            s=25)
-            model = np.polyfit(param_feature, selected_data[:,4*i+j], 1)
+            model = np.polyfit(std_selected_data, param_feature, 1)
             slope = model[0]
             slopes.append(slope)
             # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.022:
+            if abs(slope) > 0.03:
                 linestyle = '-'
+                linewidth = 2
             else:
                 linestyle = ':'
+                linewidth = 1
             predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(param_feature), np.max(param_feature), 10)
+            predict_range = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
             ax.plot(predict_range, 
                         predicted(predict_range), 
                         color=colors[tag], 
-                        linewidth=2,
+                        linewidth=linewidth,
                         linestyle=linestyle)
         # if j == 0:
         #     ax.set_ylabel(f'Row {i+1}')
@@ -502,15 +683,17 @@ for i , tag in enumerate(param_dict.keys()):
 
 slopes = []
 # y_prob 和 all_srvf_pca.train_res 的相关性分析
-fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(15, 15))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
 # 遍历all_srvf_pca.train_res的每一个特征
-for i in range(PCA_N_COMPONENTS//4):
-    for j in range(4):
+for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
+    for j in range(Multi_plot_rows):
         ax = axes[i][j]
         ax.tick_params(axis='both', which='major', labelsize=8)
         for tag in param_dict.keys():
             indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
             selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+            # std_selected_data = selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j])
+            std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
             # prob_feature= np.max(y_prob[indices, :], axis=1)
             # prob_feature = y_prob[indices, ] # [数据的tag,分数的tag]
             # 初始化一个和y_prob形状相同的数组
@@ -524,24 +707,26 @@ for i in range(PCA_N_COMPONENTS//4):
             # 如果你只关心每个样本的最大差异，可以这样得到
             prob_feature = np.max(difference, axis=1)
             # print ("prob_feature.shape:", prob_feature.shape)
-            ax.scatter(prob_feature,selected_data[:,4*i+j],
+            ax.scatter(std_selected_data,prob_feature,
                            color=colors[tag],
                            alpha=0.6, 
                            s=25)
-            model = np.polyfit(prob_feature, selected_data[:,4*i+j],  1)
+            model = np.polyfit(std_selected_data, prob_feature, 1)
             slope = model[0]
             slopes.append(slope)
             # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.018:
+            if abs(slope) > 0.02:
                 linestyle = '-'
+                linewidth = 2
             else:
                 linestyle = ':'
+                linewidth = 1
             predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(prob_feature), np.max(prob_feature), 10)
+            predict_range = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
             ax.plot(predict_range, 
                         predicted(predict_range), 
                         color=colors[tag], 
-                        linewidth=2,
+                        linewidth=linewidth,
                         linestyle=linestyle)
 
 
@@ -552,6 +737,10 @@ plt.savefig(pca_anlysis_dir+"y_prob_vs_all_srvf_pca_train_res.png")
 plt.close()
 print ("score平均斜率：",np.mean(np.abs(slopes)))
 print ("score斜率标准差：",np.std(slopes))
+slopes = np.array(slopes).reshape(-1,4)
+print ("slopes.shape:", slopes.shape)
+for i , tag in enumerate(param_dict.keys()):
+    print (tag, "的支配性PC是:", np.max(np.abs(slopes[:,i])), np.argmax(np.abs(slopes[:,i])), "其平均绝对斜率是:",np.mean(np.abs(slopes[:,i])))
 
 
 fig, axes = plt.subplots((PCA_N_COMPONENTS//8), 4, figsize=(15, 15))
@@ -564,87 +753,23 @@ for i in  range(PCA_N_COMPONENTS//8):
             # prob_feature= np.max(y_prob[indices, :], axis=1)
             ax.scatter(selected_data[:,8*i+j],selected_data[:,8*i+j+1],color=colors[tag],alpha=0.6,label=tag)
 
-
 # ax.set_xlabel('PC1')
 # ax.set_ylabel('PC2')
 # ax.set_title('PC1 VS PC2')
 # ax.legend()
-
 plt.savefig(pca_anlysis_dir+"PC1_VS_PC2.png")
 plt.close()
 
-
-
-# def fit_kde(data):
-#     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
-#     kde.fit(data)
-#     return kde
-# # Extracting data based on type
-# C_srvf_data = all_srvf_pca.train_res[Typevalues == 'C']
-# U_srvf_data = all_srvf_pca.train_res[Typevalues == 'U']
-# S_srvf_data = all_srvf_pca.train_res[Typevalues == 'S']
-# V_srvf_data = all_srvf_pca.train_res[Typevalues == 'V']
-# # Compute KDEs using sklearn's KernelDensity
-# C_srvf_kde = fit_kde(C_srvf_data)
-# U_srvf_kde = fit_kde(U_srvf_data)
-# S_srvf_kde = fit_kde(S_srvf_data)
-# V_srvf_kde = fit_kde(V_srvf_data)
-# sample_num = 1000
-# U_synthetic = U_srvf_kde.sample(sample_num)
-# V_synthetic = V_srvf_kde.sample(sample_num)
-# C_synthetic = C_srvf_kde.sample(sample_num)
-# S_synthetic = S_srvf_kde.sample(sample_num)
-# # 定义一个函数来计算elbow值
-
-
-# ##############################
-# # 绘制合成曲线的curvature和torsion
-# U_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(U_synthetic).reshape(sample_num, -1, 3)
-# U_recovered = recovered_curves(U_synthetic_inverse, True)
-# V_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(V_synthetic).reshape(sample_num, -1, 3)
-# V_recovered = recovered_curves(V_synthetic_inverse, True)
-# C_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(C_synthetic).reshape(sample_num, -1, 3)
-# C_recovered = recovered_curves(C_synthetic_inverse, True)
-# S_synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(S_synthetic).reshape(sample_num, -1, 3)
-# S_recovered = recovered_curves(S_synthetic_inverse, True)
-# # 使用函数绘制U, V, C等数据
-# if sample_num < 6:
-#     plot_recovered(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
-#     plot_recovered(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
-#     plot_recovered(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
-#     plot_recovered(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "S_srvf_synthetic.png")
-# else:
-#     # 现在，为每一个类别调用新函数
-#     # plot_stats_by_label(U_recovered, labels_U, U_curvatures, U_torsions, "U", weights, geometry_dir + "U")
-#     # plot_stats_by_label(V_recovered, labels_V, V_curvatures, V_torsions, "V", weights, geometry_dir + "V")
-#     # plot_stats_by_label(C_recovered, labels_C, C_curvatures, C_torsions, "C", weights, geometry_dir + "C")
-#     # plot_stats_by_label(S_recovered, labels_S, S_curvatures, S_torsions, "S", weights, geometry_dir + "S")
-#     plot_recovered_stats(U_recovered, U_curvatures, U_torsions, "U", weights, geometry_dir + "U_srvf_synthetic.png")
-#     plot_recovered_stats(V_recovered, V_curvatures, V_torsions, "V", weights, geometry_dir + "V_srvf_synthetic.png")
-#     plot_recovered_stats(C_recovered, C_curvatures, C_torsions, "C", weights, geometry_dir + "C_srvf_synthetic.png")
-#     plot_recovered_stats(S_recovered, S_curvatures, S_torsions, "S", weights, geometry_dir + "C_srvf_synthetic.png")
-#     # 调用上述函数为每个数据集绘制图形
-
-# srvf_synthetics = np.concatenate([U_synthetic, V_synthetic, C_synthetic, S_synthetic], axis=0)
-# print ("srvf_synthetics.shape: ", srvf_synthetics.shape)
-# srvf_recovers = np.concatenate([U_recovered, V_recovered, C_recovered, S_recovered], axis=0)
-# print ("srvf_recovers.shape: ", srvf_recovers.shape)
-
-
-# C_srvf_synthetic_curvatures, C_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(C_recovered,weights)
-# U_srvf_synthetic_curvatures, U_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(U_recovered,weights)
-# V_srvf_synthetic_curvatures, V_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(V_recovered,weights)
-# S_srvf_synthetic_curvatures, S_srvf_synthetic_torsions = compute_synthetic_curvature_and_torsion(S_recovered,weights)
 
 ####################为SRVF PCA绘制violinplot####################
 # 创建一个DataFrame
 df = pd.DataFrame(all_srvf_pca.train_res, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = quad_param_group
 # 创建一个4x4的子图网格
-fig, axes = plt.subplots((PCA_N_COMPONENTS//4), 4, figsize=(20, 20))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(20, 20))
 # 为每个主成分绘制violinplot
 for i in range(PCA_N_COMPONENTS):
-    ax = axes[i // 4, i % 4]
+    ax = axes[i // Multi_plot_rows, i % Multi_plot_rows]
     sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
     ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
@@ -652,63 +777,73 @@ plt.tight_layout()
 plt.savefig(pca_anlysis_dir+"srvfPCA_total_Violinplot.png")
 plt.close()
 
-####################为srvf PCA绘制QQplot####################
-# from numpy.polynomial.polynomial import Polynomial
+####################为SRVF PCA和geom param做sensitivity analysis####################
+import matplotlib.colors as mcolors
 
-# unique_types = df['Type'].unique()
-# colors = sns.color_palette(n_colors=len(unique_types))
+results = []
+max_pcs = {}
 
-# # Create a 4x4 subplot
-# fig, axes = plt.subplots(4, 4, figsize=(20, 20),dpi=300)
-# fig.suptitle('QQ plots: Types vs. Total')
+# 为Curvatures和Torsion分别执行相同的操作
+for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', Torsions)]:
+    # 遍历每个因变量
+    for i in range(variable_data.shape[1]):
+        y = variable_data[:, i].reshape(-1, 1)
 
-# # For each PC, conduct QQ plot analysis
-# for pc in range(1, PCA_N_COMPONENTS+1):
-#     q = np.linspace(0, 1, 101)[1:-1]  # From 1% to 99%
-#     quantiles_total = np.percentile(df[f'PC{pc}'], q*100)
-    
-#     # Locate the position of the subplot
-#     ax = axes[(pc-1)//4, (pc-1)%4]
-    
-#     # For each Type, create a QQ plot
-#     for idx, type_value in enumerate(unique_types):
-#         type_data = df[df['Type'] == type_value][f'PC{pc}']
-#         quantiles_type = np.percentile(type_data, q*100)
-        
-#         # Scatter plot
-#         ax.scatter(quantiles_total, quantiles_type, 
-#                    color=colors[idx],
-#                    marker="x",
-#                    s=40)
-        
-#         # Fit a linear model and compute the least-squares error
-#         p = Polynomial.fit(quantiles_total, quantiles_type, 1)
-#         x_fit = np.linspace(min(quantiles_total), max(quantiles_total), 500)
-#         y_fit = p(x_fit)
-#         least_squares_error = np.sum((p(quantiles_total) - quantiles_type)**2)
-        
-#         # Plot the linear fit
-#         ax.plot(x_fit, y_fit, color=colors[idx], label=f'Error: {least_squares_error:.2f}', linestyle='dotted', alpha=.5)
-        
-#         # Annotate with least-squares error
-#         ax.annotate(f'Error {type_value}: {least_squares_error:.2f}', 
-#                     xy=(0.05, 0.9 - idx*0.05), 
-#                     xycoords='axes fraction', 
-#                     color=colors[idx],
-#                     fontsize=14)
-    
-#     # Add diagonal line
-#     ax.plot([min(quantiles_total), max(quantiles_total)], 
-#             [min(quantiles_total), max(quantiles_total)], 
-#             linestyle='--',color="dimgray")
-#     ax.set_title(f'PC{pc}')
-#     ax.grid(True)
+        # 存储回归系数
+        coefficients = {}
 
-# plt.tight_layout()
-# plt.subplots_adjust(top=0.95)
-# plt.savefig(pca_anlysis_dir + 'QQ_plots_combined_srvf.png')
-# # plt.show()
-# plt.close()
+        # 遍历每个自变量
+        for pc in range(PCA_N_COMPONENTS):
+            X = all_srvf_pca.train_res[:, pc].reshape(-1, 1)
+
+            model = LinearRegression().fit(X, y)
+            coefficients[pc] = model.coef_[0][0]
+
+        # 找出受影响最大的自变量
+        max_pc = max(coefficients, key=lambda k: abs(coefficients[k]))
+        max_coefficient = coefficients[max_pc]
+
+        # 计算所有系数的均值和标准差
+        coefficient_values = list(coefficients.values())
+        mean_coefficient = np.mean(coefficient_values)
+        std_coefficient = np.std(coefficient_values)
+
+        # 将结果添加到列表中
+        results.append({
+            'Variable_Type': variable_name,
+            'Dependent_Variable_Index': i,
+            'Most_Influential_PCA_Component': max_pc,
+            'Max_Coefficient': abs(max_coefficient),
+            'Mean_Coefficient': mean_coefficient,
+            'Std_Coefficient': std_coefficient
+        })
+
+        # 存储每个因变量受影响最大的自变量编号
+        max_pcs[i] = max_pc
+
+# 将结果转换为DataFrame
+results_df = pd.DataFrame(results)
+
+# 将DataFrame输出为CSV文件
+results_df.to_csv(bkup_dir + 'regression_results.csv', index=False)
+
+# 绘图
+print ("FrechetMean.shape", FrechetMean.shape)
+colors = list(mcolors.TABLEAU_COLORS.keys())  # 获取一组颜色
+plt.figure(figsize=(10, 5))
+plt.plot(FrechetMean[:,0], marker='o', linestyle='-')
+for i, pc in max_pcs.items():
+    plt.text(i, FrechetMean[i,0], str(pc), color=colors[pc % len(colors)])
+
+plt.title('Frechet Mean with Influential PCA Components')
+plt.xlabel('Index')
+plt.ylabel('Frechet Mean Value')
+plt.savefig(pca_anlysis_dir+"Frechet_Mean_with_Influential_PCA_Components.png")
+plt.close()
+
+
+
+
 
 
 log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
@@ -720,19 +855,7 @@ print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 
 geodesic_dir = mkdir(bkup_dir, "geodesic")
 # FrechetMean = compute_frechet_mean(Procrustes_curves)
-system_name = platform.system()
-if system_name == "Windows":
-    FrechetMean = compute_frechet_mean(Procrustes_curves)
-    np.save("./bkup/FrechetMean.npy", FrechetMean)
 
-elif system_name == "Darwin":  # Mac OS的系统名称为'Darwin'
-    if os.path.exists("./FrechetMean.npy"):
-        FrechetMean = np.load("./bkup/FrechetMean.npy")
-    else:
-        # raise ValueError("File './FrechetMean.npy' does not exist!")
-        FrechetMean = np.mean(Procrustes_curves, axis=0)
-else:
-    print(f"Unsupported operating system: {system_name}")
 
 ArithmeticMean = np.mean(Procrustes_curves, axis=0)
 
