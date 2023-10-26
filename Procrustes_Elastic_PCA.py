@@ -222,70 +222,114 @@ print ("debug1")
 # 同样，哪些landmark的curvature和torsion变化最大
 # 显然landmark欧几里得距离的变化应当是线性的，但curvature torsion则未必
 
-FrechetMean = compute_frechet_mean(Procrustes_curves)
+# FrechetMean = compute_frechet_mean(Procrustes_curves)
 # print ("FrechetMean.shape:", FrechetMean.shape)
-FrechetMean_srvf = calculate_srvf(FrechetMean)
-# print ("FrechetMean_srvf.shape:", FrechetMean_srvf.shape)
-flatten_FrechetMean_srvf = FrechetMean_srvf.reshape(-1, ).reshape(1, 192)
-flatten_FrechetMean_srvf_normalized = (flatten_FrechetMean_srvf - all_srvf_pca.train_mean) / all_srvf_pca.train_std
-frechet_feature = all_srvf_pca.pca.transform(flatten_FrechetMean_srvf_normalized)
-print ("frechet_feature:", frechet_feature)
-# 日后这个初始位置还要变化，看在不同点上变化规律是否一致
 
+flatten_curvatures = []
+flatten_torsions = []
+for FrechetMean in p[FrechetMean]:
+    FrechetMean_srvf = calculate_srvf(FrechetMean)
+    # print ("FrechetMean_srvf.shape:", FrechetMean_srvf.shape)
+    flatten_FrechetMean_srvf = FrechetMean_srvf.reshape(-1, ).reshape(1, 192)
+    flatten_FrechetMean_srvf_normalized = (flatten_FrechetMean_srvf - all_srvf_pca.train_mean) / all_srvf_pca.train_std
+    frechet_feature = all_srvf_pca.pca.transform(flatten_FrechetMean_srvf_normalized)
+    print ("frechet_feature:", frechet_feature)
+    # 日后这个初始位置还要变化，看在不同点上变化规律是否一致
 
-fig1, axes1 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
-fig2, axes2 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
-fig3, axes3 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
-for pc in range(PCA_N_COMPONENTS):
-    i = pc // Multi_plot_rows
-    j = pc % Multi_plot_rows
-    ax1 = axes1[i][j]
-    ax2 = axes2[i][j]
-    ax3 = axes3[i][j]
-    delta_shapes =[]
-    # for delta in np.linspace(-1, 1, 11):
-    print ("!!!!shape:", all_srvf_pca.train_res[:,pc].shape)
-    delta_range = np.linspace(-np.std(all_srvf_pca.train_res[:, pc]),np.std(all_srvf_pca.train_res[:, pc]), 10)
-    total_delta_dist = []
-    total_delta_curvatures = []
-    total_delta_torsions = []
-    for delta in delta_range:
-        new_frechet_feature = copy.deepcopy(frechet_feature)
-        new_frechet_feature[0][pc] += delta
-        new_frechet_srvf = all_srvf_pca.inverse_transform_from_loadings(new_frechet_feature).reshape(1, -1, 3)
-        new_frechet =recovered_curves(new_frechet_srvf, True)[0]
-        d_curvature, d_torsion = compute_curvature_and_torsion(new_frechet)
-        delta_dist = np.zeros(len(new_frechet))
+    fig1, axes1 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+    fig2, axes2 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+    fig3, axes3 = plt.subplots((PCA_N_COMPONENTS // Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
 
-        # print ("delta_dist.shape:", delta.shape)
-        if len(delta_shapes)>1:
-            for lm in range(len(new_frechet)):
-                # print (new_frechet[lm], delta_shapes[-1][lm])
-                delta_dist[lm] = np.linalg.norm(new_frechet[lm] - delta_shapes[-1][lm])
-            # print ("PC{}, delta:{}, mean_delta_dist:{}, std_delta_dist:{}".format(pc, delta, np.mean(delta_dist),np.std(delta_dist)))
-            # print ("argmax:", np.argsort(delta_dist)[-10:][::-1])
-            # print (delta_dist[np.argsort(delta_dist)[-10:][::-1]])
-            # ax.plot(delta_dist, label="PC{}:{}".format(pc, delta))
-            total_delta_dist.append(delta_dist)
-        total_delta_curvatures.append(d_curvature)
-        total_delta_torsions.append(d_torsion)
-        delta_shapes.append(new_frechet)
-    total_delta_dist = np.array(total_delta_dist)
-    total_delta_curvatures = np.array(total_delta_curvatures)
-    total_delta_torsions = np.array(total_delta_torsions)
-    sns.heatmap(total_delta_dist, cmap="YlGnBu", ax=ax1,cbar=False,vmax=2,vmin=0)
-    sns.heatmap(total_delta_curvatures, cmap="YlGnBu", ax=ax2,cbar=False,vmax=1,vmin=0)
-    sns.heatmap(total_delta_torsions, cmap="YlGnBu", ax=ax3,cbar=False,vmax=1,vmin=-1)
-    ax1.set_title("PC{}".format(pc))
-    ax2.set_title("PC{}".format(pc))
-    ax3.set_title("PC{}".format(pc))
-fig1.savefig(geometry_dir+"delta_dist(coordinates)_pc.png")
-fig2.savefig(geometry_dir+"delta_dist(curvature)_pc.png")
-fig3.savefig(geometry_dir+"delta_dist(torsion)_pc.png")
-plt.close(fig1)
-plt.close(fig2)
-plt.close(fig3)
+    # 用于存储所有形状的列表
+    all_delta_shapes = []
 
+    for pc in range(PCA_N_COMPONENTS):
+        i = pc // Multi_plot_rows
+        j = pc % Multi_plot_rows
+        ax1 = axes1[i][j]
+        ax2 = axes2[i][j]
+        ax3 = axes3[i][j]
+        delta_range = np.linspace(-np.std(all_srvf_pca.train_res[:, pc]), np.std(all_srvf_pca.train_res[:, pc]), 11)
+
+        # 用于临时存储当前 PC 的所有形状
+        temp_delta_shapes = []
+
+        for delta in delta_range:
+            new_frechet_feature = copy.deepcopy(frechet_feature)
+            new_frechet_feature[0][pc] += delta
+            new_frechet_srvf = all_srvf_pca.inverse_transform_from_loadings(new_frechet_feature).reshape(1, -1, 3)
+            new_frechet = recovered_curves(new_frechet_srvf, True)[0]
+            temp_delta_shapes.append(new_frechet)
+
+        # 对齐所有形状
+        a_curves = align_icp(temp_delta_shapes, base_id=0)
+        Procrustes_delta_curves = align_procrustes(a_curves, base_id=0)
+        parametrized_curves = np.zeros_like(Procrustes_delta_curves)
+        for i in range(len(Procrustes_delta_curves)):
+            parametrized_curves[i] = arc_length_parametrize(Procrustes_delta_curves[i])
+        aligned_shapes = np.array(parametrized_curves)
+
+        # 计算距离，曲率和扭率
+        total_delta_dist = []
+        total_delta_curvatures = []
+        total_delta_torsions = []
+
+        prev_curvature = None
+        prev_torsion = None
+
+        for idx, shape in enumerate(aligned_shapes):
+            d_curvature, d_torsion = compute_curvature_and_torsion(shape)
+            delta_dist = np.zeros(len(shape))
+
+            if idx > 0:
+                for lm in range(len(shape)):
+                    delta_dist[lm] = np.linalg.norm(shape[lm] - aligned_shapes[idx - 1][lm])
+                total_delta_dist.append(delta_dist)
+
+                # 计算曲率和扭率的差
+                delta_curvature = d_curvature - prev_curvature
+                delta_torsion = d_torsion - prev_torsion
+                total_delta_curvatures.append(delta_curvature)
+                total_delta_torsions.append(delta_torsion)
+
+            prev_curvature = d_curvature
+            prev_torsion = d_torsion
+
+        # 将形状添加到总列表
+        all_delta_shapes.extend(aligned_shapes)
+
+        total_delta_dist = np.array(total_delta_dist)
+        total_delta_curvatures = np.array(total_delta_curvatures)
+        total_delta_torsions = np.array(total_delta_torsions)
+
+        sns.heatmap(total_delta_dist, cmap="mako", ax=ax1, cbar=True)
+        sns.heatmap(total_delta_curvatures, cmap="mako", ax=ax2, cbar=True)
+        sns.heatmap(total_delta_torsions, cmap="mako", ax=ax3, cbar=True)
+
+        ax1.set_title(f"PC{pc}")
+        ax2.set_title(f"PC{pc}")
+        ax3.set_title(f"PC{pc}")
+        flatten_curvatures.append(total_delta_curvatures.flatten())
+        flatten_torsions.append(total_delta_torsions.flatten())
+
+    fig1.savefig(geometry_dir + "delta_dist(coordinates)_pc.png")
+    fig2.savefig(geometry_dir + "delta_dist(curvature)_pc.png")
+    fig3.savefig(geometry_dir + "delta_dist(torsion)_pc.png")
+
+    plt.close(fig1)
+    plt.close(fig2)
+    plt.close(fig3)
+
+fig1 = plt.figure(figsize=(15, 15))
+fig2 = plt.figure(figsize=(15, 15))
+ax1 = fig1.add_subplot(111)
+ax2 = fig2.add_subplot(111)
+for i in range(len(flatten_curvatures)):
+    ax1.plot(flatten_curvatures[i], label=f"C{i}",linewidth=0.5)
+    ax2.plot(flatten_torsions[i], label=f"T{i}",linewidth=0.5)
+    # plt.plot(flatten_torsions[i], label=f"T{i}")
+fig1.savefig(geometry_dir + "delta_dist(curvature)_all.png")
+fig2.savefig(geometry_dir + "delta_dist(torsion)_all.png")
 
 
 
