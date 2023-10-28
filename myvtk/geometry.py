@@ -2,7 +2,8 @@ import numpy as np
 from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
-def smooth_curve(curve, window_length=7, polyorder=3):
+from scipy.interpolate import interp1d
+def smooth_curve(curve, window_length=5, polyorder=3):
     """
     平滑3D曲线使用Savitzky-Golay滤波器
 

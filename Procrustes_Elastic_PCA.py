@@ -160,12 +160,21 @@ parametrized_curves = np.zeros_like(Procrustes_curves)
 # aligned_curves = np.zeros_like(interpolated_curves)
 for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
-Procrustes_curves = np.array(Procrustes_curves)
+Procrustes_curves = np.array(parametrized_curves)
 
 print (Procrustes_curves.shape)
 i=30 # U
 j=46 # S
 
+preprocessing_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 20, PCA_STANDARDIZATION)
+preprocessing_pca.PCA_training_and_test()
+preprocess_curves = preprocessing_pca.inverse_transform_from_loadings(preprocessing_pca.train_res).reshape(len(preprocessing_pca.train_res), -1, 3)
+# print ("preprocess_curves:", preprocess_curves.shape)
+# for i in range(len(preprocess_curves)):
+#     plt.plot(preprocess_curves[i][:,0], preprocess_curves[i][:,1], label=str(i))
+# plt.savefig("preprocess_curves.png")
+# plt.close()
+Procrustes_curves = preprocess_curves
 
 # if SCALETO1:
 #     # 需要把长度还原到原始曲线或1
@@ -484,6 +493,13 @@ for label in param_group_unique_labels:
     param_dict[label]['Curvature'] = np.array(selected_data_curvature)
 
 
+
+
+
+
+
+
+
 def fit_kde(data):
     kde = KernelDensity(kernel='gaussian', bandwidth=0.5)
     kde.fit(data)
@@ -598,6 +614,18 @@ fig, ax = plt.subplots(dpi=300)
 index = 0
 
 # 绘制散点图
+
+
+# 定义颜色映射
+Typevalues_colors = {
+    label: plt.cm.jet((i)/4) for i, label in enumerate(set(Typevalues))
+}
+
+param_group_colors = {
+    label: plt.cm.jet((i)/8) for i, label in enumerate(set(param_group))
+}
+
+
 for label in param_group_unique_labels:
     energies = param_dict[label]['Energy']
     curvatures, torsions = zip(*energies)
@@ -610,6 +638,15 @@ for label in param_group_unique_labels:
                label=label, 
                alpha=0.6, 
                s=sizes_for_label*sizes_for_label*75)  
+    for i in range(len(curvatures)):
+        if param_group[i] in ["LMLSHC", "LMHSHC"]:
+            fontsize=8
+        else:
+            fontsize=4
+        ax.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
+        ax.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
+        ax.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]])
+        
     
     # 更新索引
     index += len(energies)
@@ -781,7 +818,8 @@ plt.close()
 import matplotlib.colors as mcolors
 
 results = []
-max_pcs = {}
+max_pcs_curvatures = {}
+max_pcs_torsions = {}
 
 # 为Curvatures和Torsion分别执行相同的操作
 for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', Torsions)]:
@@ -799,12 +837,17 @@ for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', To
             model = LinearRegression().fit(X, y)
             coefficients[pc] = model.coef_[0][0]
 
-        # 找出受影响最大的自变量
-        max_pc = max(coefficients, key=lambda k: abs(coefficients[k]))
-        max_coefficient = coefficients[max_pc]
+        # 如果是Curvatures，使用绝对值来找出受影响最大的自变量
+        if variable_name == 'Curvatures':
+            max_pc = max(coefficients, key=lambda k: abs(coefficients[k]))
+            max_coefficient = abs(coefficients[max_pc])
+            coefficient_values = [abs(value) for value in coefficients.values()]
+        else:  # 如果是Torsions，保持原有的计算方式
+            max_pc = max(coefficients, key=lambda k: coefficients[k])
+            max_coefficient = coefficients[max_pc]
+            coefficient_values = list(coefficients.values())
 
         # 计算所有系数的均值和标准差
-        coefficient_values = list(coefficients.values())
         mean_coefficient = np.mean(coefficient_values)
         std_coefficient = np.std(coefficient_values)
 
@@ -813,33 +856,46 @@ for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', To
             'Variable_Type': variable_name,
             'Dependent_Variable_Index': i,
             'Most_Influential_PCA_Component': max_pc,
-            'Max_Coefficient': abs(max_coefficient),
+            'Max_Coefficient': max_coefficient,
             'Mean_Coefficient': mean_coefficient,
             'Std_Coefficient': std_coefficient
         })
 
-        # 存储每个因变量受影响最大的自变量编号
-        max_pcs[i] = max_pc
+        # 根据变量类型存储每个因变量受影响最大的自变量编号
+        if variable_name == 'Curvatures':
+            max_pcs_curvatures[i] = max_pc
+        elif variable_name == 'Torsions':
+            max_pcs_torsions[i] = max_pc
+
 
 # 将结果转换为DataFrame
 results_df = pd.DataFrame(results)
 
 # 将DataFrame输出为CSV文件
-results_df.to_csv(bkup_dir + 'regression_results.csv', index=False)
+results_df.to_csv(bkup_dir+'regression_results.csv', index=False)
 
 # 绘图
-print ("FrechetMean.shape", FrechetMean.shape)
+fig_x = 1
+fig_shape = FrechetMean[:, fig_x][3:]
+print("fig_shape.shape", fig_shape.shape)
 colors = list(mcolors.TABLEAU_COLORS.keys())  # 获取一组颜色
 plt.figure(figsize=(10, 5))
-plt.plot(FrechetMean[:,0], marker='o', linestyle='-')
-for i, pc in max_pcs.items():
-    plt.text(i, FrechetMean[i,0], str(pc), color=colors[pc % len(colors)])
+plt.plot(fig_shape, marker='o', linestyle='-', color="dimgray", label='Frechet Mean')
+
+for i in range(len(fig_shape)):
+    curv_pc = max_pcs_curvatures.get(i)
+    tors_pc = max_pcs_torsions.get(i)
+    if curv_pc is not None:
+        plt.text(i, fig_shape[i] + 0.35, str(curv_pc), color=colors[curv_pc % len(colors)], ha='center')
+    if tors_pc is not None:
+        plt.text(i, fig_shape[i] - 0.35, str(tors_pc), color=colors[tors_pc % len(colors)], ha='center', va='top')
 
 plt.title('Frechet Mean with Influential PCA Components')
 plt.xlabel('Index')
-plt.ylabel('Frechet Mean Value')
-plt.savefig(pca_anlysis_dir+"Frechet_Mean_with_Influential_PCA_Components.png")
+plt.ylabel('Mean Shape')
+plt.savefig(pca_anlysis_dir + "Frechet_Mean_with_Influential_PCA_Components.png")
 plt.close()
+
 
 
 
