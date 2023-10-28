@@ -212,6 +212,8 @@ print(f"Procs_srvf_curves contains NaN values: {contains_nan}")
 # frechet_mean_srvf = frechet_mean_srvf / measure_length(frechet_mean_srvf)
 # 计算PCA
 # 保存数据
+log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
+print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 all_srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
 all_srvf_pca.PCA_training_and_test()
 all_srvf_pca.compute_kde()
@@ -225,7 +227,6 @@ pca_components_figname = pca_anlysis_dir+"pca_plot_variance.png"
 srvf_pca_components_figname = pca_anlysis_dir + "srvf_pca_plot_variance.png"
 all_srvf_pca.visualize_results(srvf_pca_components_figname)
 print ("debug1")
-
 
 #################################
 # 在合理范围内，每个mode变化时，曲线上的哪些landmark的欧几里得距离变化最大
@@ -522,10 +523,12 @@ for tag in param_dict.keys():
     synthetic_curvatures,synthetic_torsions = compute_synthetic_curvature_and_torsion(synthetic_recovered, weights)
     # print ("synthetic_curvatures.shape:", synthetic_curvatures.shape)
     # print ("synthetic_torsions.shape:", synthetic_torsions.shape)
-    for torsion, curvature in zip(synthetic_torsions, synthetic_curvatures):
-        c_energy, t_energy = compute_geometry_param_energy(curvature,torsion)
+    # for torsion, curvature in zip(synthetic_torsions, synthetic_curvatures):
+        # c_energy, t_energy = compute_geometry_param_energy(curvature,torsion)
         # print ("c_energy:", c_energy, "t_energy:", t_energy)
-        Synthetic_X.append([c_energy, t_energy])
+        # Synthetic_X.append([c_energy, t_energy])
+    # Synthetic_X.extend(np.hstack([synthetic_curvatures, synthetic_torsions]))
+    Synthetic_X.extend(synthetic_recovered.reshape(sample_num, -1))
     Synthetic_y.extend([tag] * sample_num)
     
 Synthetic_data = np.array(Synthetic_data)
@@ -539,7 +542,11 @@ print ("Synthetic_y.shape:", Synthetic_y.shape)
 # 准备数据
 X = []  # 用于存储所有的能量值
 y = []  # 用于存储对应的标签
+# print ("quad_param_group:", quad_param_group)
+# print ("quad_param_group.shape:", quad_param_group.shape)
+# print ("Procrustes_curves.shape:", Procrustes_curves.shape)
 for label in param_group_unique_labels:
+    print ("label:", label)
     torsions = param_dict[label]['Torsion']
     curvatures = param_dict[label]['Curvature']
     
@@ -553,7 +560,9 @@ for label in param_group_unique_labels:
     
     # 将计算的能量值存储在字典中
     param_dict[label]['Energy'] = energies
-    X.extend(energies)
+    # X.extend(energies)
+    # X.extend(np.hstack([curvatures, torsions]))
+    X.extend(Procrustes_curves[np.array(quad_param_group) == label].reshape(len(Procrustes_curves[np.array(quad_param_group) == label]), -1))
     y.extend([label] * len(energies))
 
 # 定义颜色映射
@@ -572,7 +581,7 @@ X_test_scaled = scaler.transform(X_test)
 X_scaled = scaler.transform(X)
 
 # 定义Random Forests分类器
-rf_clf = RandomForestClassifier(n_estimators=10, random_state=12)  # n_estimators代表决策树的数量
+rf_clf = RandomForestClassifier(n_estimators=20, random_state=12)  # n_estimators代表决策树的数量
 
 # 训练分类器
 rf_clf.fit(X_train_scaled, y_train)
@@ -640,10 +649,10 @@ for label in param_group_unique_labels:
                s=sizes_for_label*sizes_for_label*75)  
     for i in range(len(curvatures)):
         if param_group[i] in ["LMLSHC", "LMHSHC"]:
-            fontsize=8
+            fontsize=6
         else:
             fontsize=4
-        ax.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
+        ax.annotate(Files[i].split("/")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
         ax.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
         ax.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]])
         
@@ -660,143 +669,91 @@ ax.grid(linestyle='--', alpha=0.5)
 plt.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 plt.close()
 
+slopes_energy = []
+slopes_score = []
 
+print("(PCA_N_COMPONENTS//4):", (PCA_N_COMPONENTS//4))
 
-slopes = []
-print ("(PCA_N_COMPONENTS//4):",(PCA_N_COMPONENTS//4))
-fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
+# 绘制第一个图
+fig1, axes1 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
+
+# 绘制第二个图
+# fig2, axes2 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
+
 for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
     for j in range(Multi_plot_rows):
-        ax = axes[i][j]
-        ax.tick_params(axis='both', which='major', labelsize=8)
+        # 第一个图的绘制
+        ax1 = axes1[i][j]
+        ax1.tick_params(axis='both', which='major', labelsize=8)
+
+        # # 第二个图的绘制
+        # ax2 = axes2[i][j]
+        # ax2.tick_params(axis='both', which='major', labelsize=8)
+
         for tag in param_dict.keys():
             indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
-            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
+            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])[:,Multi_plot_rows*i+j]
+            # std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
+            
+            # 第一个图的数据和绘制
             param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
+            print ("param_feature.shape:", param_feature.shape)
+            print ("selected_data.shape:", selected_data.shape)
+            ax1.scatter(selected_data, param_feature, color=colors[tag], alpha=0.6, s=25)
+            model_energy = np.polyfit(selected_data, param_feature, 1)
+            slope_energy = model_energy[0]
+            slopes_energy.append(slope_energy)
+            linestyle_energy = '-' if abs(slope_energy) > 0.03 else ':'
+            linewidth_energy = 2 if abs(slope_energy) > 0.03 else 1
+            predicted_energy = np.poly1d(model_energy)
+            predict_range_energy = np.linspace(np.min(selected_data), np.max(selected_data), 10)
+            ax1.plot(predict_range_energy, predicted_energy(predict_range_energy), color=colors[tag], linewidth=linewidth_energy, linestyle=linestyle_energy)
+            
+            # # 第二个图的数据和绘制
+            # difference = np.zeros_like(y_prob[indices, :])
+            # for m, row in enumerate(y_prob[indices, :]):
+            #     max_val = np.max(row)
+            #     difference[m] = max_val - row
+            # prob_feature = np.max(difference, axis=1)
+            # ax2.scatter(std_selected_data, prob_feature, color=colors[tag], alpha=0.6, s=25)
+            # model_score = np.polyfit(std_selected_data, prob_feature, 1)
+            # slope_score = model_score[0]
+            # slopes_score.append(slope_score)
+            # linestyle_score = '-' if abs(slope_score) > 0.02 else ':'
+            # linewidth_score = 2 if abs(slope_score) > 0.02 else 1
+            # predicted_score = np.poly1d(model_score)
+            # predict_range_score = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
+            # ax2.plot(predict_range_score, predicted_score(predict_range_score), color=colors[tag], linewidth=linewidth_score, linestyle=linestyle_score)
 
-            # std_selected_data = selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j])
-            std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
+# 完成第一个图的保存和关闭
+plt.figure(fig1.number)
+plt.tight_layout()
+plt.subplots_adjust(top=0.9)
+plt.savefig(pca_anlysis_dir + "energy_VS_PCs.png")
+plt.close(fig1)
 
-            ax.scatter(std_selected_data,param_feature,
-                           color=colors[tag],
-                           alpha=0.6, 
-                           s=25)
-            model = np.polyfit(std_selected_data, param_feature, 1)
-            slope = model[0]
-            slopes.append(slope)
-            # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.03:
-                linestyle = '-'
-                linewidth = 2
-            else:
-                linestyle = ':'
-                linewidth = 1
-            predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
-            ax.plot(predict_range, 
-                        predicted(predict_range), 
-                        color=colors[tag], 
-                        linewidth=linewidth,
-                        linestyle=linestyle)
-        # if j == 0:
-        #     ax.set_ylabel(f'Row {i+1}')
-        # if i == 3:
-        #     ax.set_xlabel(f'Feature {4*i+j+1}')
-
+# # 完成第二个图的保存和关闭
+# plt.figure(fig2.number)
 # plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.3))
-plt.tight_layout()
-plt.subplots_adjust(top=0.9)
+# plt.tight_layout()
+# plt.subplots_adjust(top=0.9)
+# plt.savefig(pca_anlysis_dir + "y_prob_vs_all_srvf_pca_train_res.png")
+# plt.close(fig2)
 
-plt.savefig(pca_anlysis_dir+"energy_VS_PCs.png")
-plt.close()
+# 分别输出两个图的统计数据
+print("energy平均斜率：", np.mean(np.abs(slopes_energy)))
+print("energy斜率标准差：", np.std(slopes_energy))
+slopes_energy = np.array(slopes_energy).reshape(-1,4)
+print("slopes_energy.shape:", slopes_energy.shape)
+for i, tag in enumerate(param_dict.keys()):
+    print(tag, "的支配性PC是:", np.max(np.abs(slopes_energy[:,i])), np.argmax(np.abs(slopes_energy[:,i])), "其平均绝对斜率是:", np.mean(np.abs(slopes_energy[:,i])))
 
-print ("energy平均斜率：",np.mean(np.abs(slopes)))
-print ("energy斜率标准差：",np.std(slopes))
-slopes = np.array(slopes).reshape(-1,4)
-print ("slopes.shape:", slopes.shape)
-for i , tag in enumerate(param_dict.keys()):
-    print (tag, "的支配性PC是:", np.max(np.abs(slopes[:,i])), np.argmax(np.abs(slopes[:,i])), "其平均绝对斜率是:",np.mean(np.abs(slopes[:,i])))
-
-
-slopes = []
-# y_prob 和 all_srvf_pca.train_res 的相关性分析
-fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(15, 15))
-# 遍历all_srvf_pca.train_res的每一个特征
-for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
-    for j in range(Multi_plot_rows):
-        ax = axes[i][j]
-        ax.tick_params(axis='both', which='major', labelsize=8)
-        for tag in param_dict.keys():
-            indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
-            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
-            # std_selected_data = selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j])
-            std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
-            # prob_feature= np.max(y_prob[indices, :], axis=1)
-            # prob_feature = y_prob[indices, ] # [数据的tag,分数的tag]
-            # 初始化一个和y_prob形状相同的数组
-            difference = np.zeros_like(y_prob[indices, :])
-
-            # 对于y_prob的每一行
-            for m, row in enumerate(y_prob[indices, :]):
-                max_val = np.max(row)  # 找到最大值
-                difference[m] = max_val - row  # 从最大值中减去每个元素
-
-            # 如果你只关心每个样本的最大差异，可以这样得到
-            prob_feature = np.max(difference, axis=1)
-            # print ("prob_feature.shape:", prob_feature.shape)
-            ax.scatter(std_selected_data,prob_feature,
-                           color=colors[tag],
-                           alpha=0.6, 
-                           s=25)
-            model = np.polyfit(std_selected_data, prob_feature, 1)
-            slope = model[0]
-            slopes.append(slope)
-            # print (tag," PC", 4*i+j, " slope:", slope)
-            if abs(slope) > 0.02:
-                linestyle = '-'
-                linewidth = 2
-            else:
-                linestyle = ':'
-                linewidth = 1
-            predicted = np.poly1d(model)
-            predict_range = np.linspace(np.min(std_selected_data), np.max(std_selected_data), 10)
-            ax.plot(predict_range, 
-                        predicted(predict_range), 
-                        color=colors[tag], 
-                        linewidth=linewidth,
-                        linestyle=linestyle)
-
-
-plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.3))
-plt.tight_layout()
-plt.subplots_adjust(top=0.9)
-plt.savefig(pca_anlysis_dir+"y_prob_vs_all_srvf_pca_train_res.png")
-plt.close()
-print ("score平均斜率：",np.mean(np.abs(slopes)))
-print ("score斜率标准差：",np.std(slopes))
-slopes = np.array(slopes).reshape(-1,4)
-print ("slopes.shape:", slopes.shape)
-for i , tag in enumerate(param_dict.keys()):
-    print (tag, "的支配性PC是:", np.max(np.abs(slopes[:,i])), np.argmax(np.abs(slopes[:,i])), "其平均绝对斜率是:",np.mean(np.abs(slopes[:,i])))
-
-
-fig, axes = plt.subplots((PCA_N_COMPONENTS//8), 4, figsize=(15, 15))
-for i in  range(PCA_N_COMPONENTS//8):
-    for j in range(4):
-        ax = axes[i][j]
-        for tag in param_dict.keys():
-            indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
-            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])
-            # prob_feature= np.max(y_prob[indices, :], axis=1)
-            ax.scatter(selected_data[:,8*i+j],selected_data[:,8*i+j+1],color=colors[tag],alpha=0.6,label=tag)
-
-# ax.set_xlabel('PC1')
-# ax.set_ylabel('PC2')
-# ax.set_title('PC1 VS PC2')
-# ax.legend()
-plt.savefig(pca_anlysis_dir+"PC1_VS_PC2.png")
-plt.close()
-
+# print("score平均斜率：", np.mean(np.abs(slopes_score)))
+# print("score斜率标准差：", np.std(slopes_score))
+# slopes_score = np.array(slopes_score).reshape(-1,4)
+# print("slopes_score.shape:", slopes_score.shape)
+# for i, tag in enumerate(param_dict.keys()):
+#     print(tag, "的支配性PC是:", np.max(np.abs(slopes_score[:,i])), np.argmax(np.abs(slopes_score[:,i])), "其平均绝对斜率是:", np.mean(np.abs(slopes_score[:,i])))
 
 ####################为SRVF PCA绘制violinplot####################
 # 创建一个DataFrame
@@ -898,12 +855,6 @@ plt.close()
 
 
 
-
-
-
-
-log.write("PCA standardization: {}\n".format(PCA_STANDARDIZATION))
-print ("所有PCA的标准化状态：", PCA_STANDARDIZATION)
 ###########################################
 
 ##########################################
