@@ -68,8 +68,9 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import roc_curve, auc
 from sklearn.preprocessing import label_binarize
 from sklearn.ensemble import RandomForestClassifier
+import matplotlib.colors as mcolors
 
-
+from scipy.spatial import Delaunay
 
 warnings.filterwarnings("ignore")
 
@@ -449,7 +450,6 @@ for i in range(len(Curvatures)):
         param_group[i] = torsion_param_group[i] + 'LC'
 
 
-import matplotlib.pyplot as plt
 from collections import defaultdict
 
 # 给定的代码
@@ -492,12 +492,6 @@ for label in param_group_unique_labels:
     # 将选择的数据转换为numpy array并保存到字典中
     param_dict[label]['Torsion'] = np.array(selected_data_torsion)
     param_dict[label]['Curvature'] = np.array(selected_data_curvature)
-
-
-
-
-
-
 
 
 
@@ -545,6 +539,7 @@ y = []  # 用于存储对应的标签
 # print ("quad_param_group:", quad_param_group)
 # print ("quad_param_group.shape:", quad_param_group.shape)
 # print ("Procrustes_curves.shape:", Procrustes_curves.shape)
+
 for label in param_group_unique_labels:
     print ("label:", label)
     torsions = param_dict[label]['Torsion']
@@ -564,6 +559,7 @@ for label in param_group_unique_labels:
     # X.extend(np.hstack([curvatures, torsions]))
     X.extend(Procrustes_curves[np.array(quad_param_group) == label].reshape(len(Procrustes_curves[np.array(quad_param_group) == label]), -1))
     y.extend([label] * len(energies))
+
 
 # 定义颜色映射
 colors = {
@@ -647,14 +643,14 @@ for label in param_group_unique_labels:
                label=label, 
                alpha=0.6, 
                s=sizes_for_label*sizes_for_label*75)  
-    for i in range(len(curvatures)):
-        if param_group[i] in ["LMLSHC", "LMHSHC"]:
-            fontsize=6
-        else:
-            fontsize=4
-        ax.annotate(Files[i].split("/")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
-        ax.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
-        ax.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]])
+    # for i in range(len(curvatures)):
+    #     if param_group[i] in ["LMLSHC", "LMHSHC"]:
+    #         fontsize=6
+    #     else:
+    #         fontsize=4
+    #     ax.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
+    #     ax.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
+    #     ax.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]])
         
     
     # 更新索引
@@ -673,6 +669,70 @@ slopes_energy = []
 slopes_score = []
 
 print("(PCA_N_COMPONENTS//4):", (PCA_N_COMPONENTS//4))
+
+
+
+
+
+
+from scipy.ndimage import gaussian_filter
+from scipy.interpolate import griddata
+
+
+# 创建一个新的图形
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+firstpc = 1
+secondpc = 4
+
+# 计算能量
+en = []
+for c, v in zip(Curvatures, Torsions):
+    en_c, en_v = compute_geometry_param_energy(c, v)
+    en.append(en_c/en_v)
+
+x = all_srvf_pca.train_res[:, firstpc-1]
+y = all_srvf_pca.train_res[:, secondpc-1]
+z = en
+
+# 数据滤波
+x = gaussian_filter(x, sigma=1)
+y = gaussian_filter(y, sigma=1)
+z = gaussian_filter(z, sigma=1)
+
+# 创建网格数据
+xi = np.linspace(min(x), max(x), len(x))
+yi = np.linspace(min(y), max(y), len(y))
+xi, yi = np.meshgrid(xi, yi)
+
+# 使用线性插值
+zi = griddata((x, y), z, (xi, yi), method='linear')
+
+# 使用plot_surface绘制平滑的曲面
+ax.plot_surface(xi, yi, zi, cmap='binary', linewidth=0.2, antialiased=True)
+
+# 设置轴标签
+ax.set_xlabel('PC{}'.format(firstpc))
+ax.set_ylabel('PC{}'.format(secondpc))
+ax.set_zlabel('Energy')
+
+plt.savefig(pca_anlysis_dir+"PC{}_VS_PC().png".format(firstpc, secondpc))
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 绘制第一个图
 fig1, axes1 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
@@ -697,14 +757,14 @@ for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
             
             # 第一个图的数据和绘制
             param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
-            print ("param_feature.shape:", param_feature.shape)
-            print ("selected_data.shape:", selected_data.shape)
+            # print ("param_feature.shape:", param_feature.shape)
+            # print ("selected_data.shape:", selected_data.shape)
             ax1.scatter(selected_data, param_feature, color=colors[tag], alpha=0.6, s=25)
             model_energy = np.polyfit(selected_data, param_feature, 1)
             slope_energy = model_energy[0]
             slopes_energy.append(slope_energy)
-            linestyle_energy = '-' if abs(slope_energy) > 0.03 else ':'
-            linewidth_energy = 2 if abs(slope_energy) > 0.03 else 1
+            linestyle_energy = '-' if abs(slope_energy) > 0.01 else ':'
+            linewidth_energy = 2 if abs(slope_energy) > 0.01 else 1
             predicted_energy = np.poly1d(model_energy)
             predict_range_energy = np.linspace(np.min(selected_data), np.max(selected_data), 10)
             ax1.plot(predict_range_energy, predicted_energy(predict_range_energy), color=colors[tag], linewidth=linewidth_energy, linestyle=linestyle_energy)
@@ -772,7 +832,7 @@ plt.savefig(pca_anlysis_dir+"srvfPCA_total_Violinplot.png")
 plt.close()
 
 ####################为SRVF PCA和geom param做sensitivity analysis####################
-import matplotlib.colors as mcolors
+
 
 results = []
 max_pcs_curvatures = {}
@@ -792,8 +852,10 @@ for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', To
             X = all_srvf_pca.train_res[:, pc].reshape(-1, 1)
 
             model = LinearRegression().fit(X, y)
-            coefficients[pc] = model.coef_[0][0]
-
+            coefficients[pc] = np.abs(model.coef_[0][0])*np.std(all_srvf_pca.train_res[:, pc] # 修正：该处之前是model.coef_[0][0]，乘上对应PC的标准差后得到的是大概的param的变化范围（被影响的程度），这个变动对所有landmark生效
+                                                        )
+        # 将coefficient_values分解为单独的列
+        
         # 如果是Curvatures，使用绝对值来找出受影响最大的自变量
         if variable_name == 'Curvatures':
             max_pc = max(coefficients, key=lambda k: abs(coefficients[k]))
@@ -807,7 +869,7 @@ for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', To
         # 计算所有系数的均值和标准差
         mean_coefficient = np.mean(coefficient_values)
         std_coefficient = np.std(coefficient_values)
-
+        coefficient_columns = {f'Coefficient_Value_{j+1}': coefficient_values[j] for j in range(len(coefficient_values))}
         # 将结果添加到列表中
         results.append({
             'Variable_Type': variable_name,
@@ -815,7 +877,8 @@ for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', To
             'Most_Influential_PCA_Component': max_pc,
             'Max_Coefficient': max_coefficient,
             'Mean_Coefficient': mean_coefficient,
-            'Std_Coefficient': std_coefficient
+            'Std_Coefficient': std_coefficient,
+            **coefficient_columns  # 使用**来展开字典并将其合并到主字典中
         })
 
         # 根据变量类型存储每个因变量受影响最大的自变量编号
@@ -827,29 +890,72 @@ for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', To
 
 # 将结果转换为DataFrame
 results_df = pd.DataFrame(results)
-
+# 从results_df中删除'coefficient_values'列
+# results_df = results_df.drop(columns=['coefficient_values'])
 # 将DataFrame输出为CSV文件
 results_df.to_csv(bkup_dir+'regression_results.csv', index=False)
+
+
+
+# print (results_df['Mean_Coefficient'].shape)
+#print (np.std(all_srvf_pca.train_res,axis=0).shape) # 需要得到16个
+avg_curvatures = 16*results_df['Mean_Coefficient'][:61] # * np.mean(np.std(all_srvf_pca.train_res,axis=0))
+print ("avg_curvatures.shape:", avg_curvatures.shape)
+avg_torsions = 16*results_df['Mean_Coefficient'][61:] # * np.mean(np.std(all_srvf_pca.train_res,axis=0))
+print ("avg_torsions.shape:", avg_torsions.shape)
 
 # 绘图
 fig_x = 1
 fig_shape = FrechetMean[:, fig_x][3:]
+# fig_shape = Procrustes_curves[7, :, fig_x][3:]
 print("fig_shape.shape", fig_shape.shape)
 colors = list(mcolors.TABLEAU_COLORS.keys())  # 获取一组颜色
-plt.figure(figsize=(10, 5))
-plt.plot(fig_shape, marker='o', linestyle='-', color="dimgray", label='Frechet Mean')
 
+fig = plt.figure(figsize=(13, 6),dpi=300)
+# 定义GridSpec的行和列，然后设置行的高度比例。例如，这里我们设置第一个子图为3，第二个为1，所以第一个子图的高度是第二个的三倍。
+gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
+# 使用GridSpec创建子图
+ax = fig.add_subplot(gs[0])
+ax2 = fig.add_subplot(gs[1])
+ax.plot(fig_shape, marker='o', linestyle='-', color="dimgray", label='Frechet Mean')
+# ax.axvspan(0, 6, facecolor='dimgray', alpha=0.3)
+# ax.axvspan(6, 25, facecolor='dimgray', alpha=0.2)
+# ax.axvspan(25, 44, facecolor='dimgray', alpha=0.1)
+# ax.axvspan(44, 54, facecolor='dimgray', alpha=0.2)
+# ax.axvspan(54, 60, facecolor='dimgray', alpha=0.3)
+ax.set_facecolor('whitesmoke')
+# 添加barplot
+indices = np.arange(len(fig_shape))
+bar_width = 0.35
+# avg_curvatures = [np.mean(Curvatures[i]) for i in indices]
+# avg_torsions = [np.mean(Torsions[i]) for i in indices]
+ax2.bar(indices - bar_width/2, avg_curvatures, bar_width, label='Average Curvature', alpha=0.99, color="dimgray", edgecolor='k')
+ax2.bar(indices + bar_width/2, np.abs(avg_torsions), bar_width, label='Average Torsion', alpha=0.99, color="silver",edgecolor='k')
+max_coeffs_curvatures = [entry['Max_Coefficient'] for entry in results if entry['Variable_Type'] == 'Curvatures']
+max_coeffs_torsions = [entry['Max_Coefficient'] for entry in results if entry['Variable_Type'] == 'Torsions']
+# 在已有的barplot上添加新的barplot
+ax2.bar(indices - bar_width/2, max_coeffs_curvatures, bar_width, label='Max Coefficient Curvature', alpha=0.7,color="coral", edgecolor='k')
+ax2.bar(indices + bar_width/2, np.abs(max_coeffs_torsions), bar_width,  label='Max Coefficient Torsion', alpha=0.7,color="royalblue",edgecolor='k')
+
+# ax2.set_ylim(-0.2,0.8)
+# ax.set_ylim(-15,7.5)
 for i in range(len(fig_shape)):
     curv_pc = max_pcs_curvatures.get(i)
     tors_pc = max_pcs_torsions.get(i)
     if curv_pc is not None:
-        plt.text(i, fig_shape[i] + 0.35, str(curv_pc), color=colors[curv_pc % len(colors)], ha='center')
+        ax.text(i, fig_shape[i] + 0.35, str(curv_pc+1), color=colors[curv_pc % len(colors)], ha='center')
     if tors_pc is not None:
-        plt.text(i, fig_shape[i] - 0.35, str(tors_pc), color=colors[tors_pc % len(colors)], ha='center', va='top')
+        ax.text(i, fig_shape[i] - 0.35, str(tors_pc+1), color=colors[tors_pc % len(colors)], ha='center', va='top')
 
-plt.title('Frechet Mean with Influential PCA Components')
-plt.xlabel('Index')
-plt.ylabel('Mean Shape')
+# plt.title('Frechet Mean with Influential PCA Components')
+# ax.set_xlabel('Index')
+ax.set_xticks([])
+ax2.set_xlabel('Index')
+ax.set_ylabel('Mean Shape')
+ax2.set_ylabel('Geometry Parameter')
+# ax2.set_xlim(0,75)
+# ax2.legend()
+plt.tight_layout()
 plt.savefig(pca_anlysis_dir + "Frechet_Mean_with_Influential_PCA_Components.png")
 plt.close()
 

@@ -160,3 +160,43 @@ def compute_geometry_param_energy(curvature, torsion, POWER_ENG_CURVATURE=2, POW
     curvature_energy = np.mean(np.power(curvature, POWER_ENG_CURVATURE))
     torsion_energy = np.mean(np.power(torsion, POWER_ENG_TORSION))
     return curvature_energy,torsion_energy
+
+# def compute_geometry_param_energy(curvature, torsion, POWER_ENG_CURVATURE=2, POWER_ENG_TORSION=2):
+#      """
+#      这个函数并未被使用，会让torsion失去分辨力。
+#      """
+#     # 使用简单的前向差分核
+#     kernel = [1, -1]
+    
+#     # 对曲率和扭率应用卷积
+#     conv_curvature = np.convolve(curvature, kernel, mode='valid')
+#     conv_torsion = np.convolve(torsion, kernel, mode='valid')
+    
+#     # 计算卷积后的能量
+#     curvature_energy = np.mean(np.power(conv_curvature, POWER_ENG_CURVATURE))
+#     torsion_energy = np.mean(np.power(conv_torsion, POWER_ENG_TORSION))
+    
+#     return curvature_energy, torsion_energy
+
+
+def compute_geometry_param_energy_segment(curvature, torsion, POWER_ENG_CURVATURE=2, POWER_ENG_TORSION=2):
+    """
+    这个函数并未被使用。它计算曲率和扭率的能量，但是将曲线分成了几个段，然后计算每个段的能量。
+    """
+    #  分段节点
+    nodes = [0, 6, 25, 44, 54, len(curvature)]  # 添加0和len(curvature)以确保包括所有数据点
+    # 初始化存储结果的列表
+    curvature_energies = []
+    torsion_energies = []
+
+    # 遍历每个分段
+    for i in range(len(nodes) - 1):
+        start, end = nodes[i], nodes[i+1]
+        # 计算当前分段的curvature和torsion能量
+        curvature_energy = np.mean(np.power(curvature[start:end], POWER_ENG_CURVATURE))
+        torsion_energy = np.mean(np.power(torsion[start:end], POWER_ENG_TORSION))
+        # 将结果添加到列表中
+        curvature_energies.append(curvature_energy)
+        torsion_energies.append(torsion_energy)
+
+    return curvature_energies, torsion_energies
