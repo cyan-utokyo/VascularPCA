@@ -26,7 +26,7 @@ from geomstats.geometry.discrete_curves import DiscreteCurves
 from geomstats.learning.frechet_mean import FrechetMean
 import numpy as np
 from scipy.interpolate import interp1d
-
+from sklearn.preprocessing import StandardScaler
 
 
 

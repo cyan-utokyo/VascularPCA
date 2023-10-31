@@ -30,7 +30,7 @@ from sklearn.decomposition import PCA
 from scipy.stats import gaussian_kde, multivariate_normal, kde, entropy
 from scipy.spatial.distance import jensenshannon
 import seaborn as sns
-
+from sklearn.preprocessing import StandardScaler
 
 def plot_variance(pca, train_res, test_res, savepath):
     styles = [{'linestyle': '-', 'linewidth': 2},  # 实线，线宽1
@@ -77,7 +77,7 @@ def plot_variance(pca, train_res, test_res, savepath):
         #     box_data.append([])
         #     labels.append('')
         #     colors.append('none')  # 'none' means transparent
-    bp = ax2.boxplot(box_data, patch_artist=True, labels=labels)
+    bp = ax2.boxplot(box_data, patch_artist=True, labels=labels,showfliers=False)
     for patch, color in zip(bp['boxes'], colors):
         patch.set_facecolor(color)
     ax2.set_ylabel('Loadings')
@@ -127,9 +127,10 @@ class PCAHandler:
         self.test_data = test_data
         self.train_mean = np.mean(train_data,axis=0)
         self.train_std = np.std(train_data,axis=0)
+        self.standardscaler = StandardScaler()
+        self.standardscaler.fit(train_data)
         self.train_res = None
         self.pca = None
-        
         self.standardization = standardization
         self.n_components = n_components
         self.zero_stds_original = None
@@ -152,20 +153,6 @@ class PCAHandler:
         # test_kde = gaussian_kde(self.test_res.T)
         
         
-    
-    def compute_train_test_js_divergence(self): 
-        # 计算train和test的Jensen-Shannon散度
-        train_kde = self.train_kde
-        test_kde = self.test_kde
-        # 注意，需要将概率密度函数的结果转换为概率分布
-        train_prob = train_kde.pdf(self.train_res.T)
-        train_prob /= train_prob.sum()
-        test_prob = test_kde.pdf(self.train_res.T)
-        test_prob /= test_prob.sum()
-        # 计算并返回JS散度
-        train_test_js_divergence = jensenshannon(train_prob, test_prob)**2  # Square the result to get the divergence
-        return train_test_js_divergence
-
     def visualize_results(self, save_path):
         # Visualization pca的各种性质，如主成分的形状，贡献度，train和test的分布情况
         plot_variance(self.pca, self.train_res, self.test_res, save_path)
@@ -184,7 +171,7 @@ class PCAHandler:
 
     def PCA_training_and_test(self):
         pca = PCA(n_components=self.n_components)
-        if self.standardization ==1:
+        if self.standardization == 1:
             # self.train_data = 
             self.train_res = pca.fit_transform(zscore(self.train_data))
             if self.test_data is not None:
