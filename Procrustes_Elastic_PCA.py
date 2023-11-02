@@ -191,6 +191,7 @@ Procrustes_curves = preprocess_curves
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
+    print ("SRVF length:", measure_length(Procs_srvf_curves[i]))
 
 makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
@@ -507,12 +508,13 @@ Synthetic_energy = []
 Synthetic_srvf = []
 Synthetic_label = []
 synthetic_dir = mkdir(bkup_dir, "synthetic")
-
+synthetic_param_dict = {label: {} for label in param_group_unique_labels}
 for tag in param_dict.keys():
+    Synthetic_energy_inner = []
     indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
     group_feature = np.array([all_srvf_pca.train_res[idx] for idx in indices])
     # print ("group_feature.shape:", group_feature.shape)
-    group_kde = fit_kde(group_feature)
+    group_kde = fit_kde(group_feature, bandwidth=1.5)
     sample_num = 1000
     synthetic_feature = group_kde.sample(sample_num)
     synthetic_inverse = all_srvf_pca.inverse_transform_from_loadings(synthetic_feature).reshape(sample_num, -1, 3)
@@ -525,15 +527,18 @@ for tag in param_dict.keys():
         Synthetic_srvf.append(calculate_srvf(Procrustes_Synthetic[i]))
     Synthetic_data.extend(Procrustes_Synthetic)
     Synthetic_label.extend([tag] * sample_num)
-
     synthetic_curvatures,synthetic_torsions = compute_synthetic_curvature_and_torsion(Procrustes_Synthetic)
-    # print ("synthetic_curvatures.shape:", synthetic_curvatures.shape)
-    # print ("synthetic_torsions.shape:", synthetic_torsions.shape)
+    synthetic_param_dict[tag]['Torsion'] = synthetic_torsions
+    synthetic_param_dict[tag]['Curvature'] = synthetic_curvatures
     for torsion, curvature in zip(synthetic_torsions, synthetic_curvatures):
         c_energy, t_energy = compute_geometry_param_energy(curvature,torsion)
         # print ("c_energy:", c_energy, "t_energy:", t_energy)
-        Synthetic_energy.append([c_energy, t_energy])
+        Synthetic_energy_inner.append([c_energy, t_energy])
     # Synthetic_X.extend(np.hstack([synthetic_curvatures, synthetic_torsions]))
+    Synthetic_energy.extend(Synthetic_energy_inner)
+    print ("synthetic_curvatures.shape:", np.array(synthetic_curvatures).shape)
+    print (tag, "synthetic_mean", np.mean(synthetic_curvatures))
+    synthetic_param_dict[tag]['Energy'] = np.array(Synthetic_energy_inner)
     Synthetic_X.extend(Procrustes_Synthetic.reshape(sample_num, -1))
     Synthetic_y.extend([tag] * sample_num)
     makeVtkFile(synthetic_dir+"synthetic_"+tag+".vtk", Procrustes_Synthetic[0],[],[] )
@@ -551,7 +556,6 @@ print ("Synthetic_srvf.shape:", Synthetic_srvf.shape)
 synthetiec_slope, synthetiec_intercept, synthetiec_r_value, synthetiec_p_value, synthetiec_std_err = stats.linregress(Synthetic_energy[0], Synthetic_energy[1])
 print ('synthetic Fit: y = {:.2f} + {:.2f}x'.format(synthetiec_intercept, synthetiec_slope))
 log.write("synthetic Fit: y = {:.2f} + {:.2f}x\n".format(synthetiec_intercept, synthetiec_slope))
-
 
 # 对于每个标签，为其下的所有数据计算能量
 # 准备数据
@@ -576,8 +580,6 @@ for label in param_group_unique_labels:
     
     # 将计算的能量值存储在字典中
     param_dict[label]['Energy'] = energies
-    # X.extend(energies)
-    # X.extend(np.hstack([curvatures, torsions]))
     X.extend(Procrustes_curves[np.array(quad_param_group) == label].reshape(len(Procrustes_curves[np.array(quad_param_group) == label]), -1))
     y.extend([label] * len(energies))
 
@@ -647,12 +649,12 @@ for label in param_group_unique_labels:
                alpha=0.9, 
                #s=sizes_for_label*sizes_for_label*75 
                ) 
-    for i in range(len(curvatures)):
-        fontsize = 5
-        ax1.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
-        ax1.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
-        ax1.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]] )
-    # 更新索引
+    # for i in range(len(curvatures)):
+    #     fontsize = 5
+    #     ax1.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
+    #     ax1.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
+    #     ax1.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]] )
+    # # 更新索引
     index += len(energies)
 total_curvature_energy = np.array(total_curvature_energy)
 total_torsion_energy = np.array(total_torsion_energy)
@@ -714,14 +716,19 @@ print ("Synthetic Procrustes curves length:", measure_length(Synthetic_data[0]))
 brava_features = synthetic_srvf_pca.pca.transform(normalized_Procs_srvf_curves)
 
 
-fig = plt.figure(figsize=(15, 15))
+fig = plt.figure(figsize=(7, 2))
 ax = fig.add_subplot(111)
-ax.plot(all_srvf_pca.train_mean,label="all_srvf_pca.train_mean")
-ax.plot(all_srvf_pca.train_std,label="all_srvf_pca.train_std")
-ax.plot(synthetic_srvf_pca.train_mean,label="synthetic_srvf_pca.train_mean")
-ax.plot(synthetic_srvf_pca.train_std,label="synthetic_srvf_pca.train_std")
+brava_mean_x = all_srvf_pca.train_mean[::3]
+brava_std_x = all_srvf_pca.train_std[::3]
+synthetic_mean_x = synthetic_srvf_pca.train_mean[::3]
+synthetic_std_x = synthetic_srvf_pca.train_std[::3]
+ax.plot(brava_mean_x,label="all_srvf_pca.train_mean",color="red")
+ax.fill_between(np.arange(len(brava_mean_x)), brava_mean_x-brava_std_x, brava_mean_x+brava_std_x, alpha=0.2,color="red")
+ax.plot(synthetic_mean_x,label="synthetic_srvf_pca.train_mean",color="k")
+ax.fill_between(np.arange(len(synthetic_mean_x)), synthetic_mean_x-synthetic_std_x, synthetic_mean_x+synthetic_std_x, alpha=0.2,color="k")
 plt.legend()
-plt.show()
+plt.savefig(pca_anlysis_dir + "syntheticsrvf_pca_plot_mean_std.png")
+plt.close()
 
 # plt.figure(figsize=(15, 15))
 # plt.plot(synthetic_srvf_pca.train_mean,label="synthetic_srvf_pca.train_mean")
@@ -739,10 +746,14 @@ plt.show()
 
 fig = plt.figure(figsize=(15, 15))
 ax = fig.add_subplot(111)
-ax.scatter(synthetic_srvf_pca.train_res[:1000,0], synthetic_srvf_pca.train_res[:1000,1], color="r", alpha=0.1, s=25)
-ax.scatter(synthetic_srvf_pca.train_res[1000:2000,0], synthetic_srvf_pca.train_res[1000:2000,1], color="b", alpha=0.1, s=25)
-ax.scatter(synthetic_srvf_pca.train_res[2000:3000,0], synthetic_srvf_pca.train_res[2000:3000,1], color="g", alpha=0.1, s=25)
-ax.scatter(synthetic_srvf_pca.train_res[3000:4000,0], synthetic_srvf_pca.train_res[3000:4000,1], color="orange", alpha=0.1, s=25)
+for label in param_group_unique_labels:
+    ax.scatter(synthetic_srvf_pca.train_res[np.array(Synthetic_label) == label][:,0], 
+               synthetic_srvf_pca.train_res[np.array(Synthetic_label) == label][:,1],
+               color=colors[label], 
+               label=label, 
+               alpha=0.4, 
+               #s=sizes_for_label*sizes_for_label*75 
+               )
 for label in param_group_unique_labels:
     ax.scatter(brava_features[np.array(quad_param_group) == label][:,0], brava_features[np.array(quad_param_group) == label][:,1],
                color=colors[label], 
@@ -757,37 +768,44 @@ plt.close()
 #############################################
 # PC 与 energy 的线性关系
 
+
 slopes_energy = []
 slopes_score = []
 # 绘制第一个图
 fig1, axes1 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
-
+fig2, axes2 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
 for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
     for j in range(Multi_plot_rows):
         ax1 = axes1[i][j]
         ax1.tick_params(axis='both', which='major', labelsize=8)
-
-        for tag in param_dict.keys():
-            indices = [idx for idx, label in enumerate(quad_param_group) if label == tag]
-            selected_data = np.array([all_srvf_pca.train_res[idx] for idx in indices])[:,Multi_plot_rows*i+j]
-            # std_selected_data = np.tanh(selected_data[:,Multi_plot_rows*i+j]/np.std(selected_data[:,Multi_plot_rows*i+j]))
-            param_feature = np.array(param_dict[tag]["Energy"])[:,0]/np.array(param_dict[tag]["Energy"])[:,1]
-            # print ("param_feature.shape:", param_feature.shape)
-            # print ("selected_data.shape:", selected_data.shape)
-            ax1.scatter(selected_data, param_feature, color=colors[tag], alpha=0.6, s=25)
-            model_energy = np.polyfit(selected_data, param_feature, 1)
-            slope_energy = model_energy[0]
-            slopes_energy.append(slope_energy)
-            linestyle_energy = '-' if abs(slope_energy) > 0.01 else ':'
-            linewidth_energy = 2 if abs(slope_energy) > 0.01 else 1
-            predicted_energy = np.poly1d(model_energy)
-            predict_range_energy = np.linspace(np.min(selected_data), np.max(selected_data), 10)
-            ax1.plot(predict_range_energy, predicted_energy(predict_range_energy), color=colors[tag], linewidth=linewidth_energy, linestyle=linestyle_energy)
-plt.figure(fig1.number)
-plt.tight_layout()
-plt.subplots_adjust(top=0.9)
-plt.savefig(pca_anlysis_dir + "energy_VS_PCs.png")
+        ax2 = axes2[i][j]
+        ax2.tick_params(axis='both', which='major', labelsize=8)
+        for ax,PCAmodel,quad_label,p_dict in zip([ax1,ax2],[all_srvf_pca,synthetic_srvf_pca],[quad_param_group,Synthetic_label],[param_dict,synthetic_param_dict]):
+            for tag in param_dict.keys():
+                indices = [idx for idx, label in enumerate(quad_label) if label == tag]
+                selected_data = np.array([PCAmodel.train_res[idx] for idx in indices])[:,Multi_plot_rows*i+j]
+                param_feature = np.array(p_dict[tag]["Energy"])[:,0]/np.array(p_dict[tag]["Energy"])[:,1]
+                print ("selected_data.shape:", selected_data.shape)
+                print ("param_feature.shape:", param_feature.shape)
+                ax.scatter(selected_data, param_feature, color=colors[tag], alpha=0.6, s=25)
+                model_energy = np.polyfit(selected_data, param_feature, 1)
+                slope_energy = model_energy[0]
+                slopes_energy.append(slope_energy)
+                linestyle_energy = '-' if abs(slope_energy) > 0.01 else ':'
+                linewidth_energy = 2 if abs(slope_energy) > 0.01 else 1
+                predicted_energy = np.poly1d(model_energy)
+                predict_range_energy = np.linspace(np.min(selected_data), np.max(selected_data), 10)
+                ax.plot(predict_range_energy, predicted_energy(predict_range_energy), 
+                         color=colors[tag], 
+                         linewidth=linewidth_energy, 
+                         linestyle=linestyle_energy)
+# plt.figure(fig1.number)
+# plt.tight_layout()
+# plt.subplots_adjust(top=0.9)
+fig1.savefig(pca_anlysis_dir + "energy_VS_PCs_all_srvf.png")
+fig2.savefig(pca_anlysis_dir + "energy_VS_PCs_synthetic_srvf.png")
 plt.close(fig1)
+plt.close(fig2)
 
 print("energy平均斜率：", np.mean(np.abs(slopes_energy)))
 print("energy斜率标准差：", np.std(slopes_energy))
