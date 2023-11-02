@@ -94,6 +94,12 @@ def calculate_srvf(curve):
     srvf = np.sqrt(magnitude + eps)[:, np.newaxis] * derivative / (magnitude[:, np.newaxis] + eps)
     return srvf
 
+def srvf_length(srvf):
+    # 计算每个向量的长度并求和
+    length = np.linalg.norm(srvf, axis=1)
+    total_length = np.sum(length) / len(length)  # 计算平均长度
+    return total_length
+
 def inverse_srvf(srvf, initial_point):
     # print ("calling inverse_srvf, magnitude = np.linalg.norm(srvf, axis=1)")
     # 计算速度

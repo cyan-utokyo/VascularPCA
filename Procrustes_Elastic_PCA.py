@@ -73,7 +73,10 @@ from scipy.ndimage import gaussian_filter
 from scipy.interpolate import griddata
 from scipy.spatial import Delaunay
 from collections import defaultdict
-
+from sklearn.preprocessing import StandardScaler
+from sklearn.covariance import EmpiricalCovariance
+from scipy.stats import pearsonr
+import networkx as nx  # 导入NetworkX库
 warnings.filterwarnings("ignore")
 
 PCA_N_COMPONENTS = 16
@@ -187,11 +190,14 @@ Procrustes_curves = preprocess_curves
 # shape of Curvatures: (87, 61)
 # interpolate Curvatures to (87, 64)
 
+
+
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
     print ("SRVF length:", measure_length(Procs_srvf_curves[i]))
+    print ("SRVF length by GPT4:", srvf_length(Procs_srvf_curves[i]))
 
 makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
@@ -584,6 +590,167 @@ for label in param_group_unique_labels:
     y.extend([label] * len(energies))
 
 
+
+def draw_covariance_heatmap(data, savepath):
+    """
+    使用全部数据绘制协方差矩阵的热图。
+    
+    :param data: 形状为(m, n)的数据集，其中m是数据点的数量，n是特征的数量。
+    :param savepath: 图片保存路径。
+    """
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(data)
+    
+    # 计算协方差矩阵
+    cov_matrix = EmpiricalCovariance().fit(data_scaled).covariance_
+
+    # 绘制热图
+    plt.figure(figsize=(8, 8), dpi=300)
+    sns.heatmap(cov_matrix, annot=False, cmap='viridis')
+    plt.title("Covariance Matrix Heatmap")
+    plt.tight_layout()
+    plt.savefig(savepath)
+    plt.close()
+
+
+def detect_linearly_related_groups(data, sample_size, correlation_threshold=0.95):
+    """
+    从数据集中挑选特定数量的数据点，计算协方差矩阵，检测并在结束时输出线性近似相关的团的总结。
+
+    :param data: 形状为(m, n)的数据集，其中m是数据点的数量，n是特征的数量。
+    :param sample_size: 要从数据中随机选取的样本数量。
+    :param correlation_threshold: 设定的相关系数阈值。
+    """
+    scaler = StandardScaler()
+    data_scaled = scaler.fit_transform(data)
+    
+    m, n = data.shape
+    connected_components_summary = []
+
+    # 随机选择指定数量的数据点
+    selected_indices = np.random.choice(m, sample_size, replace=False)
+    selected_data = data_scaled[selected_indices]
+    
+    # 创建图来表示行之间的近似线性关系
+    G = nx.Graph()
+    for row_i in range(n):
+        G.add_node(row_i)
+        for row_j in range(row_i + 1, n):
+            corr, _ = pearsonr(selected_data[:, row_i], selected_data[:, row_j])
+            if abs(corr) > correlation_threshold:
+                G.add_edge(row_i, row_j)
+    
+    # 找到图中的所有连通分量（即线性近似相关的团或簇）
+    connected_components = list(nx.connected_components(G))
+
+    # 收集连通分量的信息以备最后输出
+    if connected_components:
+        connected_components_summary.extend(connected_components)
+
+    # 在所有操作执行完后打印总结
+    return connected_components_summary
+
+def repeated_detection(data, sample_size, repetitions, correlation_threshold=0.95):
+    """
+    多次执行 detect_linearly_related_groups 函数，并对结果进行统计。
+
+    :param data: 形状为(m, n)的数据集，其中m是数据点的数量，n是特征的数量。
+    :param sample_size: 要从数据中随机选取的样本数量。
+    :param repetitions: 执行 detect_linearly_related_groups 函数的次数。
+    :param correlation_threshold: 设定的相关系数阈值。
+    :return: 每次执行的统计结果。
+    """
+    overall_summary = []
+
+    for _ in range(repetitions):
+        summary = detect_linearly_related_groups(data, sample_size, correlation_threshold)
+        overall_summary.extend(summary)
+
+    # 统计结果
+    results_statistics = {}
+    for component in overall_summary:
+        if len(component) > 2:  # 只考虑长度大于2的组件
+            component = tuple(sorted(component))  # 对组件进行排序以保证一致性
+            if component in results_statistics:
+                results_statistics[component] += 1
+            else:
+                results_statistics[component] = 1
+
+    # 只保留出现次数至少为重复次数一半的组件
+    half_repetitions = repetitions // 2
+    filtered_results = {k: v for k, v in results_statistics.items() if v > half_repetitions}
+
+    # 按出现次数排序
+    sorted_results = dict(sorted(filtered_results.items(), key=lambda item: item[1], reverse=True))
+
+    return sorted_results
+
+# 举例使用
+# data = ... # 您的数据集
+# sample_size = ... # 您希望从数据中选择的样本大小
+# repetitions = ... # 您想要重复执行函数的次数
+# statistics = repeated_detection(data, sample_size, repetitions)
+# print(statistics)
+
+
+
+riemann_dir = mkdir(bkup_dir, "riemann")
+sample_size = 50
+repetitions = 10
+# print ("Curves X")
+draw_covariance_heatmap(Procrustes_curves[:,:,0], riemann_dir+"riemann_analysis_BraVa_x.png")
+# detect_linearly_related_groups(Procrustes_curves[:,:,0], sample_size=sample_size , correlation_threshold=0.95)
+statistics = repeated_detection(Procrustes_curves[:,:,0], sample_size, repetitions)
+print ("Curves X statistics:", statistics)
+# print ("Curves Y")
+draw_covariance_heatmap(Procrustes_curves[:,:,1], riemann_dir+"riemann_analysis_BraVa_y.png")
+# detect_linearly_related_groups(Procrustes_curves[:,:,1], sample_size=sample_size , correlation_threshold=0.95)
+statistics = repeated_detection(Procrustes_curves[:,:,1], sample_size, repetitions)
+print ("Curves Y statistics:", statistics)
+# print ("Curves Z")
+draw_covariance_heatmap(Procrustes_curves[:,:,2], riemann_dir+"riemann_analysis_BraVa_z.png")
+statistics = repeated_detection(Procrustes_curves[:,:,2], sample_size, repetitions)
+print ("Curves Z statistics:", statistics)
+# detect_linearly_related_groups(Procrustes_curves[:,:,2], sample_size=sample_size , correlation_threshold=0.95)
+# print ("SRVF X")
+draw_covariance_heatmap(Procs_srvf_curves[:,:,0], riemann_dir+"riemann_analysis_SRVF_x.png")
+statistics = repeated_detection(Procs_srvf_curves[:,:,0], sample_size, repetitions)
+print ("SRVF X statistics:", statistics)
+# detect_linearly_related_groups(Procs_srvf_curves[:,:,0], sample_size=sample_size , correlation_threshold=0.95)
+# print ("SRVF Y")
+draw_covariance_heatmap(Procs_srvf_curves[:,:,1], riemann_dir+"riemann_analysis_SRVF_y.png")
+# detect_linearly_related_groups(Procs_srvf_curves[:,:,1], sample_size=sample_size , correlation_threshold=0.95)
+statistics = repeated_detection(Procs_srvf_curves[:,:,1], sample_size, repetitions)
+print ("SRVF Y statistics:", statistics)
+# print ("SRVF Z")
+draw_covariance_heatmap(Procs_srvf_curves[:,:,2], riemann_dir+"riemann_analysis_SRVF_z.png")
+# detect_linearly_related_groups(Procs_srvf_curves[:,:,2], sample_size=sample_size , correlation_threshold=0.95)
+statistics = repeated_detection(Procs_srvf_curves[:,:,2], sample_size, repetitions)
+print ("SRVF Z statistics:", statistics)
+# print ("Curvatures")
+draw_covariance_heatmap(Curvatures, riemann_dir+"riemann_analysis_curvature.png")
+# detect_linearly_related_groups(Curvatures, sample_size=sample_size , correlation_threshold=0.95)
+statistics = repeated_detection(Curvatures, sample_size, repetitions)
+print ("Curvatures statistics:", statistics)
+# print ("Torsions")
+draw_covariance_heatmap(Torsions, riemann_dir+"riemann_analysis_torsion.png")
+# detect_linearly_related_groups(Torsions, sample_size=sample_size , correlation_threshold=0.95)
+statistics = repeated_detection(Torsions, sample_size, repetitions)
+print ("Torsions statistics:", statistics)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 定义颜色映射
 colors = {
     label: plt.cm.Set3((i)/(len(param_group_unique_labels))) for i, label in enumerate(param_group_unique_labels)
@@ -785,8 +952,8 @@ for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
                 indices = [idx for idx, label in enumerate(quad_label) if label == tag]
                 selected_data = np.array([PCAmodel.train_res[idx] for idx in indices])[:,Multi_plot_rows*i+j]
                 param_feature = np.array(p_dict[tag]["Energy"])[:,0]/np.array(p_dict[tag]["Energy"])[:,1]
-                print ("selected_data.shape:", selected_data.shape)
-                print ("param_feature.shape:", param_feature.shape)
+                # print ("selected_data.shape:", selected_data.shape)
+                # print ("param_feature.shape:", param_feature.shape)
                 ax.scatter(selected_data, param_feature, color=colors[tag], alpha=0.6, s=25)
                 model_energy = np.polyfit(selected_data, param_feature, 1)
                 slope_energy = model_energy[0]

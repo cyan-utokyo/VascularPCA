@@ -1,0 +1,13 @@
+Start at: 23-11-02-16-25-57
+PCA_N_COMPONENTS:16
+PCA standardization: 1
+CCR:0.9714741098914497
+RECONSTRUCT_WITH_SRVF:1
+MEAN geo_dist_OG_to_reverse:1.1436438734361905
+STD geo_dist_OG_to_reverse:0.18704842865665527
+MEAN length_reverse:63.0
+STD length_reverse:3.8089088677317125e-15
+synthetic Fit: y = 0.02 + 0.36x
+real data Fit: y = 0.04 + 1.16x
+synthetic PCA standardization: 1
+CCR:0.9430381886469219
