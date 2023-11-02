@@ -1152,6 +1152,28 @@ plt.close()
 geodesic_dir = mkdir(bkup_dir, "geodesic")
 # FrechetMean = compute_frechet_mean(Procrustes_curves)
 
+curves = compute_geodesic_shapes_between_two_curves(Procrustes_curves[0], Procrustes_curves[14], 10)
+print ("curves.shape:", curves.shape)
+# 获取 x, y, z 坐标
+x = curves[:, :, 0]
+y = curves[:, :, 1]
+z = curves[:, :, 2]
+
+# 创建一个新的图和3D轴
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+# 使用线框图表示曲面
+# ax.plot_wireframe(x, y, z)
+ax.plot_surface(x, y, z, cmap='viridis', edgecolor='k')
+
+# 设置轴标签
+ax.set_xlabel('X Axis')
+ax.set_ylabel('Y Axis')
+ax.set_zlabel('Z Axis')
+
+# 显示图形
+plt.show()
 
 ArithmeticMean = np.mean(Procrustes_curves, axis=0)
 
