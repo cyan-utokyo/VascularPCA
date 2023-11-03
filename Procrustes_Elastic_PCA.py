@@ -52,6 +52,7 @@ from sklearn.metrics.pairwise import rbf_kernel
 from scipy.optimize import minimize
 from myvtk.mygeodesic_plot import *
 import platform
+from dtw import *
 from sklearn.svm import SVC
 from sklearn.feature_selection import RFE
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
@@ -78,6 +79,7 @@ from sklearn.covariance import EmpiricalCovariance
 from scipy.stats import pearsonr
 import networkx as nx  # 导入NetworkX库
 from myvtk.MyRiemannCov import *
+from scipy.signal import find_peaks
 
 warnings.filterwarnings("ignore")
 
@@ -135,9 +137,6 @@ unaligned_curves = np.array(unaligned_curves)
 geometry_dir = mkdir(bkup_dir, "geometry")
 Typevalues = np.array(Typevalues)
 
-if SCALETO1:
-    for i in range(len(unaligned_curves)):
-        unaligned_curves[i] = unaligned_curves[i]*(1.0/measure_length(unaligned_curves[i]))
 
 ########################################
 
@@ -147,6 +146,44 @@ for i in range(len(Files)):
     if "BH0017_R" in Files[i]:
         base_id = i
 print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
+
+
+
+
+# 寻找每个数据中的峰值
+peaks_indices = [find_peaks(curve)[0] for curve in pre_Curvatures]
+
+# 取第一个数据及其峰值作为参考
+reference = pre_Curvatures[base_id]
+reference_peaks = peaks_indices[base_id]
+
+dtw_dir = mkdir(bkup_dir, "dtw")
+# 进行DTW计算并可视化
+for i, (query, peaks) in enumerate(zip(pre_Curvatures, peaks_indices)):
+    alignment = dtw(query, reference, keep_internals=True)
+
+    # 可视化
+    
+    plt.figure(figsize=(10, 5))
+    # 绘制参考序列和峰值
+    plt.plot(reference, label=f'Reference Curve {i}')
+    plt.scatter(reference_peaks, reference[reference_peaks], color='red', zorder=3, label='Reference Peaks')
+    
+    # 绘制查询序列和峰值
+    plt.plot(query, label=f'Query Curve {i}')
+    plt.scatter(peaks, query[peaks], color='green', zorder=3, label='Query Peaks')
+
+    # 绘制对齐路径
+    for r_idx, q_idx in zip(alignment.index1, alignment.index2):
+        plt.plot([r_idx, q_idx], [reference[r_idx], query[q_idx]], 'grey', linewidth=0.5, alpha=0.5)
+
+    plt.title(f'DTW alignment between reference and query curve {i}')
+    plt.legend()
+    # plt.show()
+    plt.savefig(dtw_dir + f"dtw_{i}.png")
+    plt.close()
+
+
 
 ##################################################
 #  从这里开始是对齐。                             #
@@ -200,7 +237,7 @@ Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     Procs_srvf_curves[i] = calculate_srvf(Procrustes_curves[i])
     print ("SRVF length:", measure_length(Procs_srvf_curves[i]))
-    print ("SRVF length by GPT4:", srvf_length(Procs_srvf_curves[i]))
+    # print ("SRVF length by GPT4:", srvf_length(Procs_srvf_curves[i]))
 
 makeVtkFile(bkup_dir+"mean_curve.vtk", np.mean(Procrustes_curves,axis=0),[],[] )
 mean_srvf_inverse = inverse_srvf(np.mean(Procs_srvf_curves,axis=0),np.zeros(3))
@@ -614,62 +651,51 @@ for label in param_group_unique_labels:
 # print(statistics)
 
 
-
-riemann_dir = mkdir(bkup_dir, "riemann")
-sample_size = 50
-repetitions = 10
-# print ("Curves X")
-draw_covariance_heatmap(Procrustes_curves[:,:,0], riemann_dir+"riemann_analysis_BraVa_x.png")
-# detect_linearly_related_groups(Procrustes_curves[:,:,0], sample_size=sample_size , correlation_threshold=0.95)
-statistics = repeated_detection(Procrustes_curves[:,:,0], sample_size, repetitions)
-print ("Curves X statistics:", statistics)
-# print ("Curves Y")
-draw_covariance_heatmap(Procrustes_curves[:,:,1], riemann_dir+"riemann_analysis_BraVa_y.png")
-# detect_linearly_related_groups(Procrustes_curves[:,:,1], sample_size=sample_size , correlation_threshold=0.95)
-statistics = repeated_detection(Procrustes_curves[:,:,1], sample_size, repetitions)
-print ("Curves Y statistics:", statistics)
-# print ("Curves Z")
-draw_covariance_heatmap(Procrustes_curves[:,:,2], riemann_dir+"riemann_analysis_BraVa_z.png")
-statistics = repeated_detection(Procrustes_curves[:,:,2], sample_size, repetitions)
-print ("Curves Z statistics:", statistics)
-# detect_linearly_related_groups(Procrustes_curves[:,:,2], sample_size=sample_size , correlation_threshold=0.95)
-# print ("SRVF X")
-draw_covariance_heatmap(Procs_srvf_curves[:,:,0], riemann_dir+"riemann_analysis_SRVF_x.png")
-statistics = repeated_detection(Procs_srvf_curves[:,:,0], sample_size, repetitions)
-print ("SRVF X statistics:", statistics)
-# detect_linearly_related_groups(Procs_srvf_curves[:,:,0], sample_size=sample_size , correlation_threshold=0.95)
-# print ("SRVF Y")
-draw_covariance_heatmap(Procs_srvf_curves[:,:,1], riemann_dir+"riemann_analysis_SRVF_y.png")
-# detect_linearly_related_groups(Procs_srvf_curves[:,:,1], sample_size=sample_size , correlation_threshold=0.95)
-statistics = repeated_detection(Procs_srvf_curves[:,:,1], sample_size, repetitions)
-print ("SRVF Y statistics:", statistics)
-# print ("SRVF Z")
-draw_covariance_heatmap(Procs_srvf_curves[:,:,2], riemann_dir+"riemann_analysis_SRVF_z.png")
-# detect_linearly_related_groups(Procs_srvf_curves[:,:,2], sample_size=sample_size , correlation_threshold=0.95)
-statistics = repeated_detection(Procs_srvf_curves[:,:,2], sample_size, repetitions)
-print ("SRVF Z statistics:", statistics)
-# print ("Curvatures")
-draw_covariance_heatmap(Curvatures, riemann_dir+"riemann_analysis_curvature.png")
-# detect_linearly_related_groups(Curvatures, sample_size=sample_size , correlation_threshold=0.95)
-statistics = repeated_detection(Curvatures, sample_size, repetitions)
-print ("Curvatures statistics:", statistics)
-# print ("Torsions")
-draw_covariance_heatmap(Torsions, riemann_dir+"riemann_analysis_torsion.png")
-# detect_linearly_related_groups(Torsions, sample_size=sample_size , correlation_threshold=0.95)
-statistics = repeated_detection(Torsions, sample_size, repetitions)
-print ("Torsions statistics:", statistics)
-
-
-
-
-
-
-
-
-
-
-
-
+RIEMANN = False
+if RIEMANN:
+    riemann_dir = mkdir(bkup_dir, "riemann")
+    sample_size = 50
+    repetitions = 10
+    # print ("Curves X")
+    draw_covariance_heatmap(Procrustes_curves[:,:,0], riemann_dir+"riemann_analysis_BraVa_x.png")
+    # detect_linearly_related_groups(Procrustes_curves[:,:,0], sample_size=sample_size , correlation_threshold=0.95)
+    statistics = repeated_detection(Procrustes_curves[:,:,0], sample_size, repetitions)
+    print ("Curves X statistics:", statistics)
+    # print ("Curves Y")
+    draw_covariance_heatmap(Procrustes_curves[:,:,1], riemann_dir+"riemann_analysis_BraVa_y.png")
+    # detect_linearly_related_groups(Procrustes_curves[:,:,1], sample_size=sample_size , correlation_threshold=0.95)
+    statistics = repeated_detection(Procrustes_curves[:,:,1], sample_size, repetitions)
+    print ("Curves Y statistics:", statistics)
+    # print ("Curves Z")
+    draw_covariance_heatmap(Procrustes_curves[:,:,2], riemann_dir+"riemann_analysis_BraVa_z.png")
+    statistics = repeated_detection(Procrustes_curves[:,:,2], sample_size, repetitions)
+    print ("Curves Z statistics:", statistics)
+    # detect_linearly_related_groups(Procrustes_curves[:,:,2], sample_size=sample_size , correlation_threshold=0.95)
+    # print ("SRVF X")
+    draw_covariance_heatmap(Procs_srvf_curves[:,:,0], riemann_dir+"riemann_analysis_SRVF_x.png")
+    statistics = repeated_detection(Procs_srvf_curves[:,:,0], sample_size, repetitions)
+    print ("SRVF X statistics:", statistics)
+    # detect_linearly_related_groups(Procs_srvf_curves[:,:,0], sample_size=sample_size , correlation_threshold=0.95)
+    # print ("SRVF Y")
+    draw_covariance_heatmap(Procs_srvf_curves[:,:,1], riemann_dir+"riemann_analysis_SRVF_y.png")
+    # detect_linearly_related_groups(Procs_srvf_curves[:,:,1], sample_size=sample_size , correlation_threshold=0.95)
+    statistics = repeated_detection(Procs_srvf_curves[:,:,1], sample_size, repetitions)
+    print ("SRVF Y statistics:", statistics)
+    # print ("SRVF Z")
+    draw_covariance_heatmap(Procs_srvf_curves[:,:,2], riemann_dir+"riemann_analysis_SRVF_z.png")
+    # detect_linearly_related_groups(Procs_srvf_curves[:,:,2], sample_size=sample_size , correlation_threshold=0.95)
+    statistics = repeated_detection(Procs_srvf_curves[:,:,2], sample_size, repetitions)
+    print ("SRVF Z statistics:", statistics)
+    # print ("Curvatures")
+    draw_covariance_heatmap(Curvatures, riemann_dir+"riemann_analysis_curvature.png")
+    # detect_linearly_related_groups(Curvatures, sample_size=sample_size , correlation_threshold=0.95)
+    statistics = repeated_detection(Curvatures, sample_size, repetitions)
+    print ("Curvatures statistics:", statistics)
+    # print ("Torsions")
+    draw_covariance_heatmap(Torsions, riemann_dir+"riemann_analysis_torsion.png")
+    # detect_linearly_related_groups(Torsions, sample_size=sample_size , correlation_threshold=0.95)
+    statistics = repeated_detection(Torsions, sample_size, repetitions)
+    print ("Torsions statistics:", statistics)
 
 
 # 定义颜色映射
