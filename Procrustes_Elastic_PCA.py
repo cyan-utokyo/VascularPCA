@@ -149,38 +149,44 @@ print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_
 
 
 
+import numpy as np
+from scipy.signal import find_peaks
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
+import matplotlib.pyplot as plt
 
-# 寻找每个数据中的峰值
-peaks_indices = [find_peaks(curve)[0] for curve in pre_Curvatures]
-
-# 取第一个数据及其峰值作为参考
-reference = pre_Curvatures[base_id]
-reference_peaks = peaks_indices[base_id]
 
 dtw_dir = mkdir(bkup_dir, "dtw")
-# 进行DTW计算并可视化
-for i, (query, peaks) in enumerate(zip(pre_Curvatures, peaks_indices)):
-    alignment = dtw(query, reference, keep_internals=True)
+reference = pre_Curvatures[base_id]
 
-    # 可视化
+# 初始化保存DTW结果的列表
+dtw_results = []
+
+# 对每个数据进行DTW操作
+for i, data in enumerate(pre_Curvatures):
+    print ("data shape:", reference.shape, data.shape)
+    if i != base_id:  # 跳过参考数据本身
+        distance, path = fastdtw(reference, data, dist=euclidean)
+        dtw_results.append((i, distance, path))
+
+# 如果需要，可视化结果
+for result in dtw_results:
+    index, distance, path = result
+    path_reference, path_data = zip(*path)
     
     plt.figure(figsize=(10, 5))
-    # 绘制参考序列和峰值
-    plt.plot(reference, label=f'Reference Curve {i}')
-    plt.scatter(reference_peaks, reference[reference_peaks], color='red', zorder=3, label='Reference Peaks')
     
-    # 绘制查询序列和峰值
-    plt.plot(query, label=f'Query Curve {i}')
-    plt.scatter(peaks, query[peaks], color='green', zorder=3, label='Query Peaks')
+    # 绘制参考数据和当前数据
+    plt.plot(reference, label=f'Reference Series (ID {base_id})')
+    plt.plot(data, label=f'Current Series (ID {index})')
+    
+    # 绘制DTW路径
+    for (map_ref, map_data) in path:
+        plt.plot([map_ref, map_data], [reference[map_ref], data[map_data]], 'r')
 
-    # 绘制对齐路径
-    for r_idx, q_idx in zip(alignment.index1, alignment.index2):
-        plt.plot([r_idx, q_idx], [reference[r_idx], query[q_idx]], 'grey', linewidth=0.5, alpha=0.5)
-
-    plt.title(f'DTW alignment between reference and query curve {i}')
+    plt.title(f'DTW Aligned Series {index} with Distance: {distance:.2f}')
     plt.legend()
-    # plt.show()
-    plt.savefig(dtw_dir + f"dtw_{i}.png")
+    plt.savefig(dtw_dir + f"dtw_{index}.png")
     plt.close()
 
 
