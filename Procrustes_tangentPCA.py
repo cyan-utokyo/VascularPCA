@@ -82,7 +82,6 @@ from myvtk.MyRiemannCov import *
 from scipy.signal import find_peaks
 import geomstats.geometry.discrete_curves as dc
 from geomstats.learning.pca import TangentPCA
-# from geomstats.geometry.srv_metric import SRVMetric
 from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
 
 warnings.filterwarnings("ignore")
@@ -115,6 +114,10 @@ pre_Curvatures = []
 pre_Torsions = []
 Typevalues = [] 
 # window size
+# 创建离散曲线空间
+r2 = Euclidean(dim=3)
+srv_metric = SRVMetric(r2)
+discrete_curves_space = DiscreteCurves(ambient_manifold=r2, k_sampling_points=64)
 
 pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
 shapetype = pd.read_csv("./UVCS_class.csv", header=None)
@@ -675,19 +678,7 @@ colors = {
 # 使用您的函数计算Frechet均值
 frechet_mean_curve = compute_frechet_mean(Procs_srvf_curves)
 
-# 创建离散曲线空间
-r2 = Euclidean(dim=3)
-srv_metric = SRVMetric(r2)
-srvf_dir = mkdir(bkup_dir, "srvf")
-for i in range(len(Procrustes_curves)):
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    srvf = srv_metric.f_transform(Procrustes_curves)
-    ax.plot(srvf[i,:,0], srvf[i,:,1], label=str(i),color="k",alpha=0.5,marker="o")
-    ax.plot(Procs_srvf_curves[i,:,0], Procs_srvf_curves[i,:,1], label="gpt"+str(i),color="r",alpha=0.5,marker="s")
-    plt.legend()
-    plt.savefig(srvf_dir + f"srvf_{i}.png")
-discrete_curves_space = DiscreteCurves(ambient_manifold=r2, k_sampling_points=64)
+
 
 tangent_vectors = []
 for curve in Procs_srvf_curves:
@@ -704,8 +695,8 @@ tangent_projected_data = tpca.transform(tangent_vectors)
 
 
 tangent_vectors = np.array(tangent_vectors)
-tangent_srvf_PCA = PCAHandler(tangent_vectors.reshape(len(tangent_vectors), -1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-tangent_srvf_PCA.PCA_training_and_test()
+all_PCA = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves), -1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+all_PCA.PCA_training_and_test()
 
 for n in range(PCA_N_COMPONENTS-1):
     fig = plt.figure()
@@ -721,21 +712,23 @@ for n in range(PCA_N_COMPONENTS-1):
         indices = [i for i, l in enumerate(quad_param_group) if l == label]
         ax.scatter(tangent_projected_data[indices, n], tangent_projected_data[indices, n+1],
                     color=colors[label], label=label)
-        ax2.scatter(tangent_srvf_PCA.train_res[indices, n], tangent_srvf_PCA.train_res[indices, n+1],
-                    color=colors[label], label=label)
+        ax2.scatter(all_PCA.train_res[indices, n], all_PCA.train_res[indices, n+1],
+                    color = colors[label], label=label)
         ax3.scatter(all_srvf_pca.train_res[indices, n], all_srvf_pca.train_res[indices, n+1],
                     color = colors[label], label=label)
 
     # 为图表添加标题和轴标签
     for Ax in [ax, ax2, ax3]:
-        Ax.set_title('Tangent PCA Projection')
         Ax.legend()
         Ax.set_xlabel('Principal Component '+str(n+1))
         Ax.set_ylabel('Principal Component '+str(n+2))
 
     # 显示图表
+    ax.set_title('Tangent PCA Projection')
+    ax2.set_title('Procrustes PCA Projection')
+    ax3.set_title('SRVF PCA Projection')
     fig.savefig(pca_anlysis_dir + f"tangent_pca_projection_{n+1}.png")
-    fig2.savefig(pca_anlysis_dir + f"logmap_pca_projection_{n+1}.png")
+    fig2.savefig(pca_anlysis_dir + f"procrustes_pca_projection_{n+1}.png")
     fig3.savefig(pca_anlysis_dir + f"srvf_pca_projection_{n+1}.png")
     plt.close(fig)
     plt.close(fig2)
