@@ -80,6 +80,10 @@ from scipy.stats import pearsonr
 import networkx as nx  # 导入NetworkX库
 from myvtk.MyRiemannCov import *
 from scipy.signal import find_peaks
+import geomstats.geometry.discrete_curves as dc
+from geomstats.learning.pca import TangentPCA
+# from geomstats.geometry.srv_metric import SRVMetric
+from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
 
 warnings.filterwarnings("ignore")
 
@@ -666,10 +670,7 @@ colors = {
 }
 
 #######################################################################
-import geomstats.geometry.discrete_curves as dc
-from geomstats.learning.pca import TangentPCA
-# from geomstats.geometry.srv_metric import SRVMetric
-from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
+
 
 # 使用您的函数计算Frechet均值
 frechet_mean_curve = compute_frechet_mean(Procs_srvf_curves)
@@ -677,6 +678,15 @@ frechet_mean_curve = compute_frechet_mean(Procs_srvf_curves)
 # 创建离散曲线空间
 r2 = Euclidean(dim=3)
 srv_metric = SRVMetric(r2)
+srvf_dir = mkdir(bkup_dir, "srvf")
+for i in range(len(Procrustes_curves)):
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    srvf = srv_metric.f_transform(Procrustes_curves)
+    ax.plot(srvf[i,:,0], srvf[i,:,1], label=str(i),color="k",alpha=0.5,marker="o")
+    ax.plot(Procs_srvf_curves[i,:,0], Procs_srvf_curves[i,:,1], label="gpt"+str(i),color="r",alpha=0.5,marker="s")
+    plt.legend()
+    plt.savefig(srvf_dir + f"srvf_{i}.png")
 discrete_curves_space = DiscreteCurves(ambient_manifold=r2, k_sampling_points=64)
 
 tangent_vectors = []
