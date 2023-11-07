@@ -723,17 +723,10 @@ for i in range(PCA_N_COMPONENTS):
                  color=colors[quad_param_group[idx]])
     single_reconstructed_curves = np.array(single_reconstructed_curves)
     ax1.set_title(f'PC{i+1}')
-    # fig.savefig(bkup_dir+f"PC{i+1}.png")
-    # plt.close(fig)
-    plt.show()
+    fig.savefig(bkup_dir+f"PC{i+1}.png")
+    plt.close(fig)
+    # plt.show()
 
-    fig2 = plt.figure(figsize=(7, 1),dpi=300)
-    ax2 = fig2.add_subplot(111)
-    sorted_indices = np.argsort(tangent_projected_data[:, i])
-    for idx in sorted_indices:
-        ax2.bar(idx, 1, color=colors[quad_param_group[idx]],width=1)
-    fig2.savefig(bkup_dir+f"PC{i+1}_bar.png")
-    plt.close(fig2)
 
 
 fig = plt.figure(figsize=(8, 4),dpi=300)
@@ -748,138 +741,6 @@ ax.set_title('Loadings of Principal Components')
 plt.tight_layout()
 plt.savefig(bkup_dir+"Loadings_of_Principal_Components.png")
 plt.close(fig)
-
-####################为SRVF PCA和geom param做sensitivity analysis####################
-results = []
-max_pcs_curvatures = {}
-max_pcs_torsions = {}
-from sklearn.preprocessing import MinMaxScaler
-# 为Curvatures和Torsion分别执行相同的操作
-for variable_name, variable_data in [('Curvatures', Curvatures), ('Torsions', Torsions)]:
-    # 遍历每个因变量
-    for i in range(variable_data.shape[1]):
-        y = variable_data[:, i].reshape(-1, 1)
-
-        # 存储回归系数
-        coefficients = {}
-
-        # 遍历每个自变量
-        for pc in range(PCA_N_COMPONENTS):
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            temp = scaler.fit_transform(tangent_projected_data[:, pc])
-            X = temp.reshape(-1, 1)
-            print ("X.shape:", X.shape)
-
-            model = LinearRegression().fit(X, y)
-            # coefficients[pc] = np.abs(model.coef_[0][0])# *np.std(tangent_projected_data[:, pc] # 修正：该处之前是model.coef_[0][0]，乘上对应PC的标准差后得到的是大概的param的变化范围（被影响的程度），这个变动对所有landmark生效)
-            coefficients[pc] = np.abs(model.coef_[0][0]) 
-        # 将coefficient_values分解为单独的列
-        
-        # 如果是Curvatures，使用绝对值来找出受影响最大的自变量
-        if variable_name == 'Curvatures':
-            max_pc = max(coefficients, key=lambda k: abs(coefficients[k]))
-            max_coefficient = abs(coefficients[max_pc])
-            coefficient_values = [abs(value) for value in coefficients.values()]
-        else:  # 如果是Torsions，保持原有的计算方式
-            max_pc = max(coefficients, key=lambda k: coefficients[k])
-            max_coefficient = coefficients[max_pc]
-            coefficient_values = list(coefficients.values())
-
-        # 计算所有系数的均值和标准差
-        mean_coefficient = np.mean(coefficient_values)
-        std_coefficient = np.std(coefficient_values)
-        coefficient_columns = {f'Coefficient_Value_{j+1}': coefficient_values[j] for j in range(len(coefficient_values))}
-        # 将结果添加到列表中
-        results.append({
-            'Variable_Type': variable_name,
-            'Dependent_Variable_Index': i,
-            'Most_Influential_PCA_Component': max_pc,
-            'Max_Coefficient': max_coefficient,
-            'Mean_Coefficient': mean_coefficient,
-            'Std_Coefficient': std_coefficient,
-            **coefficient_columns  # 使用**来展开字典并将其合并到主字典中
-        })
-
-        # 根据变量类型存储每个因变量受影响最大的自变量编号
-        if variable_name == 'Curvatures':
-            max_pcs_curvatures[i] = max_pc
-        elif variable_name == 'Torsions':
-            max_pcs_torsions[i] = max_pc
-
-
-# 将结果转换为DataFrame
-results_df = pd.DataFrame(results)
-# 从results_df中删除'coefficient_values'列
-# results_df = results_df.drop(columns=['coefficient_values'])
-# 将DataFrame输出为CSV文件
-results_df.to_csv(bkup_dir+'regression_results.csv', index=False)
-
-
-
-# print (results_df['Mean_Coefficient'].shape)
-#print (np.std(all_srvf_pca.train_res,axis=0).shape) # 需要得到16个
-# avg_curvatures = 16*results_df['Mean_Coefficient'][:61] # * np.mean(np.std(all_srvf_pca.train_res,axis=0))
-# print ("avg_curvatures.shape:", avg_curvatures.shape)
-# avg_torsions = 16*results_df['Mean_Coefficient'][61:] # * np.mean(np.std(all_srvf_pca.train_res,axis=0))
-# print ("avg_torsions.shape:", avg_torsions.shape)
-
-# 绘图
-fig_x = 1
-fig_shape = compute_frechet_mean(Procrustes_curves)[:, fig_x][3:]
-# fig_shape = Procrustes_curves[7, :, fig_x][3:]
-print("fig_shape.shape", fig_shape.shape)
-colors2 = list(mcolors.TABLEAU_COLORS.keys())  # 获取一组颜色
-
-fig = plt.figure(figsize=(13, 6),dpi=300)
-# 定义GridSpec的行和列，然后设置行的高度比例。例如，这里我们设置第一个子图为3，第二个为1，所以第一个子图的高度是第二个的三倍。
-gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
-# 使用GridSpec创建子图
-ax = fig.add_subplot(gs[0])
-ax2 = fig.add_subplot(gs[1])
-ax.plot(fig_shape, marker='o', linestyle='-', color="dimgray", label='Frechet Mean')
-# ax.axvspan(0, 6, facecolor='dimgray', alpha=0.3)
-# ax.axvspan(6, 25, facecolor='dimgray', alpha=0.2)
-# ax.axvspan(25, 44, facecolor='dimgray', alpha=0.1)
-# ax.axvspan(44, 54, facecolor='dimgray', alpha=0.2)
-# ax.axvspan(54, 60, facecolor='dimgray', alpha=0.3)
-ax.set_facecolor('whitesmoke')
-# 添加barplot
-indices = np.arange(len(fig_shape))
-bar_width = 0.35
-avg_curvatures = [np.mean(Curvatures[i]) for i in indices]
-avg_torsions = [np.mean(np.abs(Torsions[i])) for i in indices]
-ax2.bar(indices - bar_width/2, avg_curvatures, bar_width, label='Average Curvature', alpha=0.99, color="dimgray", edgecolor='k')
-ax2.bar(indices + bar_width/2, avg_torsions, bar_width, label='Average Torsion', alpha=0.99, color="silver",edgecolor='k')
-max_coeffs_curvatures = [entry['Max_Coefficient'] for entry in results if entry['Variable_Type'] == 'Curvatures']
-max_coeffs_torsions = [entry['Max_Coefficient'] for entry in results if entry['Variable_Type'] == 'Torsions']
-# 在已有的barplot上添加新的barplot
-ax2.bar(indices - bar_width/2, max_coeffs_curvatures, bar_width, label='Max Coefficient Curvature', alpha=0.7,color="coral", edgecolor='k')
-ax2.bar(indices + bar_width/2, np.abs(max_coeffs_torsions), bar_width,  label='Max Coefficient Torsion', alpha=0.7,color="royalblue",edgecolor='k')
-
-# ax2.set_ylim(-0.2,0.8)
-# ax.set_ylim(-15,7.5)
-for i in range(len(fig_shape)):
-    curv_pc = max_pcs_curvatures.get(i)
-    tors_pc = max_pcs_torsions.get(i)
-    if curv_pc is not None:
-        ax.text(i, fig_shape[i] + 0.35, str(curv_pc+1), color=colors2[curv_pc % len(colors2)], ha='center')
-    if tors_pc is not None:
-        ax.text(i, fig_shape[i] - 0.35, str(tors_pc+1), color=colors2[tors_pc % len(colors2)], ha='center', va='top')
-
-# plt.title('Frechet Mean with Influential PCA Components')
-# ax.set_xlabel('Index')
-ax.set_xticks([])
-ax2.set_xlabel('Index')
-ax.set_ylabel('Mean Shape')
-ax2.set_ylabel('Geometry Parameter')
-# ax2.set_xlim(0,75)
-# ax2.legend()
-plt.tight_layout()
-plt.savefig(bkup_dir + "Frechet_Mean_with_Influential_PCA_Components.png")
-plt.close()
-
-
-
 
 
 vtk_dir = mkdir(bkup_dir , "vtk")
