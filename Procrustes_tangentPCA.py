@@ -6,7 +6,7 @@ from scipy.interpolate import CubicSpline
 import matplotlib.pyplot as plt
 from scipy.stats import zscore
 import glob
-from myvtk.GetMakeVtk import GetMyVtk, makeVtkFile, measure_length
+from myvtk.GetMakeVtk import *
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 from procrustes import orthogonal
@@ -28,7 +28,6 @@ import os
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
-from myvtk.scores import *
 import csv
 from sklearn.manifold import TSNE
 from scipy.interpolate import griddata
@@ -86,6 +85,7 @@ from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 from PIL import Image
+from myvtk.Myscores import *
 warnings.filterwarnings("ignore")
 
 PCA_N_COMPONENTS = 16
@@ -537,6 +537,52 @@ colors = {
     label: plt.cm.CMRmap((i+1)/(len(param_group_unique_labels)+1)) for i, label in enumerate(param_group_unique_labels)
 }
 
+# Calculate centroids and scores for each label
+energy_centroids = {}
+energy_scores = {label: [] for label in param_group_unique_labels}
+# Calculate the centroid of energies for each label
+for label in param_group_unique_labels:
+    energy_centroids[label] = compute_energy_centroid(param_dict[label]['Energy'])
+
+# Calculate the scores for each energy value based on its distance from the centroid
+fig = plt.figure(figsize=(8, 5), dpi=300)
+ax = fig.add_subplot(111)
+for i in range(len(Procrustes_curves)):
+    
+    energy = compute_geometry_param_energy(Curvatures[i], Torsions[i])
+    ax.scatter(energy[0], energy[1], color=colors[quad_param_group[i]], alpha=0.9, s=25, marker="${}$".format(Typevalues[i]))
+    print (quad_param_group[i], Typevalues[i])
+    shape_score = {}
+    for label in param_group_unique_labels:
+        energy_score = score_energy(energy, energy_centroids[label])
+        shape_score[label] = energy_score
+    print (shape_score)
+    print ("-"*20)
+plt.savefig(bkup_dir+"Energy_Typevalue_scatter.png")
+plt.close()
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 创建一个图形和轴
 fig1, ax1 = plt.subplots(dpi=300)
 fig2, ax2 = plt.subplots(dpi=300)
@@ -698,8 +744,12 @@ for i, tag in enumerate(param_dict.keys()):
 
 
 ####################BraVa Data的各PC####################
+def map_quad_params_to_int(quad_params):
+    unique_params, inverse_indices = np.unique(quad_params, return_inverse=True)
+    return inverse_indices
 
-
+quad_param_group_mapped = map_quad_params_to_int(quad_param_group)
+vtk_dir = mkdir(bkup_dir , "vtk")
 for i in range(PCA_N_COMPONENTS):
     single_component_feature = np.zeros_like(tangent_projected_data)
     single_component_feature[:,i] = tangent_projected_data[:,i]
@@ -722,6 +772,16 @@ for i in range(PCA_N_COMPONENTS):
         plt.plot(reconstructed_curve[:,0], reconstructed_curve[:,1],reconstructed_curve[:,2], 
                  color=colors[quad_param_group[idx]])
     single_reconstructed_curves = np.array(single_reconstructed_curves)
+    single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
+    print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
+    print ("Curvautres.shape:", Curvatures.shape)
+    all_single_curvatures = [curvature for curve in single_reconstructed_curvature for curvature in curve]
+    all_single_torsions = [torsion for curve in single_reconstructed_torsion for torsion in curve]
+    all_curvature = [curvature for curve in Curvatures for curvature in curve]
+    all_torsion = [torsion for curve in Torsions for torsion in curve]
+    vtk_file_name = vtk_dir + f"PC{i+1}.vtk"
+    write_vtk_line(vtk_file_name, single_reconstructed_curves, quad_param_group_mapped, single_component_feature[:,i], all_single_curvatures, all_single_torsions, all_curvature, all_torsion)
+
     ax1.set_title(f'PC{i+1}')
     fig.savefig(bkup_dir+f"PC{i+1}.png")
     plt.close(fig)
@@ -743,7 +803,7 @@ plt.savefig(bkup_dir+"Loadings_of_Principal_Components.png")
 plt.close(fig)
 
 
-vtk_dir = mkdir(bkup_dir , "vtk")
+
 fig = plt.figure(dpi=300)
 ax = fig.add_subplot(111)
 for label in param_group_unique_labels:

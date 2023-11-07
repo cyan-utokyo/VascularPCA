@@ -111,3 +111,68 @@ def makeVtkFile(savePath, coords, scalarAttributes, fieldAttributes):
                 v.write("{}\n".format(fieldAttributes[i][2][j]))
 
     v.close()
+def write_vtk_line(file_name, lines, quad_params, single_component_values, single_curvatures, single_torsions, curvatures, torsions):
+    with open(file_name, 'w') as vtk_file:
+        # Write VTK header
+        vtk_file.write("# vtk DataFile Version 3.0\n")
+        vtk_file.write("vtk output\n")
+        vtk_file.write("ASCII\n")
+        vtk_file.write("DATASET POLYDATA\n")
+
+        # Count the total number of points
+        total_points = sum([len(line) for line in lines])
+        total_lines = len(lines)
+
+        # Write points
+        vtk_file.write(f"POINTS {total_points} float\n")
+        for line in lines:
+            for point in line:
+                vtk_file.write(f"{point[0]} {point[1]} {point[2]}\n")
+
+        # Write lines
+        vtk_file.write(f"LINES {total_lines} {total_lines + total_points}\n")
+        point_index = 0
+        for line in lines:
+            vtk_file.write(f"{len(line)} ")
+            vtk_file.write(" ".join(str(i) for i in range(point_index, point_index + len(line))))
+            vtk_file.write("\n")
+            point_index += len(line)
+
+        # Write scalar data for quad_params (as integer)
+        vtk_file.write(f"CELL_DATA {total_lines}\n")  # This specifies that the data applies to lines not points
+        vtk_file.write("SCALARS quad_param_group int 1\n")  # Each line has one integer value associated with it
+        vtk_file.write("LOOKUP_TABLE default\n")
+        for param in quad_params:
+            vtk_file.write(f"{param}\n")
+
+        # Write scalar data for single_component_values (as float)
+        vtk_file.write("SCALARS single_component_feature float 1\n")  # Each line has one float value associated with it
+        vtk_file.write("LOOKUP_TABLE default\n")
+        for value in single_component_values:
+            vtk_file.write(f"{value}\n")
+        # Write scalar data for curvatures and torsions as point data
+        vtk_file.write(f"POINT_DATA {total_points}\n")
+
+        # Write scalar data for curvatures (as float)
+        vtk_file.write("SCALARS single_curvature float 1\n")
+        vtk_file.write("LOOKUP_TABLE default\n")
+        for single_curvature in single_curvatures:
+            vtk_file.write(f"{single_curvature}\n")
+
+        # Write scalar data for torsions (as float)
+        vtk_file.write("SCALARS single_torsion float 1\n")
+        vtk_file.write("LOOKUP_TABLE default\n")
+        for single_torsion in single_torsions:
+            vtk_file.write(f"{single_torsion}\n")
+
+        # Write scalar data for curvatures (as float)
+        vtk_file.write("SCALARS curvature float 1\n")
+        vtk_file.write("LOOKUP_TABLE default\n")
+        for curvature in curvatures:
+            vtk_file.write(f"{curvature}\n")
+
+        # Write scalar data for torsions (as float)
+        vtk_file.write("SCALARS torsion float 1\n")
+        vtk_file.write("LOOKUP_TABLE default\n")
+        for torsion in torsions:
+            vtk_file.write(f"{torsion}\n")

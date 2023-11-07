@@ -27,25 +27,24 @@ def smooth_curve(curve, window_length=5, polyorder=3):
     return smoothed_curve
 
 
+import numpy as np
+
 def compute_curvature_and_torsion(curve):
     window_size = 4
     # calculate moving averages using numpy convolve
     weights = np.repeat(1.0, window_size)/window_size
 
+    # calculate first, second, and third derivatives using finite differences
+    r_prime = np.diff(curve, axis=0)
+    r_double_prime = np.diff(r_prime, axis=0)
+    r_triple_prime = np.diff(r_double_prime, axis=0)
 
-
-    # 使用有限差分计算第一、第二和第三导数
-    # curve =smooth_curve(curve)
-    r_prime = np.diff(curve, axis=0, n=1)
-    r_double_prime = np.diff(curve, axis=0, n=2)
-    r_triple_prime = np.diff(curve, axis=0, n=3)
-    
-    # 为了对齐数组大小，我们在开始和/或结束时加上零行
+    # Pad derivatives to align array sizes
     r_prime = np.vstack((r_prime, np.zeros((1, 3))))
     r_double_prime = np.vstack((np.zeros((1, 3)), r_double_prime, np.zeros((1, 3))))
     r_triple_prime = np.vstack((np.zeros((2, 3)), r_triple_prime, np.zeros((2, 3))))
 
-    # 这里，我们需要确保r_prime, r_double_prime和r_triple_prime具有相同的形状
+    # Ensure that r_prime, r_double_prime, and r_triple_prime have the same shape
     min_length = min(len(r_prime), len(r_double_prime), len(r_triple_prime))
     r_prime = r_prime[:min_length]
     r_double_prime = r_double_prime[:min_length]
@@ -54,20 +53,30 @@ def compute_curvature_and_torsion(curve):
     cross_product = np.cross(r_prime, r_double_prime)
     cross_norm = np.linalg.norm(cross_product, axis=1)
     r_prime_norm = np.linalg.norm(r_prime, axis=1)
-    
+
     epsilon = 1e-7
     curvature = np.where(r_prime_norm**3 > epsilon, cross_norm / (r_prime_norm ** 3), 0)
-    
+
     torsion_numerator = np.einsum('ij,ij->i', r_prime, np.cross(r_double_prime, r_triple_prime))
     torsion = np.where(cross_norm**2 > epsilon, torsion_numerator / (cross_norm ** 2), 0)
 
     curvature = np.convolve(curvature, weights, 'valid')
     torsion = np.convolve(torsion, weights, 'valid')
 
+    # Apply non-linear transformation
     curvature = np.tanh(curvature)
     torsion = np.tanh(torsion)
-    
-    return curvature, torsion
+
+    # Create the interpolator functions for curvature and torsion
+    # We are using 'linear' interpolation and 'extrapolate' to allow extension beyond the original range
+    interp_curvature = interp1d(np.arange(len(curvature)), curvature, kind='linear', fill_value="extrapolate")
+    interp_torsion = interp1d(np.arange(len(torsion)), torsion, kind='linear', fill_value="extrapolate")
+
+    # Use the interpolator functions to extend the arrays to the original curve length
+    interpolated_curvature = interp_curvature(np.arange(len(curve)))
+    interpolated_torsion = interp_torsion(np.arange(len(curve)))
+
+    return interpolated_curvature, interpolated_torsion
 
 
 def compute_synthetic_curvature_and_torsion(C_recovered):

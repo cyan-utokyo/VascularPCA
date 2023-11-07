@@ -28,7 +28,6 @@ import os
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.signal import savgol_filter
 import matplotlib.gridspec as gridspec
-from myvtk.scores import *
 import csv
 from sklearn.manifold import TSNE
 from scipy.interpolate import griddata
