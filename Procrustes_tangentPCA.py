@@ -88,6 +88,7 @@ from PIL import Image
 from myvtk.Myscores import *
 warnings.filterwarnings("ignore")
 
+sns.set_context("talk", font_scale=0.8)
 PCA_N_COMPONENTS = 16
 Multi_plot_rows = 4
 SCALETO1 = False
@@ -191,14 +192,30 @@ for i in range(len(Procrustes_curves)):
 log.write("SCALED to 1 before compute SRVF.\n")
 log.write("according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF.\n")
 
-frechet_mean_srvf = compute_frechet_mean(Procs_srvf_curves)
+
+TANGENT_BASE = "srvf_frechet"
+if TANGENT_BASE == "frechet":
+    frechet_mean_shape = compute_frechet_mean(Procrustes_curves)
+    tangent_base = calculate_srvf(frechet_mean_shape)/measure_length(frechet_mean_shape)
+    print ("using frechet as tangent_base.")
+    log.write("using frechet as tangent_base.\n")
+elif TANGENT_BASE == "srvf_frechet":
+    tangent_base = compute_frechet_mean(Procs_srvf_curves)
+    print ("using srvf_frechet as tangent_base.")
+    log.write("using srvf_frechet as tangent_base.\n")
+else:
+    for i in range(len(Files)):
+        if TANGENT_BASE in Files[i]:
+            tangent_base_id = i
+    print ("using {} as tangent_base_id.".format(Files[tangent_base_id]))
+    log.write("using {} as tangent_base_id.\n".format(Files[tangent_base_id]))
+    tangent_base = Procs_srvf_curves[tangent_base_id]
 
 #########################################
 # 把srvf曲线做对数映射，得到切线空间的切向量
 tangent_vectors = []
 for curve in Procs_srvf_curves:
-    # tangent_vector = discrete_curves_space.metric.log(point=curve, base_point=frechet_mean_curve)
-    tangent_vector = discrete_curves_space.to_tangent(curve, frechet_mean_srvf)
+    tangent_vector = discrete_curves_space.to_tangent(curve, tangent_base)
     tangent_vectors.append(tangent_vector)
 tangent_vectors = np.array(tangent_vectors)
 # 把srvf曲线做对数映射，得到切线空间的切向量
@@ -225,7 +242,7 @@ principal_components = tpca.components_
 principal_components_reshaped = principal_components.reshape((PCA_N_COMPONENTS, len(tangent_vectors[0]), 3))
 # Now use exp on each reshaped component
 curves_from_components = [
-    discrete_curves_space.metric.exp(tangent_vec=component, base_point=frechet_mean_srvf)
+    discrete_curves_space.metric.exp(tangent_vec=component, base_point=tangent_base)
     for component in principal_components_reshaped
 ]
 
@@ -237,7 +254,7 @@ for idx in range(len(tangent_projected_data)):
     tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
     # Map the tangent vector back to the curve space using the exponential map.
     reconstructed_srvf = discrete_curves_space.metric.exp(
-        tangent_vec=tangent_vector_reconstructed, base_point=frechet_mean_srvf
+        tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
     )
     reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
     # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
@@ -247,7 +264,7 @@ reconstructed_curves = np.array(reconstructed_curves)
 
 reconstructed_synthetic_curves = []
 synthetic_length = []
-print ("synthetic_features.shape", synthetic_features.shape)
+# print ("synthetic_features.shape", synthetic_features.shape)
 for idx in range(len(synthetic_features)):
     # This is your feature - a single point in PCA space representing the loadings for the first curve.
     feature = synthetic_features[idx]
@@ -255,7 +272,7 @@ for idx in range(len(synthetic_features)):
     tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
     # Map the tangent vector back to the curve space using the exponential map.
     reconstructed_srvf = discrete_curves_space.metric.exp(
-        tangent_vec=tangent_vector_reconstructed, base_point=frechet_mean_srvf
+        tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
     )
     reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
     # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
@@ -266,7 +283,7 @@ reconstructed_synthetic_curves = np.array(reconstructed_synthetic_curves)
 print ("synthetic_length:", np.mean(synthetic_length))
 print ("reconstructed_synthetic_curves.shape:", reconstructed_synthetic_curves.shape)
 
-def reconstruct_components(tpca, discrete_curves_space, frechet_mean_srvf, inverse_srvf_func):
+def reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf_func):
     principal_components = tpca.components_
     # Assuming the shape of principal_components is (n_components, n_sampling_points * n_dimensions)
     principal_components_reshaped = principal_components.reshape(
@@ -277,7 +294,7 @@ def reconstruct_components(tpca, discrete_curves_space, frechet_mean_srvf, inver
     for component in principal_components_reshaped:
         # Map the tangent vector back to the curve space using the exponential map.
         srvf_curve = discrete_curves_space.metric.exp(
-            tangent_vec=component, base_point=frechet_mean_srvf
+            tangent_vec=component, base_point=tangent_base
         )
         # Apply the inverse SRVF to get the curve
         curve = inverse_srvf_func(srvf_curve, np.zeros(3))  # Assuming inverse_srvf function takes srvf_curve and a base point as input.
@@ -288,9 +305,9 @@ def reconstruct_components(tpca, discrete_curves_space, frechet_mean_srvf, inver
     # Visualize each reconstructed component curve
     return curves_from_components
 # Usage
-tangent_components = reconstruct_components(tpca, discrete_curves_space, frechet_mean_srvf, inverse_srvf)
+tangent_components = reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf)
 
-sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('winter'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
+sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
 sm.set_array([])  # Only needed for the colorbar
 fig1 = plt.figure(figsize=(13, 6),dpi=300)
 ax1 = fig1.add_subplot(111)
@@ -307,10 +324,10 @@ plt.close(fig1)
 def update_plot(angle):
     ax.view_init(elev=10., azim=angle)
 fig, ax = plt.subplots(figsize=(6, 5), dpi=300, subplot_kw={'projection': '3d'})
-sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('winter'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components[:8])-1))
+sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
 sm.set_array([])  # Only needed for the colorbar
 
-for i, component in enumerate(tangent_components[:8]):
+for i, component in enumerate(tangent_components):
     color = sm.to_rgba(i)
     ax.plot(component[:, 0], component[:, 1], component[:, 2], color=color)
 
@@ -361,6 +378,7 @@ plt.grid(True)
 plt.savefig(bkup_dir+"CCR.png")
 plt.close()
 ###########################################################
+
 
 Curvatures, Torsions = compute_synthetic_curvature_and_torsion(reconstructed_curves)
 synthetic_Curvatures, synthetic_Torsions = compute_synthetic_curvature_and_torsion(reconstructed_synthetic_curves)
@@ -551,6 +569,7 @@ for i in range(len(Procrustes_curves)):
     
     energy = compute_geometry_param_energy(Curvatures[i], Torsions[i])
     ax.scatter(energy[0], energy[1], color=colors[quad_param_group[i]], alpha=0.9, s=25, marker="${}$".format(Typevalues[i]))
+    # ax.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (energy[0], energy[1]), fontsize=5)
     print (quad_param_group[i], Typevalues[i])
     shape_score = {}
     for label in param_group_unique_labels:
@@ -560,27 +579,9 @@ for i in range(len(Procrustes_curves)):
     print ("-"*20)
 plt.savefig(bkup_dir+"Energy_Typevalue_scatter.png")
 plt.close()
-    
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+##########################################################
+# 计算距离矩阵
 
 
 # 创建一个图形和轴
@@ -746,9 +747,14 @@ for i, tag in enumerate(param_dict.keys()):
 ####################BraVa Data的各PC####################
 def map_quad_params_to_int(quad_params):
     unique_params, inverse_indices = np.unique(quad_params, return_inverse=True)
-    return inverse_indices
-
-quad_param_group_mapped = map_quad_params_to_int(quad_param_group)
+    # 打印每个 unique param 对应的 quad_param_group 中的元素
+    mapping = {unique_param: quad_param for unique_param, quad_param in zip(unique_params, range(len(unique_params)))}
+    return inverse_indices, mapping
+# 假设 quad_param_group 是一个已经定义的数组
+quad_param_group_mapped, mapping = map_quad_params_to_int(quad_param_group)
+# 打印映射结果
+print("Mapped Indices: ", quad_param_group_mapped)
+print("Mapping: ", mapping)
 vtk_dir = mkdir(bkup_dir , "vtk")
 for i in range(PCA_N_COMPONENTS):
     single_component_feature = np.zeros_like(tangent_projected_data)
@@ -763,7 +769,7 @@ for i in range(PCA_N_COMPONENTS):
         tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
         # Map the tangent vector back to the curve space using the exponential map.
         reconstructed_srvf = discrete_curves_space.metric.exp(
-            tangent_vec=tangent_vector_reconstructed, base_point=frechet_mean_srvf
+            tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
         )
         reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
         # reconstructed_curve = move_to_centroid(reconstructed_curve)
@@ -773,8 +779,8 @@ for i in range(PCA_N_COMPONENTS):
                  color=colors[quad_param_group[idx]])
     single_reconstructed_curves = np.array(single_reconstructed_curves)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
-    print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
-    print ("Curvautres.shape:", Curvatures.shape)
+    # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
+    # print ("Curvautres.shape:", Curvatures.shape)
     all_single_curvatures = [curvature for curve in single_reconstructed_curvature for curvature in curve]
     all_single_torsions = [torsion for curve in single_reconstructed_torsion for torsion in curve]
     all_curvature = [curvature for curve in Curvatures for curvature in curve]
@@ -806,27 +812,43 @@ plt.close(fig)
 
 fig = plt.figure(dpi=300)
 ax = fig.add_subplot(111)
+fig2 = plt.figure(dpi=300)
+ax2 = fig2.add_subplot(111)
 for label in param_group_unique_labels:
     print (label)
     print ("real data:", param_dict[label]['Torsion'].shape)
     print ("synthetic data:", synthetic_param_dict[label]['Torsion'].shape)
-    ax.scatter(synthetic_features[np.array(synthetic_quad_param_group) == label][:,2], 
-               synthetic_features[np.array(synthetic_quad_param_group) == label][:,7],
+    ax.scatter(synthetic_features[np.array(synthetic_quad_param_group) == label][:,0], 
+               synthetic_features[np.array(synthetic_quad_param_group) == label][:,1],
                color=colors[label], 
                label=label, 
                alpha=0.4, )
-    ax.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,2], 
-               tangent_projected_data[np.array(quad_param_group) == label][:,7],
+    ax.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,0], 
+               tangent_projected_data[np.array(quad_param_group) == label][:,1],
                color=colors[label], 
                label=label, 
                alpha=0.9, 
                marker="x",
                s=50) 
+    ax2.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,0], 
+               tangent_projected_data[np.array(quad_param_group) == label][:,1],
+               color=colors[label], 
+               label=label, 
+               alpha=0.9) 
     for i in range(10):
         makeVtkFile(vtk_dir + label + "_synthetic_" + str(i) + ".vtk",reconstructed_synthetic_curves[np.array(synthetic_quad_param_group) == label][i], [],[])
         makeVtkFile(vtk_dir + label + "_real_" + str(i) + ".vtk",reconstructed_curves[np.array(quad_param_group) == label][i],[],[])
-fig.savefig(bkup_dir + "pcaloadings_plot.png")
-plt.close()
+ax.set_xlabel('PC1')
+ax.set_ylabel('PC2')
+ax2.set_xlabel('PC1')
+ax2.set_ylabel('PC2')
+ax.legend()
+ax2.legend()
+fig.savefig(bkup_dir + "pcaloadings_plot_both.png")
+fig2.savefig(bkup_dir + "pcaloadings_plot_real.png")
+plt.close(fig1)
+plt.close(fig2)
+
 
 
 
