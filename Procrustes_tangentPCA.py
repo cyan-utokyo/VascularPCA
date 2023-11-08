@@ -233,8 +233,8 @@ def fit_kde(data, bandwidth=1):
     return kde
 
 
-tangent_pca_kde = fit_kde(tangent_projected_data, bandwidth=0.1)
-sample_num = 2000
+tangent_pca_kde = fit_kde(tangent_projected_data, bandwidth=0.8)
+sample_num = 1000
 synthetic_features = tangent_pca_kde.sample(sample_num)
 
 principal_components = tpca.components_
@@ -395,7 +395,7 @@ for i in range(len(reconstructed_synthetic_curves)):
         post_synthetic_Torsions.append(synthetic_Torsions[i])
         post_synthetic_features.append(synthetic_features[i])
         count += 1
-    if count == 1000:
+    if count == 400:
         break
 reconstructed_synthetic_curves = np.array(post_reconstructed_synthetic_curves)
 synthetic_Curvatures = np.array(post_synthetic_Curvatures)
@@ -751,14 +751,14 @@ def map_quad_params_to_int(quad_params):
     mapping = {unique_param: quad_param for unique_param, quad_param in zip(unique_params, range(len(unique_params)))}
     return inverse_indices, mapping
 # 假设 quad_param_group 是一个已经定义的数组
-quad_param_group_mapped, mapping = map_quad_params_to_int(quad_param_group)
+quad_param_group_mapped, mapping = map_quad_params_to_int(synthetic_quad_param_group)
 # 打印映射结果
 print("Mapped Indices: ", quad_param_group_mapped)
 print("Mapping: ", mapping)
 vtk_dir = mkdir(bkup_dir , "vtk")
 for i in range(PCA_N_COMPONENTS):
-    single_component_feature = np.zeros_like(tangent_projected_data)
-    single_component_feature[:,i] = tangent_projected_data[:,i]
+    single_component_feature = np.zeros_like(synthetic_features)
+    single_component_feature[:,i] = synthetic_features[:,i]
     single_reconstructed_curves = []
     fig = plt.figure(figsize=(6, 6),dpi=300)
     ax = fig.add_subplot(111, projection='3d')
@@ -776,7 +776,7 @@ for i in range(PCA_N_COMPONENTS):
         # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
         single_reconstructed_curves.append(reconstructed_curve)
         plt.plot(reconstructed_curve[:,0], reconstructed_curve[:,1],reconstructed_curve[:,2], 
-                 color=colors[quad_param_group[idx]])
+                 color=colors[synthetic_quad_param_group[idx]])
     single_reconstructed_curves = np.array(single_reconstructed_curves)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
     # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
