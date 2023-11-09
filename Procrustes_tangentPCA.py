@@ -88,7 +88,7 @@ from PIL import Image
 from myvtk.Myscores import *
 warnings.filterwarnings("ignore")
 
-sns.set_context("talk", font_scale=0.8)
+# sns.set_context("talk", font_scale=0.8)
 PCA_N_COMPONENTS = 16
 Multi_plot_rows = 4
 SCALETO1 = False
@@ -173,6 +173,8 @@ for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
 Procrustes_curves = np.array(parametrized_curves)
 
+
+
 print (Procrustes_curves.shape)
 i=30 # U
 j=46 # S
@@ -233,8 +235,8 @@ def fit_kde(data, bandwidth=1):
     return kde
 
 
-tangent_pca_kde = fit_kde(tangent_projected_data, bandwidth=0.8)
-sample_num = 1000
+tangent_pca_kde = fit_kde(tangent_projected_data, bandwidth=0.45)
+sample_num = 5000
 synthetic_features = tangent_pca_kde.sample(sample_num)
 
 principal_components = tpca.components_
@@ -389,18 +391,24 @@ post_synthetic_features = []
 count = 0
 for i in range(len(reconstructed_synthetic_curves)):
     Curvature_energy, Torsion_energy = compute_geometry_param_energy(synthetic_Curvatures[i], synthetic_Torsions[i])
-    if 0.01<Curvature_energy < 0.1 and Torsion_energy < 0.3:
+    Tortuosity = compute_tortuosity(reconstructed_synthetic_curves[i])
+    if 0.01<Curvature_energy < 0.1 and Torsion_energy < 0.3 and 1.6< Tortuosity < 2.7:
         post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
         post_synthetic_Curvatures.append(synthetic_Curvatures[i])
         post_synthetic_Torsions.append(synthetic_Torsions[i])
         post_synthetic_features.append(synthetic_features[i])
         count += 1
-    if count == 400:
+    if count == 4000:
         break
 reconstructed_synthetic_curves = np.array(post_reconstructed_synthetic_curves)
 synthetic_Curvatures = np.array(post_synthetic_Curvatures)
 synthetic_Torsions = np.array(post_synthetic_Torsions)
 synthetic_features = np.array(post_synthetic_features)
+
+
+
+
+
 
 
 # average_of_means_torsions = np.mean([np.mean(tors) for tors in Torsions])
@@ -550,6 +558,17 @@ for label in param_group_unique_labels:
     param_dict[label]['Energy'] = energies
     synthetic_param_dict[label]['Energy'] = synthetic_energies
 
+    selected_data_curve = [Procrustes_curves[i] for i, tag in enumerate(quad_param_group) if tag == label]
+    synthetic_selected_data_curve = [reconstructed_synthetic_curves[i] for i, tag in enumerate(synthetic_quad_param_group) if tag == label]
+    tortuosity = []
+    synthetic_tortuosity = []
+    for curve in selected_data_curve:
+        tortuosity.append(compute_tortuosity(curve))
+    for curve in synthetic_selected_data_curve:
+        synthetic_tortuosity.append(compute_tortuosity(curve))
+    param_dict[label]['Tortuosity'] = np.array(tortuosity)
+    synthetic_param_dict[label]['Tortuosity'] = np.array(synthetic_tortuosity)
+
 # 定义颜色映射
 colors = {
     label: plt.cm.CMRmap((i+1)/(len(param_group_unique_labels)+1)) for i, label in enumerate(param_group_unique_labels)
@@ -566,7 +585,6 @@ for label in param_group_unique_labels:
 fig = plt.figure(figsize=(8, 5), dpi=300)
 ax = fig.add_subplot(111)
 for i in range(len(Procrustes_curves)):
-    
     energy = compute_geometry_param_energy(Curvatures[i], Torsions[i])
     ax.scatter(energy[0], energy[1], color=colors[quad_param_group[i]], alpha=0.9, s=25, marker="${}$".format(Typevalues[i]))
     # ax.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (energy[0], energy[1]), fontsize=5)
@@ -577,7 +595,7 @@ for i in range(len(Procrustes_curves)):
         shape_score[label] = energy_score
     print (shape_score)
     print ("-"*20)
-plt.savefig(bkup_dir+"Energy_Typevalue_scatter.png")
+plt.savefig(bkup_dir+"centroid_classification.png")
 plt.close()
 
 ##########################################################
@@ -587,6 +605,8 @@ plt.close()
 # 创建一个图形和轴
 fig1, ax1 = plt.subplots(dpi=300)
 fig2, ax2 = plt.subplots(dpi=300)
+fig3 = plt.figure(figsize=(8, 5), dpi=300)
+ax3 = fig3.add_subplot(111, projection='3d')
 # 初始化一个索引来跟踪y_prob_max中的当前位置
 index = 0
 # 绘制散点图
@@ -601,9 +621,15 @@ total_curvature_energy = []
 total_torsion_energy = []
 synthetic_total_curvature_energy = []
 synthetic_total_torsion_energy = []
+total_tortuosity = []
+synthetic_total_tortuosity = []
 for label in param_group_unique_labels:
     energies = param_dict[label]['Energy']
     synthetic_energies = synthetic_param_dict[label]['Energy']
+    tortuosity = param_dict[label]['Tortuosity']
+    total_tortuosity.extend(tortuosity)
+    synthetic_tortuosity = synthetic_param_dict[label]['Tortuosity']
+    synthetic_total_tortuosity.extend(synthetic_tortuosity)
     curvatures, torsions = zip(*energies)
     synthetic_curvatures, synthetic_torsions = zip(*synthetic_energies)
     total_curvature_energy.extend(curvatures)
@@ -615,28 +641,49 @@ for label in param_group_unique_labels:
     ax1.scatter(curvatures, torsions, 
                color=colors[label], 
                label=label, 
-               alpha=0.9, ) 
+               alpha=0.5, 
+               s = tortuosity*tortuosity*20) 
+    fontsize = 5
+    for i in range(len(curvatures)):
+        ax1.annotate(round(tortuosity[i],2), (curvatures[i], torsions[i]), fontsize=fontsize)
     ax2.scatter(synthetic_curvatures, synthetic_torsions,
                 color=colors[label],
                 label=label,
-                alpha=0.9,)
+                alpha=0.5,
+                s = synthetic_tortuosity*synthetic_tortuosity*20)
     # for i in range(len(curvatures)):
     #     fontsize = 5
     #     ax1.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (curvatures[i], torsions[i]), fontsize=fontsize)
     #     ax1.annotate(param_group[i], (curvatures[i], torsions[i]-0.0015), fontsize=fontsize, color=param_group_colors[param_group[i]])
     #     ax1.annotate(Typevalues[i], (curvatures[i], torsions[i]-0.0030), fontsize=fontsize, color=Typevalues_colors[Typevalues[i]] )
     # # 更新索引
+    ax3.scatter3D(synthetic_curvatures,synthetic_torsions,synthetic_tortuosity,
+                color=colors[label],
+                label=label,
+                alpha=0.3,
+                marker='^')
+    ax3.scatter3D(curvatures,torsions,tortuosity,
+                color=colors[label],
+                label=label,
+                alpha=0.9,
+                marker='o')
     index += len(energies)
+
 total_curvature_energy = np.array(total_curvature_energy)
 total_torsion_energy = np.array(total_torsion_energy)
+synthetic_total_curvature_energy = np.array(synthetic_total_curvature_energy)
+synthetic_total_torsion_energy = np.array(synthetic_total_torsion_energy)
+total_tortuosity = np.array(total_tortuosity)
+synthetic_total_tortuosity = np.array(synthetic_total_tortuosity)
 # ax2.scatter(total_curvature_energy, total_torsion_energy, color="k", alpha=0.5, s=25)
 # 计算线性回归
 slope, intercept, r_value, p_value, std_err = stats.linregress(total_curvature_energy, total_torsion_energy)
 synthetic_slope, synthetic_intercept, synthetic_r_value, synthetic_p_value, synthetic_std_err = stats.linregress(synthetic_total_curvature_energy, synthetic_total_torsion_energy)
 # 计算预测值和置信区间
 x_pred = np.linspace(total_curvature_energy.min(), total_curvature_energy.max(), 100)
+synthetic_x_pred = np.linspace(synthetic_total_curvature_energy.min(), synthetic_total_curvature_energy.max(), 100)
 y_pred = intercept + slope * x_pred
-synthetic_y_pred = synthetic_intercept + synthetic_slope * x_pred
+synthetic_y_pred = synthetic_intercept + synthetic_slope * synthetic_x_pred
 y_err = std_err * np.sqrt(1/len(total_curvature_energy) + (x_pred - np.mean(total_curvature_energy))**2 / np.sum((total_curvature_energy - np.mean(total_curvature_energy))**2))
 conf_interval_upper = y_pred + 1.96 * y_err  # 95% 置信区间
 conf_interval_lower = y_pred - 1.96 * y_err  # 95% 置信区间
@@ -644,8 +691,7 @@ ax1.plot(x_pred, y_pred, color="k", alpha=0.4, label='Fit: y = {:.2f} + {:.2f}x'
 ax1.fill_between(x_pred, conf_interval_lower, conf_interval_upper, color='silver', alpha=0.15)# , label='95% CI')
 # 比较合成形状
 ax2.plot(x_pred, y_pred, color="k", alpha=0.4, linestyle=":",label='Fit: y = {:.2f} + {:.2f}x'.format(intercept, slope))
-ax2.plot(x_pred, synthetic_y_pred, color="k", alpha=0.4,label='Fit: y = {:.2f} + {:.2f}x'.format(synthetic_intercept, synthetic_slope))
-ax2.fill_between(x_pred, conf_interval_lower, conf_interval_upper, color='silver', alpha=0.15)# , label='95% CI')
+ax2.plot(synthetic_x_pred, synthetic_y_pred, color="k", alpha=0.4,label='Fit: y = {:.2f} + {:.2f}x'.format(synthetic_intercept, synthetic_slope))
 for ax in [ax1,ax2]:
     ax.set_xlabel('Curvature Energy')
     ax.set_ylabel('Torsion Energy')
@@ -653,10 +699,17 @@ for ax in [ax1,ax2]:
     ax.grid(linestyle='--', alpha=0.5)
 ax1.legend()
 ax2.legend()
+ax3.legend()
+ax3.set_xlabel('Curvature')
+ax3.set_ylabel('Torsion')
+ax3.set_zlabel('Tortuosity')
+# fig3.show()
 fig1.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 fig2.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label=synthetic.png")
-plt.close()
-plt.close()
+fig3.savefig(bkup_dir+"Tortuosity_Scatter_Plot_by_Label.png")
+plt.close(fig1)
+plt.close(fig2)
+plt.close(fig3)
 
 df = pd.DataFrame(tangent_projected_data, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = quad_param_group
@@ -665,83 +718,13 @@ fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, f
 # 为每个主成分绘制violinplot
 for i in range(PCA_N_COMPONENTS):
     ax = axes[i // Multi_plot_rows, i % Multi_plot_rows]
-    sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
+    # sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
+    sns.boxplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, palette=colors)
     ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
 plt.tight_layout()
 plt.savefig(bkup_dir+"srvfPCA_total_Violinplot.png")
 plt.close()
-
-
-slopes_energy1= []
-slopes_score1 = []
-slopes_energy2= []
-slopes_score2 = []
-# 绘制第一个图
-fig1, axes1 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
-fig2, axes2 = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, dpi=300, figsize=(16, 13))
-for i in range(PCA_N_COMPONENTS//Multi_plot_rows):
-    for j in range(Multi_plot_rows):
-        ax1 = axes1[i][j]
-        ax1.tick_params(axis='both', which='major', labelsize=8)
-        ax2 = axes2[i][j]
-        ax2.tick_params(axis='both', which='major', labelsize=8)
-        total_y1 = []
-        total_x1 = []
-        total_y2 = []
-        total_x2 = []
-        for tag in param_dict.keys():
-            indices = [idx for idx, label in enumerate(synthetic_quad_param_group) if label == tag]
-            selected_data1 = np.array([synthetic_features[idx] for idx in indices])[:,Multi_plot_rows*i+j]
-            param_feature1 = np.array(synthetic_param_dict[tag]["Energy"])[:,1]# /np.array(synthetic_param_dict[tag]["Energy"])[:,0]
-            selected_data2 = np.array([synthetic_features[idx] for idx in indices])[:,Multi_plot_rows*i+j]
-            param_feature2 = np.array(synthetic_param_dict[tag]["Energy"])[:,0]
-            ax1.scatter(selected_data1, param_feature1, color=colors[tag], alpha=0.6, s=25)
-            total_x1.extend(list(selected_data1))
-            total_y1.extend(list(param_feature1))
-            ax2.scatter(selected_data2, param_feature2, color=colors[tag], alpha=0.6, s=25)
-            total_x2.extend(list(selected_data2))
-            total_y2.extend(list(param_feature2))
-        model_energy1 = np.polyfit(total_x1, total_y1, 1)
-        model_energy2 = np.polyfit(total_x2, total_y2, 1)
-        slope_energy1 = model_energy1[0]
-        slope_energy2 = model_energy2[0]
-        slopes_energy1.append(slope_energy1)
-        slopes_energy2.append(slope_energy2)
-        linestyle_energy = '-' 
-        linewidth_energy = 1
-        predicted_energy1 = np.poly1d(model_energy1)
-        predicted_energy2 = np.poly1d(model_energy2)
-        predict_range_energy1 = np.linspace(np.min(total_x1), np.max(total_x1), 10)
-        predict_range_energy2 = np.linspace(np.min(total_x2), np.max(total_x2), 10)
-        ax1.plot(predict_range_energy1, predicted_energy1(predict_range_energy1), 
-                    color="k", 
-                    linewidth=linewidth_energy, 
-                    linestyle=linestyle_energy)
-        ax2.plot(predict_range_energy2, predicted_energy2(predict_range_energy2),
-                    color="k",
-                    linewidth=linewidth_energy,
-                    linestyle=linestyle_energy)
-        ax1.set_title(f'PC{Multi_plot_rows*i+j+1}')
-        ax2.set_title(f'PC{Multi_plot_rows*i+j+1}')
-# plt.figure(fig1.number)
-# plt.tight_layout()
-# plt.subplots_adjust(top=0.9)
-fig1.savefig(bkup_dir+"Cenergy_VS_PCs_synthetic.png")
-fig2.savefig(bkup_dir+"Tenergy_VS_PCs_synthetic.png")
-plt.close(fig1)
-plt.close(fig2)
-
-print("Torsion energy平均斜率：", np.mean(np.abs(slopes_energy1)))
-print("Torsion energy斜率标准差：", np.std(slopes_energy1))
-slopes_energy = np.array(slopes_energy1).reshape(-1,4)
-for i, tag in enumerate(param_dict.keys()):
-    print(tag, "的支配性PC是:", np.max(np.abs(slopes_energy[:,i])), np.argmax(np.abs(slopes_energy[:,i])), "其平均绝对斜率是:", np.mean(np.abs(slopes_energy[:,i])))
-print("Curvature energy平均斜率：", np.mean(np.abs(slopes_energy2)))
-print("Curvature energy斜率标准差：", np.std(slopes_energy2))
-slopes_energy = np.array(slopes_energy2).reshape(-1,4)
-for i, tag in enumerate(param_dict.keys()):
-    print(tag, "的支配性PC是:", np.max(np.abs(slopes_energy[:,i])), np.argmax(np.abs(slopes_energy[:,i])), "其平均绝对斜率是:", np.mean(np.abs(slopes_energy[:,i])))
 
 
 ####################BraVa Data的各PC####################

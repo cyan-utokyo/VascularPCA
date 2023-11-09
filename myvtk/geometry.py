@@ -114,6 +114,19 @@ def compute_geometry_param_energy(curvature, torsion, POWER_ENG_CURVATURE=2, POW
 #     return curvature_energy, torsion_energy
 
 
+def compute_tortuosity(curve):
+    """
+    计算曲线的扭曲度
+    """
+    # 计算曲线的长度
+    curve_length = np.sum(np.linalg.norm(np.diff(curve, axis=0), axis=1))
+    # 计算曲线的欧式距离
+    euclidean_distance = np.linalg.norm(curve[-1] - curve[0])
+    # 计算扭曲度
+    tortuosity = curve_length / euclidean_distance
+    return tortuosity
+
+
 def compute_geometry_param_energy_segment(curvature, torsion, POWER_ENG_CURVATURE=2, POWER_ENG_TORSION=2):
     """
     这个函数并未被使用。它计算曲率和扭率的能量，但是将曲线分成了几个段，然后计算每个段的能量。
