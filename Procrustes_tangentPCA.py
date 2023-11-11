@@ -225,7 +225,6 @@ tangent_vectors = np.array(tangent_vectors)
 #########################################
 
 tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPONENTS)
-log.write("discrete_curves_space.metric: <geomstats.geometry.discrete_curves.SRVMetric object\n")
 # 拟合并变换数据到切线空间的主成分中
 tpca.fit(tangent_vectors)
 tangent_projected_data = tpca.transform(tangent_vectors)
@@ -235,62 +234,48 @@ def fit_kde(data, bandwidth=1):
     kde.fit(data)
     return kde
 
-
 tangent_pca_kde = fit_kde(tangent_projected_data, bandwidth=0.45)
 sample_num = 5000
 synthetic_features = tangent_pca_kde.sample(sample_num)
 
-principal_components = tpca.components_
-# Assuming principal_components has the shape (n_components, n_sampling_points * n_dimensions)
-principal_components_reshaped = principal_components.reshape((PCA_N_COMPONENTS, len(tangent_vectors[0]), 3))
-# Now use exp on each reshaped component
-curves_from_components = [
-    discrete_curves_space.metric.exp(tangent_vec=component, base_point=tangent_base)
-    for component in principal_components_reshaped
-]
+def from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, inverse_srvf_func=inverse_srvf):
+    principal_components = tpca.components_
+    # Assuming principal_components has the shape (n_components, n_sampling_points * n_dimensions)
+    principal_components_reshaped = principal_components.reshape((PCA_N_COMPONENTS, 64, 3)) # 64是采样点数
+    # Now use exp on each reshaped component
+    curves_from_components = [
+        discrete_curves_space.metric.exp(tangent_vec=component, base_point=tangent_base)
+        for component in principal_components_reshaped
+    ]
 
-reconstructed_curves = []
-for idx in range(len(tangent_projected_data)):
-    # This is your feature - a single point in PCA space representing the loadings for the first curve.
-    feature = tangent_projected_data[idx]
-    # Reconstruct the tangent vector from the feature.
-    tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
-    # Map the tangent vector back to the curve space using the exponential map.
-    reconstructed_srvf = discrete_curves_space.metric.exp(
-        tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
-    )
-    reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
-    # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
-    
-    reconstructed_curves.append(reconstructed_curve)
-reconstructed_curves = np.array(reconstructed_curves)
+    reconstructed_curves = []
+    for idx in range(len(tangent_projected_data)):
+        # This is your feature - a single point in PCA space representing the loadings for the first curve.
+        feature = np.array(tangent_projected_data[idx])
+        # Reconstruct the tangent vector from the feature.
+        # print ("feature:", feature.shape)
+        # print ("principal_components_reshaped:", principal_components_reshaped.shape)
+        # print ("idx:", idx)
+        tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
+        # Map the tangent vector back to the curve space using the exponential map.
+        reconstructed_srvf = discrete_curves_space.metric.exp(
+            tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
+        )
+        reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
+        # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
+        
+        reconstructed_curves.append(reconstructed_curve)
+    reconstructed_curves = np.array(reconstructed_curves)
+    return reconstructed_curves
 
-reconstructed_synthetic_curves = []
-synthetic_length = []
-# print ("synthetic_features.shape", synthetic_features.shape)
-for idx in range(len(synthetic_features)):
-    # This is your feature - a single point in PCA space representing the loadings for the first curve.
-    feature = synthetic_features[idx]
-    # Reconstruct the tangent vector from the feature.
-    tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
-    # Map the tangent vector back to the curve space using the exponential map.
-    reconstructed_srvf = discrete_curves_space.metric.exp(
-        tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
-    )
-    reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
-    # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
-    
-    reconstructed_synthetic_curves.append(reconstructed_curve)
-    synthetic_length.append(measure_length(reconstructed_curve))
-reconstructed_synthetic_curves = np.array(reconstructed_synthetic_curves)
-print ("synthetic_length:", np.mean(synthetic_length))
-print ("reconstructed_synthetic_curves.shape:", reconstructed_synthetic_curves.shape)
-
+reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, inverse_srvf_func=inverse_srvf)
+reconstructed_synthetic_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, inverse_srvf_func=inverse_srvf)
+print ("done......")
 def reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf_func):
     principal_components = tpca.components_
     # Assuming the shape of principal_components is (n_components, n_sampling_points * n_dimensions)
     principal_components_reshaped = principal_components.reshape(
-        (tpca.n_components, -1, 3)
+        (tpca.n_components, 64, 3)
     )
 
     curves_from_components = []
@@ -309,6 +294,7 @@ def reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_sr
     return curves_from_components
 # Usage
 tangent_components = reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf)
+
 
 sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
 sm.set_array([])  # Only needed for the colorbar
@@ -402,13 +388,61 @@ for i in range(len(reconstructed_synthetic_curves)):
     if count == 4000:
         break
 reconstructed_synthetic_curves = np.array(post_reconstructed_synthetic_curves)
+
+reconstructed_synthetic_curves = align_icp(reconstructed_synthetic_curves, base_id=0)
+print ("First alignment done.")
+reconstructed_synthetic_curves = align_procrustes(reconstructed_synthetic_curves,base_id=0)
+print ("procrustes alignment done.")
+# for i in range(len(Procrustes_curves)):
+#     print ("length:", measure_length(Procrustes_curves[i]))
+parametrized_curves = np.zeros_like(reconstructed_synthetic_curves)
+# aligned_curves = np.zeros_like(interpolated_curves)
+for i in range(len(reconstructed_synthetic_curves)):
+    parametrized_curves[i] = arc_length_parametrize(reconstructed_synthetic_curves[i])
+reconstructed_synthetic_curves = np.array(parametrized_curves)
+
 synthetic_Curvatures = np.array(post_synthetic_Curvatures)
 synthetic_Torsions = np.array(post_synthetic_Torsions)
 synthetic_features = np.array(post_synthetic_features)
 
+synthetic_srvf = []
+for i in range(len(reconstructed_synthetic_curves)):
+    synthetic_srvf.append(calculate_srvf(reconstructed_synthetic_curves[i])/measure_length(reconstructed_synthetic_curves[i]))
+synthetic_srvf = np.array(synthetic_srvf)
+synthetic_tangent_base = compute_frechet_mean(synthetic_srvf)
+
+print ("measure length synthetic:", measure_length(reconstructed_synthetic_curves[0]))
+print ("measure length reconstruct", measure_length(reconstructed_curves[0]))
+print ("measure length synthetic srvf:", measure_length(synthetic_srvf[0]))
+print ("measure length srvf:",measure_length(Procs_srvf_curves[0]))
+#########################################
+# 把srvf曲线做对数映射，得到切线空间的切向量
+synthetic_tangent_vectors = []
+for curve in synthetic_srvf:
+    synthetic_tangent_vector = discrete_curves_space.to_tangent(curve, synthetic_tangent_base)
+    synthetic_tangent_vectors.append(synthetic_tangent_vector)
+synthetic_tangent_vectors = np.array(synthetic_tangent_vectors)
+tangent_vectors_in_synthetic = []
+for curve in Procs_srvf_curves:
+    tangent_vector_in_synthetic = discrete_curves_space.to_tangent(curve, synthetic_tangent_base)
+    tangent_vectors_in_synthetic.append(tangent_vector)
+# 把srvf曲线做对数映射，得到切线空间的切向量
+#########################################
+synthetic_tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPONENTS)
+synthetic_tpca.fit(synthetic_tangent_vectors)
+synthetic_tangent_projected_data = tpca.transform(synthetic_tangent_vectors)
+brava_tangent_projected_data = tpca.transform(tangent_vectors_in_synthetic)
 
 
-
+fig1 = plt.figure(figsize=(13, 6),dpi=300)
+ax1 = fig1.add_subplot(111)
+ax1.scatter(synthetic_tangent_projected_data[:,0], synthetic_tangent_projected_data[:,1], s=25, marker="o", color="k", alpha=0.5)
+ax1.scatter(brava_tangent_projected_data[:,0], brava_tangent_projected_data[:,1], s=25, marker="o", color="r", alpha=0.5)
+ax1.set_xlabel("PC1")
+ax1.set_ylabel("PC2")
+ax1.set_title("synthetic_tangent_projected_data")
+fig1.savefig(bkup_dir+"synthetic_tangent_projected_data.png")
+plt.close(fig1)
 
 
 
@@ -746,20 +780,7 @@ for i in range(PCA_N_COMPONENTS):
     single_reconstructed_curves = []
     # fig = plt.figure(figsize=(6, 6),dpi=300)
     # ax = fig.add_subplot(111, projection='3d')
-    for idx in range(len(single_component_feature)):
-        # This is your feature - a single point in PCA space representing the loadings for the first curve.
-        feature = single_component_feature[idx]
-        # Reconstruct the tangent vector from the feature.
-        tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
-        # Map the tangent vector back to the curve space using the exponential map.
-        reconstructed_srvf = discrete_curves_space.metric.exp(
-            tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
-        )
-        reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
-        single_reconstructed_curves.append(reconstructed_curve)
-        # plt.plot(reconstructed_curve[:,0], reconstructed_curve[:,1],reconstructed_curve[:,2], 
-        #          color=colors[synthetic_quad_param_group[idx]])
-    single_reconstructed_curves = np.array(single_reconstructed_curves)
+    single_reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, inverse_srvf_func=inverse_srvf)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
     # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
     # print ("Curvautres.shape:", Curvatures.shape)
@@ -768,8 +789,11 @@ for i in range(PCA_N_COMPONENTS):
     all_curvature = [curvature for curve in Curvatures for curvature in curve]
     all_torsion = [torsion for curve in Torsions for torsion in curve]
     vtk_file_name = vtk_dir + f"PC{i+1}.vtk"
-    write_vtk_line(vtk_file_name, single_reconstructed_curves, quad_param_group_mapped, single_component_feature[:,i], all_single_curvatures, all_single_torsions, all_curvature, all_torsion)
-
+    write_vtk_line(vtk_file_name, 
+                   single_reconstructed_curves, 
+                   quad_param_group_mapped, 
+                   single_component_feature[:,i], 
+                   all_single_curvatures, all_single_torsions, all_curvature, all_torsion)
     # ax1.set_title(f'PC{i+1}')
     # fig.savefig(bkup_dir+f"PC{i+1}.png")
     # plt.close(fig)
