@@ -88,7 +88,8 @@ from PIL import Image
 from myvtk.Myscores import *
 warnings.filterwarnings("ignore")
 
-# sns.set_context("talk", font_scale=0.8)
+sns.set_context("talk", font_scale=0.8)
+sns.set_style("whitegrid")
 PCA_N_COMPONENTS = 16
 Multi_plot_rows = 4
 SCALETO1 = False
@@ -392,7 +393,7 @@ count = 0
 for i in range(len(reconstructed_synthetic_curves)):
     Curvature_energy, Torsion_energy = compute_geometry_param_energy(synthetic_Curvatures[i], synthetic_Torsions[i])
     Tortuosity = compute_tortuosity(reconstructed_synthetic_curves[i])
-    if 0.01<Curvature_energy < 0.1 and Torsion_energy < 0.3 and 1.6< Tortuosity < 2.7:
+    if 0.01<Curvature_energy < 0.08 and Torsion_energy < 0.22 and 1.6< Tortuosity < 2.7:
         post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
         post_synthetic_Curvatures.append(synthetic_Curvatures[i])
         post_synthetic_Torsions.append(synthetic_Torsions[i])
@@ -743,8 +744,8 @@ for i in range(PCA_N_COMPONENTS):
     single_component_feature = np.zeros_like(synthetic_features)
     single_component_feature[:,i] = synthetic_features[:,i]
     single_reconstructed_curves = []
-    fig = plt.figure(figsize=(6, 6),dpi=300)
-    ax = fig.add_subplot(111, projection='3d')
+    # fig = plt.figure(figsize=(6, 6),dpi=300)
+    # ax = fig.add_subplot(111, projection='3d')
     for idx in range(len(single_component_feature)):
         # This is your feature - a single point in PCA space representing the loadings for the first curve.
         feature = single_component_feature[idx]
@@ -755,11 +756,9 @@ for i in range(PCA_N_COMPONENTS):
             tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
         )
         reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
-        # reconstructed_curve = move_to_centroid(reconstructed_curve)
-        # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
         single_reconstructed_curves.append(reconstructed_curve)
-        plt.plot(reconstructed_curve[:,0], reconstructed_curve[:,1],reconstructed_curve[:,2], 
-                 color=colors[synthetic_quad_param_group[idx]])
+        # plt.plot(reconstructed_curve[:,0], reconstructed_curve[:,1],reconstructed_curve[:,2], 
+        #          color=colors[synthetic_quad_param_group[idx]])
     single_reconstructed_curves = np.array(single_reconstructed_curves)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
     # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
@@ -771,9 +770,9 @@ for i in range(PCA_N_COMPONENTS):
     vtk_file_name = vtk_dir + f"PC{i+1}.vtk"
     write_vtk_line(vtk_file_name, single_reconstructed_curves, quad_param_group_mapped, single_component_feature[:,i], all_single_curvatures, all_single_torsions, all_curvature, all_torsion)
 
-    ax1.set_title(f'PC{i+1}')
-    fig.savefig(bkup_dir+f"PC{i+1}.png")
-    plt.close(fig)
+    # ax1.set_title(f'PC{i+1}')
+    # fig.savefig(bkup_dir+f"PC{i+1}.png")
+    # plt.close(fig)
     # plt.show()
 
 
@@ -782,7 +781,7 @@ fig = plt.figure(figsize=(8, 4),dpi=300)
 ax = fig.add_subplot(111)
 for i in range(PCA_N_COMPONENTS):
     ax.boxplot(tangent_projected_data[:,i], positions=[i], widths=0.6, showfliers=False)
-ax.set_xticks(range(PCA_N_COMPONENTS))
+ax.set_xticks(range(PCA_N_COMPONENTS),angle=45)
 ax.set_xticklabels([f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 ax.set_xlabel('Principal Components')
 ax.set_ylabel('Loadings')
@@ -805,19 +804,19 @@ for label in param_group_unique_labels:
                synthetic_features[np.array(synthetic_quad_param_group) == label][:,1],
                color=colors[label], 
                label=label, 
-               alpha=0.4, )
+               alpha=0.2, )
     ax.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,0], 
                tangent_projected_data[np.array(quad_param_group) == label][:,1],
                color=colors[label], 
-               label=label, 
-               alpha=0.9, 
+               label=label+ " real",
+               alpha=0.7, 
                marker="x",
                s=50) 
     ax2.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,0], 
                tangent_projected_data[np.array(quad_param_group) == label][:,1],
                color=colors[label], 
                label=label, 
-               alpha=0.9) 
+               alpha=0.7) 
     for i in range(10):
         makeVtkFile(vtk_dir + label + "_synthetic_" + str(i) + ".vtk",reconstructed_synthetic_curves[np.array(synthetic_quad_param_group) == label][i], [],[])
         makeVtkFile(vtk_dir + label + "_real_" + str(i) + ".vtk",reconstructed_curves[np.array(quad_param_group) == label][i],[],[])
