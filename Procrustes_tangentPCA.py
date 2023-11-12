@@ -234,9 +234,14 @@ def fit_kde(data, bandwidth=1):
     kde.fit(data)
     return kde
 
-tangent_pca_kde = fit_kde(tangent_projected_data, bandwidth=0.45)
-sample_num = 5000
-synthetic_features = tangent_pca_kde.sample(sample_num)
+mean_tangent_projected_data = np.mean(tangent_projected_data, axis=0)
+std_tangent_projected_data = np.std(tangent_projected_data, axis=0)
+standardize_tangent_projected_data = zscore(tangent_projected_data)
+standardize_tangent_pca_kde = fit_kde(standardize_tangent_projected_data, bandwidth=1)
+
+sample_num = 50000
+standardize_synthetic_features = standardize_tangent_pca_kde.sample(sample_num)
+synthetic_features = standardize_synthetic_features* std_tangent_projected_data + mean_tangent_projected_data
 
 def from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, inverse_srvf_func=inverse_srvf):
     principal_components = tpca.components_
@@ -389,14 +394,11 @@ for i in range(len(reconstructed_synthetic_curves)):
         break
 reconstructed_synthetic_curves = np.array(post_reconstructed_synthetic_curves)
 
-reconstructed_synthetic_curves = align_icp(reconstructed_synthetic_curves, base_id=0)
+reconstructed_synthetic_curves = align_icp(reconstructed_synthetic_curves, base_id=-2, external_curve=Procrustes_curves[base_id])
 print ("First alignment done.")
-reconstructed_synthetic_curves = align_procrustes(reconstructed_synthetic_curves,base_id=0)
+reconstructed_synthetic_curves = align_procrustes(reconstructed_synthetic_curves,base_id=-2, external_curve=Procrustes_curves[base_id])
 print ("procrustes alignment done.")
-# for i in range(len(Procrustes_curves)):
-#     print ("length:", measure_length(Procrustes_curves[i]))
 parametrized_curves = np.zeros_like(reconstructed_synthetic_curves)
-# aligned_curves = np.zeros_like(interpolated_curves)
 for i in range(len(reconstructed_synthetic_curves)):
     parametrized_curves[i] = arc_length_parametrize(reconstructed_synthetic_curves[i])
 reconstructed_synthetic_curves = np.array(parametrized_curves)
@@ -410,6 +412,14 @@ for i in range(len(reconstructed_synthetic_curves)):
     synthetic_srvf.append(calculate_srvf(reconstructed_synthetic_curves[i])/measure_length(reconstructed_synthetic_curves[i]))
 synthetic_srvf = np.array(synthetic_srvf)
 synthetic_tangent_base = compute_frechet_mean(synthetic_srvf)
+fig1 = plt.figure(figsize=(13, 6),dpi=300)
+ax1 = fig1.add_subplot(111)
+ax1.plot(synthetic_tangent_base[:,0], label="synthetic_tangent_base")
+ax1.plot(tangent_base[:,0], label="tangent_base")
+ax1.plot(synthetic_srvf[0][:,0], label="synthetic_srvf[0]")
+plt.legend()
+plt.savefig(bkup_dir+"synthetic_tangent_base.png")
+plt.close()
 
 print ("measure length synthetic:", measure_length(reconstructed_synthetic_curves[0]))
 print ("measure length reconstruct", measure_length(reconstructed_curves[0]))
@@ -425,7 +435,7 @@ synthetic_tangent_vectors = np.array(synthetic_tangent_vectors)
 tangent_vectors_in_synthetic = []
 for curve in Procs_srvf_curves:
     tangent_vector_in_synthetic = discrete_curves_space.to_tangent(curve, synthetic_tangent_base)
-    tangent_vectors_in_synthetic.append(tangent_vector)
+    tangent_vectors_in_synthetic.append(tangent_vector_in_synthetic)
 # 把srvf曲线做对数映射，得到切线空间的切向量
 #########################################
 synthetic_tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPONENTS)
