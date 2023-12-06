@@ -446,73 +446,11 @@ for i in range(len(reconstructed_synthetic_curves)):
     if count == 320:
         break
 reconstructed_synthetic_curves = np.array(post_reconstructed_synthetic_curves)
-
-# reconstructed_synthetic_curves = align_icp(reconstructed_synthetic_curves, base_id=-2, external_curve=Procrustes_curves[base_id])
-# print ("First alignment done.")
-# reconstructed_synthetic_curves = align_procrustes(reconstructed_synthetic_curves,base_id=-2, external_curve=Procrustes_curves[base_id])
-# print ("procrustes alignment done.")
-# parametrized_curves = np.zeros_like(reconstructed_synthetic_curves)
-# for i in range(len(reconstructed_synthetic_curves)):
-#     parametrized_curves[i] = arc_length_parametrize(reconstructed_synthetic_curves[i])
-# reconstructed_synthetic_curves = np.array(parametrized_curves)
-
 synthetic_Curvatures = np.array(post_synthetic_Curvatures)
 synthetic_Torsions = np.array(post_synthetic_Torsions)
 synthetic_features = np.array(post_synthetic_features)
 
-# synthetic_srvf = []
-# for i in range(len(reconstructed_synthetic_curves)):
-#     synthetic_srvf.append(calculate_srvf(reconstructed_synthetic_curves[i])/measure_length(reconstructed_synthetic_curves[i]))
-# synthetic_srvf = np.array(synthetic_srvf)
 
-# synthetic_tangent_base = compute_frechet_mean(synthetic_srvf)
-# fig1 = plt.figure(figsize=(13, 6),dpi=300)
-# ax1 = fig1.add_subplot(111)
-# ax1.plot(synthetic_tangent_base[:,0], label="synthetic_tangent_base")
-# ax1.plot(tangent_base[:,0], label="tangent_base")
-# ax1.plot(synthetic_srvf[0][:,0], label="synthetic_srvf[0]")
-# plt.legend()
-# plt.savefig(bkup_dir+"synthetic_tangent_base.png")
-# plt.close()
-
-# print ("measure length synthetic:", measure_length(reconstructed_synthetic_curves[0]))
-# print ("measure length reconstruct", measure_length(reconstructed_curves[0]))
-# print ("measure length synthetic srvf:", measure_length(synthetic_srvf[0]))
-# print ("measure length srvf:",measure_length(Procs_srvf_curves[0]))
-#########################################
-# 把srvf曲线做对数映射，得到切线空间的切向量
-# synthetic_tangent_vectors = []
-# for curve in synthetic_srvf:
-#     synthetic_tangent_vector = discrete_curves_space.to_tangent(curve, synthetic_tangent_base)
-#     synthetic_tangent_vectors.append(synthetic_tangent_vector)
-# synthetic_tangent_vectors = np.array(synthetic_tangent_vectors)
-# tangent_vectors_in_synthetic = []
-# for curve in Procs_srvf_curves:
-#     tangent_vector_in_synthetic = discrete_curves_space.to_tangent(curve, synthetic_tangent_base)
-#     tangent_vectors_in_synthetic.append(tangent_vector_in_synthetic)
-# 把srvf曲线做对数映射，得到切线空间的切向量
-#########################################
-# synthetic_tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPONENTS)
-# synthetic_tpca.fit(synthetic_tangent_vectors)
-# synthetic_tangent_projected_data = tpca.transform(synthetic_tangent_vectors)
-# brava_tangent_projected_data = tpca.transform(tangent_vectors_in_synthetic)
-
-# # tpca = synthetic_tpca
-
-
-# fig1 = plt.figure(figsize=(13, 6),dpi=300)
-# ax1 = fig1.add_subplot(111)
-# ax1.scatter(synthetic_tangent_projected_data[:,0], synthetic_tangent_projected_data[:,1], s=25, marker="o", color="k", alpha=0.5)
-# ax1.scatter(brava_tangent_projected_data[:,0], brava_tangent_projected_data[:,1], s=25, marker="o", color="r", alpha=0.5)
-# ax1.set_xlabel("PC1")
-# ax1.set_ylabel("PC2")
-# ax1.set_title("synthetic_tangent_projected_data")
-# fig1.savefig(bkup_dir+"synthetic_tangent_projected_data.png")
-# plt.close(fig1)
-
-
-
-# average_of_means_torsions = np.mean([np.mean(tors) for tors in Torsions])
 average_of_means_torsions = np.mean([np.mean(np.abs(tors)) for tors in Torsions])
 average_of_std_torsions = np.mean([np.std(tors) for tors in Torsions])
 
@@ -824,7 +762,7 @@ for i in range(PCA_N_COMPONENTS):
     ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
 plt.tight_layout()
-plt.savefig(bkup_dir+"srvfPCA_total_Violinplot.png")
+plt.savefig(bkup_dir+"tangentPCA_total_boxplot.png")
 plt.close()
 
 
@@ -875,7 +813,14 @@ for i in range(PCA_N_COMPONENTS):
     for label,key in zip(mapping.values(), mapping.keys()):
     # 筛选出特定标签的数据
         data = single_component_feature[:, i][np.array(quad_param_group_mapped) == label]
-        sns.kdeplot(data, label=key,ax=ax31,bw_adjust=1.5, shade=True, color=colors[key])
+        mean_label = np.mean(data)
+        std_label = np.std(data)
+        # 创建用于绘制高斯分布的数据点
+        x_values = np.linspace(min(data), max(data), 1000)
+        y_values = norm.pdf(x_values, loc=mean_label, scale=std_label)
+        # 绘制高斯分布
+        ax31.plot(x_values, y_values, label=f'{key} Gaussian', color=colors[key])
+
     ax31.legend()
     ax1.set_title(f'PC{i+1}')
     ax2.set_title(f'PC{i+1}')
@@ -884,7 +829,7 @@ for i in range(PCA_N_COMPONENTS):
     ax1.set_ylabel('Curvature')
     ax2.set_ylabel('Torsion')
     fig.savefig(bkup_dir+f"PC{i+1}.png")
-    fig3.savefig(bkup_dir+f"PC{i+1}_kde.png")
+    fig3.savefig(bkup_dir+f"PC{i+1}_gaussian.png")
     plt.close(fig3)
     plt.tight_layout()
     plt.close(fig)
