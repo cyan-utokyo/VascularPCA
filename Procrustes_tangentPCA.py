@@ -88,8 +88,8 @@ from PIL import Image
 from myvtk.Myscores import *
 warnings.filterwarnings("ignore")
 
-sns.set_context("talk", font_scale=0.8)
-sns.set_style("whitegrid")
+# sns.set_context("talk", font_scale=0.8)
+# sns.set_style("whitegrid")
 PCA_N_COMPONENTS = 16
 Multi_plot_rows = 4
 SCALETO1 = False
@@ -156,15 +156,32 @@ for i in range(len(Files)):
         base_id = i
 print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
 
+# 设定参考点 p，您可以根据需要修改这个点
+p = np.array([0, 0, 1])  # 例如，令 p 在 z 轴上
+unaligned_curves = np.array([align_endpoints(curve, p) for curve in unaligned_curves])
+
+fig = plt.figure(figsize=(13, 6),dpi=300)
+ax1 = fig.add_subplot(133)
+ax2 = fig.add_subplot(132)
+ax3 = fig.add_subplot(131)
+for i in range(len(unaligned_curves)):
+    ax1.plot(unaligned_curves[i][:,0], unaligned_curves[i][:,1])
+    ax2.plot(unaligned_curves[i][:,0], unaligned_curves[i][:,2])
+    ax3.plot(unaligned_curves[i][:,1], unaligned_curves[i][:,2])
+fig.savefig(bkup_dir+"unaligned_curves.png")
+plt.close(fig)
+
+
 ##################################################
 #  从这里开始是对齐。                             #
 #  To-Do: 需要保存Procrustes对齐后的              #
 #  曲线各一条，作为后续的曲线对齐的基准。           #
 ##################################################
 
-a_curves = align_icp(unaligned_curves, base_id=base_id)
+# a_curves = align_icp(unaligned_curves, base_id=base_id)
+a_curves = unaligned_curves
 print ("First alignment done.")
-Procrustes_curves = align_procrustes(a_curves,base_id=base_id)
+Procrustes_curves = align_procrustes(a_curves, base_id=base_id)
 print ("procrustes alignment done.")
 # for i in range(len(Procrustes_curves)):
 #     print ("length:", measure_length(Procrustes_curves[i]))
@@ -173,6 +190,22 @@ parametrized_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
 Procrustes_curves = np.array(parametrized_curves)
+# Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
+# frechet_mean_shape=compute_frechet_mean(Procrustes_curves)
+
+fig = plt.figure(figsize=(13, 6),dpi=300)
+ax1 = fig.add_subplot(133)
+ax2 = fig.add_subplot(132)
+ax3 = fig.add_subplot(131)
+for i in range(len(Procrustes_curves)):
+    ax1.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,1])
+    ax2.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,2])
+    ax3.plot(Procrustes_curves[i][:,1], Procrustes_curves[i][:,2])
+fig.savefig(bkup_dir+"Procrustes_curves.png")
+plt.close(fig)
+
+
+
 
 
 
@@ -189,10 +222,11 @@ Procrustes_curves = preprocess_curves
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
-    Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/measure_length(Procrustes_curves[i]))
+    # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/measure_length(Procrustes_curves[i]))
+    Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/np.linalg.norm(Procrustes_curves[i][-1] - Procrustes_curves[i][0]))
     # print ("SRVF length:", measure_length(Procs_srvf_curves[i]))
     # print ("SRVF length by GPT4:", srvf_length(Procs_srvf_curves[i]))
-log.write("SCALED to 1 before compute SRVF.\n")
+log.write("SCALED to (absolute length) 1 before compute SRVF.\n")
 log.write("according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF.\n")
 
 TANGENT_BASE = "srvf_frechet"
@@ -206,6 +240,8 @@ elif TANGENT_BASE == "srvf_frechet":
     tangent_base = compute_frechet_mean(Procs_srvf_curves)
     print ("using srvf_frechet as tangent_base.")
     log.write("using srvf_frechet as tangent_base.\n")
+    frechet_mean_shape = compute_frechet_mean(Procrustes_curves)
+    # print ("tangent_base_curve length:", measure_length(tangent_base_curve))
 # else:
 #     for i in range(len(Files)):
 #         if TANGENT_BASE in Files[i]:
@@ -355,16 +391,16 @@ def reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_sr
 tangent_components = reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf)
 
 
-sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
-sm.set_array([])  # Only needed for the colorbar
-fig1 = plt.figure(figsize=(13, 6),dpi=300)
-ax1 = fig1.add_subplot(111)
-for i in range(len(tangent_components)):
-    color = sm.to_rgba(i)
-    ax1.plot(tangent_components[i][:,0], label="component{}".format(i+1), color=color)
-ax1.legend()
-fig1.savefig(bkup_dir+"component.png")
-plt.close(fig1)
+# sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
+# sm.set_array([])  # Only needed for the colorbar
+# fig1 = plt.figure(figsize=(13, 6),dpi=300)
+# ax1 = fig1.add_subplot(111)
+# for i in range(len(tangent_components)):
+#     color = sm.to_rgba(i)
+#     ax1.plot(tangent_components[i][:,0], label="component{}".format(i+1), color=color)
+# ax1.legend()
+# fig1.savefig(bkup_dir+"component.png")
+# plt.close(fig1)
 
 
 ###########################################################
@@ -377,6 +413,7 @@ sm.set_array([])  # Only needed for the colorbar
 
 for i, component in enumerate(tangent_components):
     color = sm.to_rgba(i)
+    component = align_endpoints(component, p)
     ax.plot(component[:, 0], component[:, 1], component[:, 2], color=color)
 
 ax.set_xlabel("X axis")
@@ -735,6 +772,7 @@ for ax in [ax1,ax2]:
     ax.set_xlabel('Curvature Energy')
     ax.set_ylabel('Torsion Energy')
     ax.set_title('Energy Scatter Plot by Label')
+    ax.set_ylim(-0.2, 0.5)
     ax.grid(linestyle='--', alpha=0.5)
 ax1.legend()
 ax2.legend()
@@ -753,12 +791,12 @@ plt.close(fig3)
 df = pd.DataFrame(tangent_projected_data, columns=[f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
 df['Type'] = quad_param_group
 # 创建一个4x4的子图网格
-fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(20, 20))
+fig, axes = plt.subplots((PCA_N_COMPONENTS//Multi_plot_rows), Multi_plot_rows, figsize=(16, 20))
 # 为每个主成分绘制violinplot
 for i in range(PCA_N_COMPONENTS):
     ax = axes[i // Multi_plot_rows, i % Multi_plot_rows]
     # sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
-    sns.boxplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, palette=colors)
+    sns.boxplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, palette=colors, width=0.25)  # inner='quartile' 在violin内部显示四分位数
     ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
 plt.tight_layout()
@@ -834,6 +872,116 @@ for i in range(PCA_N_COMPONENTS):
     plt.tight_layout()
     plt.close(fig)
     # plt.show()
+
+reconstructed_curves = np.array([align_endpoints(curve, p) for curve in reconstructed_curves])
+
+
+
+fig1 = plt.figure(figsize=(12, 3),dpi=300)
+ax1 = fig1.add_subplot(111)
+fig2 = plt.figure(figsize=(12, 3),dpi=300)
+ax2 = fig2.add_subplot(111)
+frechet_mean_shape = align_endpoints(frechet_mean_shape, p)
+# ax.plot(frechet_mean_shape[:,0], label="Mean shape", color="k")  
+curvature_means = {key: [] for key in mapping.keys()}
+torsion_means = {key: [] for key in mapping.keys()}
+for label,key in zip(mapping.values(), mapping.keys()):
+    data = reconstructed_curves[np.array(quad_param_group_mapped) == label]
+    curvature = Curvatures[np.array(quad_param_group_mapped) == label]
+    torsion = Torsions[np.array(quad_param_group_mapped) == label]
+    # for curve in data:
+    #     ax.scatter(range(len(curve)), curve[:,0], color=colors[key], alpha=0.5, marker="+", s=10)
+    print ("colorkey", colors[key])
+    # 初始化存储均值的列表
+    curvature_means_per_loci = []
+    torsion_means_per_loci = []
+    for loci in range(len(curvature[0])):
+        curvature_means[key].append(np.mean(curvature[:, loci]))
+        torsion_means[key].append(np.mean(torsion[:, loci]))
+        box = ax1.boxplot(curvature[:, loci], positions=[loci], widths=0.3, 
+                        showfliers=False, patch_artist=True,
+                        boxprops=dict(facecolor=colors[key], color=colors[key]))
+        box = ax2.boxplot(torsion[:, loci], positions=[loci], widths=0.3, 
+                        showfliers=False, patch_artist=True,
+                        boxprops=dict(facecolor=colors[key], color=colors[key]))
+ax1.set_xlabel('Sampling Points')
+ax1.set_ylabel('Curvature')
+ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
+ax2.set_xlabel('Sampling Points')
+ax2.set_ylabel('Torsion')
+ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
+plt.tight_layout()
+fig1.savefig(bkup_dir+"X_axis_of_curvature.png")
+plt.close(fig1)
+fig2.savefig(bkup_dir+"X_axis_of_torsion.png")
+plt.close(fig2)
+
+# 初始化存储均值的列表
+curvature_means_per_loci = [[] for _ in range(len(curvature[0]))]
+torsion_means_per_loci = [[] for _ in range(len(torsion[0]))]
+
+# 聚合不同类别的均值
+for loci in range(len(curvature[0])):
+    for key in curvature_means:
+        curvature_means_per_loci[loci].append(curvature_means[key][loci])
+        torsion_means_per_loci[loci].append(torsion_means[key][loci])
+
+# 计算类别均值的标准差
+curvature_std_devs = [np.std(means) for means in curvature_means_per_loci]
+torsion_std_devs = [np.std(means) for means in torsion_means_per_loci]
+
+# 标准差降序排序并获取前10个最大的loci
+# top10_diff_curvature_loci = np.argsort(curvature_std_devs)[::-1][:10]
+# top10_diff_torsion_loci = np.argsort(torsion_std_devs)[::-1][:10]
+
+diff_curvature_loci = np.argsort(curvature_std_devs)
+diff_torsion_loci = np.argsort(torsion_std_devs)
+
+# print(f"Loci with the largest differences in curvature means: {top10_diff_curvature_loci}")
+# print(f"Loci with the largest differences in torsion means: {top10_diff_torsion_loci}")
+
+
+fig1 = plt.figure(figsize=(3,12),dpi=300)
+ax1 = fig1.add_subplot(111)
+ax1.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
+fig2 = plt.figure(figsize=(3,12),dpi=300)
+ax2 = fig2.add_subplot(111)
+ax2.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
+fig3 = plt.figure(figsize=(3,12),dpi=300)
+ax3 = fig3.add_subplot(111)
+ax3.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")
+
+for label,key in zip(mapping.values(), mapping.keys()):
+    data = reconstructed_curves[np.array(quad_param_group_mapped) == label]
+    for curve in data:
+        for loci in range(len(curve)-5):
+            ax1.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+                        alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
+            ax2.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+                        alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
+            ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+                        alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
+            ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+                        alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
+# ax1.set_xlabel('Sampling Points')
+# ax1.set_ylabel('X axis')
+ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
+plt.tight_layout()
+fig1.savefig(bkup_dir+"X_axis_of_curvature_.png")
+plt.close(fig1)
+# ax2.set_xlabel('Sampling Points')
+# ax2.set_ylabel('X axis')
+ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
+plt.tight_layout()
+fig2.savefig(bkup_dir+"X_axis_of_torsion_.png")
+plt.close(fig2)
+# ax3.set_xlabel('Sampling Points')
+# ax3.set_ylabel('X axis')
+ax3.set_xticklabels(ax3.get_xticks(), rotation=45)
+plt.tight_layout()
+fig3.savefig(bkup_dir+"X_axis_of_curvature_and_torsion_.png")
+
+
 
 
 

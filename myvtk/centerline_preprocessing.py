@@ -262,3 +262,20 @@ def compute_geod_dist_mat(weighted_procrustes_curves):
                                                                   weighted_procrustes_curves[j])
             geod_dist_mat[i, j] = geodesic_d
     return geod_dist_mat
+
+def align_endpoints(curve, p):
+    # 将起点移动到原点
+    translated_curve = curve - curve[0]
+    # 确定曲线终点
+    curve_end = translated_curve[-1]
+    # 计算旋转所需的向量
+    rotation_vector = np.cross(curve_end, p)
+    # 计算旋转角度
+    angle = np.arccos(np.dot(curve_end, p) / (np.linalg.norm(curve_end) * np.linalg.norm(p)))
+    # 创建旋转对象并应用旋转
+    if np.linalg.norm(rotation_vector) != 0:
+        rotation = R.from_rotvec(rotation_vector / np.linalg.norm(rotation_vector) * angle)
+        rotated_curve = rotation.apply(translated_curve)
+    else:
+        rotated_curve = translated_curve
+    return rotated_curve
