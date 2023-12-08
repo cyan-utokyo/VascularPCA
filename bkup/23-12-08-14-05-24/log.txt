@@ -1,0 +1,6 @@
+Start at: 23-12-08-14-05-24
+PCA_N_COMPONENTS:16
+- preprocessing_pca is not a SRVF PCA.
+SCALED to (absolute length) 1 before compute SRVF.
+according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF.
+using srvf_frechet as tangent_base.

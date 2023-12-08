@@ -139,6 +139,8 @@ for idx in range(len(pre_files)):
     pt, Curv, Tors, Radius, Abscissas, ptns, ftangent, fnormal, fbinormal = GetMyVtk(pre_files[idx], frenet=1)
     Files.append(pre_files[idx])
     pt = pt-np.mean(pt,axis=0)
+    # pt = pt - (pt[0]+[np.random.uniform(-0.0001,0.0001),np.random.uniform(-0.0001,0.0001),np.random.uniform(-0.0001,0.1)])
+    # pt = pt/np.linalg.norm(pt[-1] - pt[0]) * 64
     unaligned_curves.append(pt[::-1])
     radii.append(Radius[::-1])
     pre_Curvatures.append(Curv[::-1])
@@ -179,10 +181,11 @@ plt.close(fig)
 ##################################################
 
 # a_curves = align_icp(unaligned_curves, base_id=base_id)
-a_curves = unaligned_curves
-print ("First alignment done.")
-Procrustes_curves = align_procrustes(a_curves, base_id=base_id)
+#print ("First alignment done.")
+Procrustes_curves = align_procrustes(unaligned_curves, base_id=base_id)
 print ("procrustes alignment done.")
+
+
 # for i in range(len(Procrustes_curves)):
 #     print ("length:", measure_length(Procrustes_curves[i]))
 parametrized_curves = np.zeros_like(Procrustes_curves)
@@ -219,6 +222,8 @@ preprocessing_pca.PCA_training_and_test()
 preprocess_curves = preprocessing_pca.inverse_transform_from_loadings(preprocessing_pca.train_res).reshape(len(preprocessing_pca.train_res), -1, 3)
 
 Procrustes_curves = preprocess_curves
+
+Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
@@ -963,6 +968,16 @@ for label,key in zip(mapping.values(), mapping.keys()):
                         alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
             ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
                         alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
+for loci in range(2, len(curve)-5):
+    ax1.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+                alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
+    ax2.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+                alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
+    ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+                alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
+    ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+                alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
+
 # ax1.set_xlabel('Sampling Points')
 # ax1.set_ylabel('X axis')
 ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
