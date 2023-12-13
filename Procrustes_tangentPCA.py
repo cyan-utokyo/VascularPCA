@@ -818,8 +818,8 @@ def map_quad_params_to_int(quad_params):
 # 假设 quad_param_group 是一个已经定义的数组
 quad_param_group_mapped, mapping = map_quad_params_to_int(quad_param_group)
 # 打印映射结果
-print("Mapped Indices: ", quad_param_group_mapped)
-print("Mapping: ", mapping)
+print("Mapped Indices(quad_param_group_mapped): ", quad_param_group_mapped)
+print("Mapping(mapping): ", mapping)
 vtk_dir = mkdir(bkup_dir , "vtk")
 
 for i in range(PCA_N_COMPONENTS):
@@ -878,10 +878,11 @@ for i in range(PCA_N_COMPONENTS):
     plt.close(fig)
     # plt.show()
 
+def darken_color(color, factor=0.7):
+    """使颜色变深"""
+    return tuple([factor * c for c in color[:3]] + [color[3]])
+
 reconstructed_curves = np.array([align_endpoints(curve, p) for curve in reconstructed_curves])
-
-
-
 fig1 = plt.figure(figsize=(12, 3),dpi=300)
 ax1 = fig1.add_subplot(111)
 fig2 = plt.figure(figsize=(12, 3),dpi=300)
@@ -903,12 +904,14 @@ for label,key in zip(mapping.values(), mapping.keys()):
     for loci in range(len(curvature[0])):
         curvature_means[key].append(np.mean(curvature[:, loci]))
         torsion_means[key].append(np.mean(torsion[:, loci]))
+        boxprops = dict(facecolor=colors[key], color=colors[key])
+        medianprops = dict(color=darken_color(colors[key]), linewidth=2)
         box = ax1.boxplot(curvature[:, loci], positions=[loci], widths=0.3, 
                         showfliers=False, patch_artist=True,
-                        boxprops=dict(facecolor=colors[key], color=colors[key]))
+                        boxprops=boxprops, medianprops=medianprops)
         box = ax2.boxplot(torsion[:, loci], positions=[loci], widths=0.3, 
                         showfliers=False, patch_artist=True,
-                        boxprops=dict(facecolor=colors[key], color=colors[key]))
+                        boxprops=boxprops, medianprops=medianprops)
 ax1.set_xlabel('Sampling Points')
 ax1.set_ylabel('Curvature')
 ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
@@ -946,57 +949,82 @@ diff_torsion_loci = np.argsort(torsion_std_devs)
 # print(f"Loci with the largest differences in torsion means: {top10_diff_torsion_loci}")
 
 
-fig1 = plt.figure(figsize=(3,12),dpi=300)
-ax1 = fig1.add_subplot(111)
-ax1.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
-fig2 = plt.figure(figsize=(3,12),dpi=300)
-ax2 = fig2.add_subplot(111)
-ax2.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
-fig3 = plt.figure(figsize=(3,12),dpi=300)
-ax3 = fig3.add_subplot(111)
-ax3.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")
+# fig1 = plt.figure(figsize=(3,12),dpi=300)
+# ax1 = fig1.add_subplot(111)
+# ax1.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
+# fig2 = plt.figure(figsize=(3,12),dpi=300)
+# ax2 = fig2.add_subplot(111)
+# ax2.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
+# fig3 = plt.figure(figsize=(3,12),dpi=300)
+# ax3 = fig3.add_subplot(111)
+# ax3.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")
 
+# for label,key in zip(mapping.values(), mapping.keys()):
+#     data = reconstructed_curves[np.array(quad_param_group_mapped) == label]
+#     for curve in data:
+#         for loci in range(len(curve)-5):
+#             ax1.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+#                         alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
+#             ax2.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+#                         alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
+#             ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+#                         alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
+#             ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
+#                         alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
+# for loci in range(2, len(curve)-5):
+#     ax1.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+#                 alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
+#     ax2.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='s',color="dimgray",
+#                 alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
+#     ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+#                 alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
+#     ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='s',color="dimgray",
+#                 alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
+# # ax1.set_xlabel('Sampling Points')
+# # ax1.set_ylabel('X axis')
+# ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
+# plt.tight_layout()
+# fig1.savefig(bkup_dir+"X_axis_of_curvature_.png")
+# plt.close(fig1)
+# # ax2.set_xlabel('Sampling Points')
+# # ax2.set_ylabel('X axis')
+# ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
+# plt.tight_layout()
+# fig2.savefig(bkup_dir+"X_axis_of_torsion_.png")
+# plt.close(fig2)
+# # ax3.set_xlabel('Sampling Points')
+# # ax3.set_ylabel('X axis')
+# ax3.set_xticklabels(ax3.get_xticks(), rotation=45)
+# plt.tight_layout()
+# fig3.savefig(bkup_dir+"X_axis_of_curvature_and_torsion_.png")
+# plt.close(fig3)
+
+
+vtk_points = np.zeros((len(reconstructed_curves)+1, len(reconstructed_curves[0]), 3))
+print ("vtk_points.shape:", vtk_points.shape)
+vtk_groups = np.zeros((len(reconstructed_curves)+1, len(reconstructed_curves[0])))
+vtk_groups[:] = -1
+vtk_variance_curvature = np.zeros((len(reconstructed_curves)+1, len(reconstructed_curves[0])))
+vtk_variance_torsion = np.zeros((len(reconstructed_curves)+1, len(reconstructed_curves[0])))
+i = 0
 for label,key in zip(mapping.values(), mapping.keys()):
     data = reconstructed_curves[np.array(quad_param_group_mapped) == label]
     for curve in data:
-        for loci in range(len(curve)-5):
-            ax1.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-                        alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
-            ax2.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-                        alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
-            ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-                        alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
-            ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-                        alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
-for loci in range(2, len(curve)-5):
-    ax1.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
-                alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
-    ax2.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
-                alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
-    ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
-                alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
-    ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
-                alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
+        for loci in range(len(curve)):
+            vtk_points[i+1, loci] = curve[loci]
+            vtk_groups[i+1, loci] = label
+            vtk_variance_curvature[i+1][loci] = diff_curvature_loci[loci]
+            vtk_variance_torsion[i+1][loci] = diff_torsion_loci[loci]
+        i += 1
 
-# ax1.set_xlabel('Sampling Points')
-# ax1.set_ylabel('X axis')
-ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
-plt.tight_layout()
-fig1.savefig(bkup_dir+"X_axis_of_curvature_.png")
-plt.close(fig1)
-# ax2.set_xlabel('Sampling Points')
-# ax2.set_ylabel('X axis')
-ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
-plt.tight_layout()
-fig2.savefig(bkup_dir+"X_axis_of_torsion_.png")
-plt.close(fig2)
-# ax3.set_xlabel('Sampling Points')
-# ax3.set_ylabel('X axis')
-ax3.set_xticklabels(ax3.get_xticks(), rotation=45)
-plt.tight_layout()
-fig3.savefig(bkup_dir+"X_axis_of_curvature_and_torsion_.png")
+file_name = bkup_dir + "output.vtk"
+save_vtk_file(vtk_points, vtk_groups, vtk_variance_curvature, vtk_variance_torsion, file_name)
 
-
+# for loci in range(2, len(curve)-5):
+#     ax1.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
+#                 alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
+#     ax2.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='s',color="dimgray",
+#                 alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
 
 
 
@@ -1012,7 +1040,6 @@ ax.set_title('Loadings of Principal Components')
 plt.tight_layout()
 plt.savefig(bkup_dir+"Loadings_of_Principal_Components.png")
 plt.close(fig)
-
 
 
 fig = plt.figure(dpi=300)
@@ -1054,11 +1081,6 @@ fig.savefig(bkup_dir + "pcaloadings_plot_both.png")
 fig2.savefig(bkup_dir + "pcaloadings_plot_real.png")
 plt.close(fig1)
 plt.close(fig2)
-
-
-
-
-
 
 
 end_time = datetime.now()

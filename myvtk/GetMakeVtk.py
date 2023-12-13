@@ -176,3 +176,97 @@ def write_vtk_line(file_name, lines, quad_params, single_component_values, singl
         vtk_file.write("LOOKUP_TABLE default\n")
         for torsion in torsions:
             vtk_file.write(f"{torsion}\n")
+
+
+
+def save_vtk_file(vtk_points, vtk_groups, vtk_variance_curvature, vtk_variance_torsion, file_name):
+    # 创建 vtkPoints 对象
+    points = vtk.vtkPoints()
+
+    # 创建 vtkFloatArray 对象来存储额外数据
+    groups_array = vtk.vtkFloatArray()
+    groups_array.SetName("Groups")
+    
+    variance_curvature_array = vtk.vtkFloatArray()
+    variance_curvature_array.SetName("Variance_Curvature")
+
+    variance_torsion_array = vtk.vtkFloatArray()
+    variance_torsion_array.SetName("Variance_Torsion")
+
+    # 创建 vtkCellArray 对象来存储polylines
+    lines = vtk.vtkCellArray()
+
+    point_id = 0
+    for i in range(vtk_points.shape[0]):
+        # 每条曲线的点数
+        num_points = vtk_points.shape[1]
+
+        # 插入新的polyline
+        lines.InsertNextCell(num_points)
+        for j in range(num_points):
+            points.InsertNextPoint(vtk_points[i, j])
+            lines.InsertCellPoint(point_id)
+
+            # 添加额外数据
+            groups_array.InsertNextValue(vtk_groups[i, j])
+            variance_curvature_array.InsertNextValue(vtk_variance_curvature[i, j])
+            variance_torsion_array.InsertNextValue(vtk_variance_torsion[i, j])
+
+            point_id += 1
+
+    # 创建 vtkPolyData 对象
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+    polydata.SetLines(lines)
+
+    # 将额外的数据数组添加到 polydata
+    polydata.GetPointData().AddArray(groups_array)
+    polydata.GetPointData().AddArray(variance_curvature_array)
+    polydata.GetPointData().AddArray(variance_torsion_array)
+
+    # 创建 writer 对象
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetFileName(file_name)
+    writer.SetInputData(polydata)
+
+    # 写入文件
+    writer.Write()
+
+# 示例使用
+# 假设 vtk_points, vtk_groups, vtk_variance_curvature, vtk_variance_torsion 已定义
+# file_name = "output.vtk"
+# save_vtk_file(vtk_points, vtk_groups, vtk_variance_curvature, vtk_variance_torsion, file_name)
+
+
+def save_transfer_vtk_file(transfer_vec, transfer_idx, file_name):
+    # 创建 vtkPoints 对象
+    points = vtk.vtkPoints()
+
+    # 创建 vtkIntArray 对象来存储索引数据
+    index_array = vtk.vtkIntArray()
+    index_array.SetName("Index")
+
+    # 填充 points 和 index_array
+    for i in range(len(transfer_vec)):
+        # 插入点
+        points.InsertNextPoint(transfer_vec[i])
+
+        # 添加索引数据
+        index_array.InsertNextValue(transfer_idx[i])
+
+    # 创建 vtkPolyData 对象
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+
+    # 将索引数据数组添加到 polydata
+    polydata.GetPointData().AddArray(index_array)
+
+    # 创建 writer 对象
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetFileName(file_name)
+    writer.SetInputData(polydata)
+
+    # 写入文件
+    writer.Write()
+
+
