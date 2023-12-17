@@ -86,6 +86,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 from PIL import Image
 from myvtk.Myscores import *
+from myvtk.MytangentPCA import *
 warnings.filterwarnings("ignore")
 
 # sns.set_context("talk", font_scale=0.8)
@@ -118,9 +119,9 @@ pre_Torsions = []
 Typevalues = [] 
 # window size
 # 创建离散曲线空间
-r2 = Euclidean(dim=3)
-srv_metric = SRVMetric(r2)
-discrete_curves_space = DiscreteCurves(ambient_manifold=r2, k_sampling_points=64)
+r3 = Euclidean(dim=3)
+srv_metric = SRVMetric(r3)
+discrete_curves_space = DiscreteCurves(ambient_manifold=r3, k_sampling_points=64)
 
 pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
 shapetype = pd.read_csv("./UVCS_class.csv", header=None)
@@ -146,17 +147,28 @@ for idx in range(len(pre_files)):
     pre_Curvatures.append(Curv[::-1])
     pre_Torsions.append(Tors[::-1])
 unaligned_curves = np.array(unaligned_curves)
-geometry_dir = mkdir(bkup_dir, "geometry")
+# geometry_dir = mkdir(bkup_dir, "geometry")
 Typevalues = np.array(Typevalues)
 
 ########################################
 
-print ("全データ（{}）を読み込みました。".format(len(pre_files)))
-print ("使用できるデータ：", len(Files))
+log.write("Data used: {}".format(len(Files)))
+Files_df = pd.read_csv("./siphon_index.csv")
+siphon_name = Files_df.iloc[:, 0]
+pre_siphon_idx = Files_df.iloc[:, 1]
+pre_siphon_arb = Files_df.iloc[:, 2]
+siphon_idx = []
+siphon_arb = []
 for i in range(len(Files)):
+    for j in range(len(siphon_name)):
+        if siphon_name[j] in Files[i]:
+            siphon_idx.append(63-int(pre_siphon_idx[j]))
+            siphon_arb.append(pre_siphon_arb[j])
+            break
     if "BG0014_R" in Files[i]:
         base_id = i
-print ("base_id:{},casename:{}で方向調整する".format(base_id, Files[base_id]))
+log.write("Alignment reference data (base_id):{},casename:{}".format(base_id, Files[base_id]))
+# print (siphon_idx)
 
 # 设定参考点 p，您可以根据需要修改这个点
 p = np.array([0, 0, 1])  # 例如，令 p 在 z 轴上
@@ -167,9 +179,13 @@ ax1 = fig.add_subplot(133)
 ax2 = fig.add_subplot(132)
 ax3 = fig.add_subplot(131)
 for i in range(len(unaligned_curves)):
+    siphon = siphon_idx[i]
     ax1.plot(unaligned_curves[i][:,0], unaligned_curves[i][:,1])
     ax2.plot(unaligned_curves[i][:,0], unaligned_curves[i][:,2])
     ax3.plot(unaligned_curves[i][:,1], unaligned_curves[i][:,2])
+    ax1.scatter(unaligned_curves[i][siphon,0], unaligned_curves[i][siphon,1])
+    ax2.scatter(unaligned_curves[i][siphon,0], unaligned_curves[i][siphon,2])
+    ax3.scatter(unaligned_curves[i][siphon,1], unaligned_curves[i][siphon,2])
 fig.savefig(bkup_dir+"unaligned_curves.png")
 plt.close(fig)
 
@@ -183,7 +199,7 @@ plt.close(fig)
 # a_curves = align_icp(unaligned_curves, base_id=base_id)
 #print ("First alignment done.")
 Procrustes_curves = align_procrustes(unaligned_curves, base_id=base_id)
-print ("procrustes alignment done.")
+log.write("procrustes alignment done.")
 
 
 # for i in range(len(Procrustes_curves)):
@@ -204,48 +220,47 @@ for i in range(len(Procrustes_curves)):
     ax1.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,1])
     ax2.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,2])
     ax3.plot(Procrustes_curves[i][:,1], Procrustes_curves[i][:,2])
+    ax1.scatter(Procrustes_curves[i][siphon_idx[i],0], Procrustes_curves[i][siphon_idx[i],1])
+    ax2.scatter(Procrustes_curves[i][siphon_idx[i],0], Procrustes_curves[i][siphon_idx[i],2])
+    ax3.scatter(Procrustes_curves[i][siphon_idx[i],1], Procrustes_curves[i][siphon_idx[i],2])
 fig.savefig(bkup_dir+"Procrustes_curves.png")
 plt.close(fig)
 
+# i=30 # U
+# j=46 # S
 
-
-
-
-
-print (Procrustes_curves.shape)
-i=30 # U
-j=46 # S
-
-log.write("- preprocessing_pca is not a SRVF PCA.\n")
+log.write("- preprocessing_pca is not a SRVF PCA, and it is conducted on Procrustes_cruves before aligned_endpoints.\n")
 preprocessing_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 20, PCA_STANDARDIZATION)
 preprocessing_pca.PCA_training_and_test()
 preprocess_curves = preprocessing_pca.inverse_transform_from_loadings(preprocessing_pca.train_res).reshape(len(preprocessing_pca.train_res), -1, 3)
 
 Procrustes_curves = preprocess_curves
 
+log.write("Procrustes_curves is aligned again by endpoints.\n")
 Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/measure_length(Procrustes_curves[i]))
-    Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/np.linalg.norm(Procrustes_curves[i][-1] - Procrustes_curves[i][0]))
+    # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/np.linalg.norm(Procrustes_curves[i][-1] - Procrustes_curves[i][0]))
+    Procs_srvf_curves[i] =Procrustes_curves[i]/measure_length(Procrustes_curves[i])
     # print ("SRVF length:", measure_length(Procs_srvf_curves[i]))
     # print ("SRVF length by GPT4:", srvf_length(Procs_srvf_curves[i]))
-log.write("SCALED to (absolute length) 1 before compute SRVF.\n")
-log.write("according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF.\n")
+log.write("SCALED to (absolute length) 1 and did not compute SRVF manually.\n")
+log.write("according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF. The convert is conducted inside Geomstats.\n")
 
-TANGENT_BASE = "srvf_frechet"
+# TANGENT_BASE = "srvf_frechet"
 #TANGENT_BASE = "BH0012_R"
-if TANGENT_BASE == "frechet":
-    frechet_mean_shape = compute_frechet_mean(Procrustes_curves)
-    tangent_base = calculate_srvf(frechet_mean_shape)/measure_length(frechet_mean_shape)
-    print ("using frechet as tangent_base.")
-    log.write("using frechet as tangent_base.\n")
-elif TANGENT_BASE == "srvf_frechet":
-    tangent_base = compute_frechet_mean(Procs_srvf_curves)
-    print ("using srvf_frechet as tangent_base.")
-    log.write("using srvf_frechet as tangent_base.\n")
-    frechet_mean_shape = compute_frechet_mean(Procrustes_curves)
+# if TANGENT_BASE == "frechet":
+#     frechet_mean_shape = compute_frechet_mean(Procrustes_curves)
+#     tangent_base = calculate_srvf(frechet_mean_shape)/measure_length(frechet_mean_shape)
+#     print ("using frechet as tangent_base.")
+#     log.write("using frechet as tangent_base.\n")
+# elif TANGENT_BASE == "srvf_frechet":
+#     tangent_base = compute_frechet_mean(Procs_srvf_curves)
+#     print ("using srvf_frechet as tangent_base.")
+#     log.write("using srvf_frechet as tangent_base.\n")
+#     frechet_mean_shape = compute_frechet_mean(Procrustes_curves)
     # print ("tangent_base_curve length:", measure_length(tangent_base_curve))
 # else:
 #     for i in range(len(Files)):
@@ -255,6 +270,8 @@ elif TANGENT_BASE == "srvf_frechet":
 #     log.write("using {} as tangent_base_id.\n".format(Files[tangent_base_id]))
 #     tangent_base = Procs_srvf_curves[tangent_base_id]
 
+tangent_base = compute_frechet_mean(Procs_srvf_curves)
+frechet_mean_shape = compute_frechet_mean(Procs_srvf_curves)
 #########################################
 # 把srvf曲线做对数映射，得到切线空间的切向量
 tangent_vectors = []
@@ -267,146 +284,39 @@ tangent_vectors = np.array(tangent_vectors)
 #########################################
 
 
-srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
-srvf_pca.PCA_training_and_test()
-
+# srvf_pca = PCAHandler(Procs_srvf_curves.reshape(len(Procs_srvf_curves),-1), None, PCA_N_COMPONENTS, PCA_STANDARDIZATION)
+# srvf_pca.PCA_training_and_test()
 tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPONENTS)
 # 拟合并变换数据到切线空间的主成分中
 tpca.fit(tangent_vectors)
 tangent_projected_data = tpca.transform(tangent_vectors)
-dist_to_zero = []
-for i in range(len(tangent_projected_data)):
-    dist_to_zero.append(np.linalg.norm(tangent_projected_data[i]))
 
-fig = plt.figure(figsize=(13, 6),dpi=300)
-ax = fig.add_subplot(111)
-ax.scatter(tangent_projected_data[:,0], tangent_projected_data[:,1], s=25, marker="o", color="k", alpha=0.5)
-ax.scatter(srvf_pca.train_res[:,0], srvf_pca.train_res[:,1], s=25, marker="o", color="r", alpha=0.5)
-
-# 选择一个颜色图
-cmap_q = plt.cm.get_cmap('hsv', 87)  # 例如使用 HSV 颜色图
-
-# 为每条线选择不同的颜色
-for i in range(len(tangent_projected_data)):
-    color = cmap_q(i)
-    ax.plot([tangent_projected_data[i, 0], srvf_pca.train_res[i, 0]], 
-            [tangent_projected_data[i, 1], srvf_pca.train_res[i, 1]], 
-            color=color, alpha=0.5)
-
-ax.set_xlabel("PC1")
-ax.set_ylabel("PC2")
-ax.set_title("tangent_VS_srvf_pca")
-fig.savefig(bkup_dir+"tangent_projected_data.png")
-plt.close(fig)
-
-
+################################
+# 比较srvf和tangent pca的相关性
+# pca_correlaton_matrix = np.corrcoef(tangent_projected_data.T, srvf_pca.train_res.T)[16:,:16]
 # fig = plt.figure(figsize=(13, 6),dpi=300)
 # ax = fig.add_subplot(111)
-# ax.scatter(tangent_projected_data[:,0], tangent_projected_data[:,1], s=25, marker="o", color="k", alpha=0.5)
-# for i in range(len(tangent_projected_data)):
-#     ax.annotate(Files[i].split('\\')[-1][:-12], (tangent_projected_data[i,0], tangent_projected_data[i,1]+0.05),color='r',
-#                 fontsize=3)
-#     ax.annotate(Typevalues[i], (tangent_projected_data[i,0], tangent_projected_data[i,1]),fontsize=10, color='b')   
-# # plt.show()
-# plt.savefig(bkup_dir+"annotation.png")
+# sns.heatmap(pca_correlaton_matrix, annot=False, fmt=".2f", cmap='seismic', ax=ax)
+# ax.set_title("tangent_VS_srvf_pca")
+# fig.savefig(bkup_dir+"pca_correlaton_matrix.png")
 # plt.close(fig)
+# 比较srvf和tangent pca的相关性
+################################
 
-
-# def fit_kde(data, bandwidth=1):
-#     kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth)
-#     kde.fit(data)
-#     return kde
-
-# mean_tangent_projected_data = np.mean(tangent_projected_data, axis=0)
-# std_tangent_projected_data = np.std(tangent_projected_data, axis=0)
-# standardize_tangent_projected_data = zscore(tangent_projected_data)
-
-def fit_gaussian(data):
-    # 计算数据的均值和标准差
-    mean = np.mean(data, axis=0)
-    std = np.std(data, axis=0)
-
-    # 创建一个高斯分布对象数组
-    gaussians = [norm(loc=mean[i], scale=std[i]) for i in range(len(mean))]
-    return gaussians
 
 # 使用高斯方法拟合数据
 tangent_pca_gaussian = fit_gaussian(tangent_projected_data)
 
 # 从每个高斯分布中独立采样
-sample_num = 1000  # 定义您想要的样本数
+sample_num = 500  # 定义您想要的样本数
 synthetic_features = np.array([g.rvs(sample_num) for g in tangent_pca_gaussian]).T
 
+reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+reconstructed_synthetic_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
 
-def from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, inverse_srvf_func=inverse_srvf):
-    principal_components = tpca.components_
-    # Assuming principal_components has the shape (n_components, n_sampling_points * n_dimensions)
-    principal_components_reshaped = principal_components.reshape((PCA_N_COMPONENTS, 64, 3)) # 64是采样点数
-    # Now use exp on each reshaped component
-    curves_from_components = [
-        discrete_curves_space.metric.exp(tangent_vec=component, base_point=tangent_base)
-        for component in principal_components_reshaped
-    ]
 
-    reconstructed_curves = []
-    for idx in range(len(tangent_projected_data)):
-        # This is your feature - a single point in PCA space representing the loadings for the first curve.
-        feature = np.array(tangent_projected_data[idx])
-        # Reconstruct the tangent vector from the feature.
-        # print ("feature:", feature.shape)
-        # print ("principal_components_reshaped:", principal_components_reshaped.shape)
-        # print ("idx:", idx)
-        tangent_vector_reconstructed = sum(feature[i] * principal_components_reshaped[i] for i in range(len(feature)))
-        # Map the tangent vector back to the curve space using the exponential map.
-        reconstructed_srvf = discrete_curves_space.metric.exp(
-            tangent_vec=tangent_vector_reconstructed, base_point=tangent_base
-        )
-        reconstructed_curve = inverse_srvf(reconstructed_srvf, np.zeros(3))
-        # print ("reconstructed_curve length:", measure_length(reconstructed_curve))# length=63
-        
-        reconstructed_curves.append(reconstructed_curve)
-    reconstructed_curves = np.array(reconstructed_curves)
-    return reconstructed_curves
-
-reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, inverse_srvf_func=inverse_srvf)
-reconstructed_synthetic_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, inverse_srvf_func=inverse_srvf)
-print ("done......")
-def reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf_func):
-    principal_components = tpca.components_
-    # Assuming the shape of principal_components is (n_components, n_sampling_points * n_dimensions)
-    principal_components_reshaped = principal_components.reshape(
-        (tpca.n_components, 64, 3)
-    )
-
-    curves_from_components = []
-    for component in principal_components_reshaped:
-        # Map the tangent vector back to the curve space using the exponential map.
-        srvf_curve = discrete_curves_space.metric.exp(
-            tangent_vec=component, base_point=tangent_base
-        )
-        # Apply the inverse SRVF to get the curve
-        curve = inverse_srvf_func(srvf_curve, np.zeros(3))  # Assuming inverse_srvf function takes srvf_curve and a base point as input.
-        curves_from_components.append(curve)
-    #curves_from_components = align_icp(curves_from_components, base_id=0)
-    #print ("First alignment done.")
-    #curves_from_components = align_procrustes(curves_from_components,base_id=0)
-    # Visualize each reconstructed component curve
-    return curves_from_components
-# Usage
+# 把主成分还原成曲线
 tangent_components = reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf)
-
-
-# sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
-# sm.set_array([])  # Only needed for the colorbar
-# fig1 = plt.figure(figsize=(13, 6),dpi=300)
-# ax1 = fig1.add_subplot(111)
-# for i in range(len(tangent_components)):
-#     color = sm.to_rgba(i)
-#     ax1.plot(tangent_components[i][:,0], label="component{}".format(i+1), color=color)
-# ax1.legend()
-# fig1.savefig(bkup_dir+"component.png")
-# plt.close(fig1)
-
 
 ###########################################################
 # plot 各个主成分
@@ -418,7 +328,7 @@ sm.set_array([])  # Only needed for the colorbar
 
 for i, component in enumerate(tangent_components):
     color = sm.to_rgba(i)
-    component = align_endpoints(component, p)
+    # component = align_endpoints(component, p)
     ax.plot(component[:, 0], component[:, 1], component[:, 2], color=color)
 
 ax.set_xlabel("X axis")
@@ -479,18 +389,37 @@ count = 0
 for i in range(len(reconstructed_synthetic_curves)):
     Curvature_energy, Torsion_energy = compute_geometry_param_energy(synthetic_Curvatures[i], synthetic_Torsions[i])
     Tortuosity = compute_tortuosity(reconstructed_synthetic_curves[i])
-    if 0.01<Curvature_energy < 0.08 and Torsion_energy < 0.22 and 1.6< Tortuosity < 2.7:
-        post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
-        post_synthetic_Curvatures.append(synthetic_Curvatures[i])
-        post_synthetic_Torsions.append(synthetic_Torsions[i])
-        post_synthetic_features.append(synthetic_features[i])
-        count += 1
-    if count == 320:
-        break
+    # if 0.01<Curvature_energy < 0.08 and Torsion_energy < 0.22 and 1.6< Tortuosity < 2.7:
+    #     post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
+    #     post_synthetic_Curvatures.append(synthetic_Curvatures[i])
+    #     post_synthetic_Torsions.append(synthetic_Torsions[i])
+    #     post_synthetic_features.append(synthetic_features[i])
+    #     count += 1
+    # if count == 320:
+    #     break
+    post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
+    post_synthetic_Curvatures.append(synthetic_Curvatures[i])
+    post_synthetic_Torsions.append(synthetic_Torsions[i])
+    post_synthetic_features.append(synthetic_features[i])
+    count += 1
 reconstructed_synthetic_curves = np.array(post_reconstructed_synthetic_curves)
 synthetic_Curvatures = np.array(post_synthetic_Curvatures)
 synthetic_Torsions = np.array(post_synthetic_Torsions)
 synthetic_features = np.array(post_synthetic_features)
+
+correlation_matrix_curvature = np.corrcoef(tangent_projected_data.T, Curvatures.T)
+correlation_matrix_torsion = np.corrcoef(tangent_projected_data.T, Torsions.T)
+correlation_matrix_synthetic_curvature = np.corrcoef(synthetic_features.T, synthetic_Curvatures.T)
+correlation_matrix_synthetic_torsion = np.corrcoef(synthetic_features.T, synthetic_Torsions.T)
+print ("correlation_matrix_curvature[:16,16:].shape",correlation_matrix_curvature[:16,16:].shape)
+# 绘制热图
+fig = plt.figure(figsize=(12, 4))
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+sns.heatmap(correlation_matrix_curvature[:16,16:], annot=False, fmt=".2f", cmap='seismic', ax=ax1)
+sns.heatmap(correlation_matrix_torsion[:16,16:], annot=False, fmt=".2f", cmap='seismic', ax=ax2)
+plt.savefig(bkup_dir+"correlation_matrix.png")
+plt.close(fig)
 
 
 average_of_means_torsions = np.mean([np.mean(np.abs(tors)) for tors in Torsions])
@@ -619,11 +548,13 @@ for label in param_group_unique_labels:
     # 使用布尔索引来选择与当前标签对应的数据
     selected_data_torsion = [Torsions[i] for i, tag in enumerate(quad_param_group) if tag == label]
     selected_data_curvature = [Curvatures[i] for i, tag in enumerate(quad_param_group) if tag == label]
+    select_data_siphon = [siphon_idx[i] for i, tag in enumerate(quad_param_group) if tag == label]
     synthetic_selected_data_torsion = [synthetic_Torsions[i] for i, tag in enumerate(synthetic_quad_param_group) if tag == label]
     synthetic_selected_data_curvature = [synthetic_Curvatures[i] for i, tag in enumerate(synthetic_quad_param_group) if tag == label]
     # 将选择的数据转换为numpy array并保存到字典中
     param_dict[label]['Torsion'] = np.array(selected_data_torsion)
     param_dict[label]['Curvature'] = np.array(selected_data_curvature)
+    param_dict[label]['Siphon'] = np.array(select_data_siphon)
     synthetic_param_dict[label]['Torsion'] = np.array(synthetic_selected_data_torsion)
     synthetic_param_dict[label]['Curvature'] = np.array(synthetic_selected_data_curvature)
     # 初始化能量值列表
@@ -650,10 +581,28 @@ for label in param_group_unique_labels:
     param_dict[label]['Tortuosity'] = np.array(tortuosity)
     synthetic_param_dict[label]['Tortuosity'] = np.array(synthetic_tortuosity)
 
+
 # 定义颜色映射
 colors = {
     label: plt.cm.CMRmap((i+1)/(len(param_group_unique_labels)+1)) for i, label in enumerate(param_group_unique_labels)
 }
+
+i = 0
+fig = plt.figure(figsize=(8, 4), dpi=300)
+ax1 = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
+for lbl, data in param_dict.items():
+    # print (label, len(data['Torsion']), len(data['Curvature']), len(data['Energy']), len(data['Tortuosity']),)
+    print (lbl, np.array(data['Tortuosity']).shape, np.array(data['Energy']).shape, np.array(data['Siphon']).shape)
+    ax1.boxplot(data['Tortuosity'], positions=[i], widths=0.3, showfliers=False,boxprops=dict(color=colors[lbl]), medianprops=dict(color=colors[lbl]))
+    ax2.boxplot(data['Siphon'], positions=[i], widths=0.3, showfliers=False,boxprops=dict(color=colors[lbl]), medianprops=dict(color=colors[lbl]))
+    i += 1
+for ax in [ax1, ax2]:
+    ax.set_xticklabels(param_dict.keys())
+    ax.set_xticks(range(len(param_dict)))
+
+plt.savefig(bkup_dir+"statistics.png")
+plt.close(fig)
 
 # Calculate centroids and scores for each label
 energy_centroids = {}
@@ -674,8 +623,8 @@ for i in range(len(Procrustes_curves)):
     for label in param_group_unique_labels:
         energy_score = score_energy(energy, energy_centroids[label])
         shape_score[label] = energy_score
-    print (shape_score)
-    print ("-"*20)
+    # print (shape_score)
+    # print ("-"*20)
 plt.savefig(bkup_dir+"centroid_classification.png")
 plt.close()
 
@@ -774,11 +723,11 @@ ax1.fill_between(x_pred, conf_interval_lower, conf_interval_upper, color='silver
 ax2.plot(x_pred, y_pred, color="k", alpha=0.4, linestyle=":",label='Fit: y = {:.2f} + {:.2f}x'.format(intercept, slope))
 ax2.plot(synthetic_x_pred, synthetic_y_pred, color="k", alpha=0.4,label='Fit: y = {:.2f} + {:.2f}x'.format(synthetic_intercept, synthetic_slope))
 for ax in [ax1,ax2]:
-    ax.set_xlabel('Curvature Energy')
-    ax.set_ylabel('Torsion Energy')
+    ax.set_xlabel('Bending Energy')
+    ax.set_ylabel('Twisting Energy')
     ax.set_title('Energy Scatter Plot by Label')
     ax.set_ylim(-0.2, 0.5)
-    ax.grid(linestyle='--', alpha=0.5)
+    ax.grid(linestyle='dotted', alpha=0.5)
 ax1.legend()
 ax2.legend()
 ax3.legend()
@@ -804,7 +753,7 @@ for i in range(PCA_N_COMPONENTS):
     sns.boxplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, palette=colors, width=0.25)  # inner='quartile' 在violin内部显示四分位数
     ax.set_title(f'Principal Component {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
-plt.tight_layout()
+fig.tight_layout()
 plt.savefig(bkup_dir+"tangentPCA_total_boxplot.png")
 plt.close()
 
@@ -822,16 +771,31 @@ print("Mapped Indices(quad_param_group_mapped): ", quad_param_group_mapped)
 print("Mapping(mapping): ", mapping)
 vtk_dir = mkdir(bkup_dir , "vtk")
 
+
+
+PC_sigma_dir = mkdir(bkup_dir , "PC_sigma")
+PC_gaussian_dir = mkdir(bkup_dir , "PC_gaussian")
+PC_geometry_dir = mkdir(bkup_dir , "PC_geometry")
 for i in range(PCA_N_COMPONENTS):
     single_component_feature = np.zeros_like(tangent_projected_data)
     single_component_feature[:,i] = tangent_projected_data[:,i]
     single_reconstructed_curves = []
+    sigma = np.std(single_component_feature[:,i])
+    sigma_single_feature = np.zeros_like(tangent_projected_data)[:7]
+    for j in range(7):
+        sigma_single_feature[j,i] = (j-3) * sigma
+    sigma_single_reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, sigma_single_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+    sigma_single_reconstructed_curves = np.array([align_endpoints(sigma_single_reconstructed_curves[j], p) for j in range(7)])
     fig = plt.figure(figsize=(10,2),dpi=300)
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
     fig3 = plt.figure(figsize=(8, 5), dpi=300)
     ax31 = fig3.add_subplot(111)
-    single_reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, inverse_srvf_func=inverse_srvf)
+    fig4 = plt.figure(figsize=(8, 5), dpi=300)
+    ax41 = fig4.add_subplot(311)
+    ax42 = fig4.add_subplot(312)
+    ax43 = fig4.add_subplot(313)
+    single_reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
     # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
     # print ("Curvautres.shape:", Curvatures.shape)
@@ -839,8 +803,8 @@ for i in range(PCA_N_COMPONENTS):
     curvature_std_dev = np.std(single_reconstructed_curvature, axis=0)
     torsion_mean_values = np.mean(single_reconstructed_torsion, axis=0)
     torsion_std_dev = np.std(single_reconstructed_torsion, axis=0)
-    ax1.plot(curvature_mean_values, label=r'$\bar{\kappa}$')
-    ax2.plot(torsion_mean_values, label=r'$\bar{\tau}$')
+    ax1.plot(curvature_mean_values, label=r'$\bar{\kappa}$', marker='o')
+    ax2.plot(torsion_mean_values, label=r'$\bar{\tau}$', marker='o')
     ax1.errorbar(range(len(curvature_mean_values)), curvature_mean_values, yerr=curvature_std_dev, fmt='-o')
     ax2.errorbar(range(len(torsion_mean_values)), torsion_mean_values, yerr=torsion_std_dev, fmt='-o')
     all_single_curvatures = [curvature for curve in single_reconstructed_curvature for curvature in curve]
@@ -853,6 +817,10 @@ for i in range(PCA_N_COMPONENTS):
                    quad_param_group_mapped, 
                    single_component_feature[:,i], 
                    all_single_curvatures, all_single_torsions, all_curvature, all_torsion)
+    for j in range(7):
+        ax41.plot(sigma_single_reconstructed_curves[j][:,0], label="{}SIGMA".format(j-3), marker='o')
+        ax42.plot(sigma_single_reconstructed_curves[j][:,1], label="{}SIGMA".format(j-3), marker='o')
+        ax43.plot(sigma_single_reconstructed_curves[j][:,2], label="{}SIGMA".format(j-3), marker='o')
     for label,key in zip(mapping.values(), mapping.keys()):
     # 筛选出特定标签的数据
         data = single_component_feature[:, i][np.array(quad_param_group_mapped) == label]
@@ -865,18 +833,23 @@ for i in range(PCA_N_COMPONENTS):
         ax31.plot(x_values, y_values, label=f'{key} Gaussian', color=colors[key])
 
     ax31.legend()
+    ax43.legend()
     ax1.set_title(f'PC{i+1}')
     ax2.set_title(f'PC{i+1}')
     ax1.set_xlabel('Sampling Points')
     ax2.set_xlabel('Sampling Points')
     ax1.set_ylabel('Curvature')
     ax2.set_ylabel('Torsion')
-    fig.savefig(bkup_dir+f"PC{i+1}.png")
-    fig3.savefig(bkup_dir+f"PC{i+1}_gaussian.png")
+    fig.savefig(PC_geometry_dir+f"PC{i+1}.png")
+    fig3.savefig(PC_gaussian_dir+f"PC{i+1}_gaussian.png")
+    fig4.savefig(PC_sigma_dir+f"PC{i+1}_sigma.png")
+    fig.tight_layout()
+    fig3.tight_layout()
+    fig4.tight_layout()
     plt.close(fig3)
-    plt.tight_layout()
     plt.close(fig)
-    # plt.show()
+    plt.close(fig4)
+
 
 def darken_color(color, factor=0.7):
     """使颜色变深"""
@@ -887,7 +860,7 @@ fig1 = plt.figure(figsize=(12, 3),dpi=300)
 ax1 = fig1.add_subplot(111)
 fig2 = plt.figure(figsize=(12, 3),dpi=300)
 ax2 = fig2.add_subplot(111)
-frechet_mean_shape = align_endpoints(frechet_mean_shape, p)
+# frechet_mean_shape = align_endpoints(frechet_mean_shape, p)
 # ax.plot(frechet_mean_shape[:,0], label="Mean shape", color="k")  
 curvature_means = {key: [] for key in mapping.keys()}
 torsion_means = {key: [] for key in mapping.keys()}
@@ -918,7 +891,8 @@ ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
 ax2.set_xlabel('Sampling Points')
 ax2.set_ylabel('Torsion')
 ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
-plt.tight_layout()
+fig1.tight_layout()
+fig2.tight_layout()
 fig1.savefig(bkup_dir+"X_axis_of_curvature.png")
 plt.close(fig1)
 fig2.savefig(bkup_dir+"X_axis_of_torsion.png")
@@ -1026,18 +1000,42 @@ save_vtk_file(vtk_points, vtk_groups, vtk_variance_curvature, vtk_variance_torsi
 #     ax2.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='s',color="dimgray",
 #                 alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
 
+fig = plt.figure(figsize=(8, 4),dpi=300)
+ax1 = fig.add_subplot(211)
+ax2 = fig.add_subplot(212)
+for i in range(len(reconstructed_curves[0])):
+    curvature_loci = Curvatures[:,i]-np.mean(Curvatures[:,i])
+    torsion_loci = Torsions[:,i]-np.mean(Torsions[:,i])
+    ax1.boxplot(curvature_loci, positions=[i], widths=0.3, showfliers=False)
+    ax2.boxplot(torsion_loci, positions=[i], widths=0.3, showfliers=False)
+# 假设reconstructed_curves[0]的长度是n
+n = len(reconstructed_curves[0])
+# 创建一个列表，包含每隔10个点的索引
+tick_positions = list(range(0, n, 10))  # 从0开始，到n结束，步长为10
+# 设置这些位置为刻度
+for ax in [ax1, ax2]:
+    ax.set_xticks(tick_positions)
+    ax.set_xticks(tick_positions)
+    # 设置刻度标签并旋转45度
+    ax.set_xticklabels(tick_positions, rotation=45)
+    ax.set_xticklabels(tick_positions, rotation=45)
+    ax.grid(linestyle='dotted', alpha=0.3)
+
+fig.tight_layout()
+plt.savefig(bkup_dir+"influence_on_geometry.png")
+plt.close(fig)
 
 
 fig = plt.figure(figsize=(8, 4),dpi=300)
 ax = fig.add_subplot(111)
 for i in range(PCA_N_COMPONENTS):
     ax.boxplot(tangent_projected_data[:,i], positions=[i], widths=0.6, showfliers=False)
-ax.set_xticks(range(PCA_N_COMPONENTS),angle=45)
-ax.set_xticklabels([f'PC{i+1}' for i in range(PCA_N_COMPONENTS)])
+ax.set_xticks(range(PCA_N_COMPONENTS))
+ax.set_xticklabels([f'PC{i+1}' for i in range(PCA_N_COMPONENTS)],  rotation=45)
 ax.set_xlabel('Principal Components')
 ax.set_ylabel('Loadings')
 ax.set_title('Loadings of Principal Components')
-plt.tight_layout()
+fig.tight_layout()
 plt.savefig(bkup_dir+"Loadings_of_Principal_Components.png")
 plt.close(fig)
 

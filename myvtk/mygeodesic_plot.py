@@ -30,7 +30,7 @@ import seaborn as sns
 import geomstats.geometry.discrete_curves as dc
 import geomstats.backend as gs
 
-def compute_geodesic_shapes_between_two_curves(curve_A, curve_B, num_steps=10):
+def compute_geodesic_shapes_between_two_curves(curve_A, curve_B, num_steps=10, initial_tangent_vec=None):
     """
     Compute the shapes along the geodesic between two curves.
 
@@ -46,14 +46,18 @@ def compute_geodesic_shapes_between_two_curves(curve_A, curve_B, num_steps=10):
         List of np.arrays, each of shape [n_points, 3].
     """
     # Create discrete curves space
-    discrete_curves_space = dc.DiscreteCurves(ambient_manifold=dc.Euclidean(dim=3))
+    ambient_manifold = dc.Euclidean(dim=3)
+    srv_metric = dc.SRVMetric(ambient_manifold=ambient_manifold)
+    discrete_curves_space = dc.DiscreteCurves(ambient_manifold=ambient_manifold, metric=srv_metric)
+    
     
     # Ensure curves have the correct shape
     if curve_A.shape != curve_B.shape:
         raise ValueError("The dimensions of the two curves should be the same.")
     
     # Compute the geodesic path between the curves
-    initial_tangent_vec = discrete_curves_space.metric.log(point=curve_B, base_point=curve_A)
+    if initial_tangent_vec is None:
+        initial_tangent_vec = discrete_curves_space.metric.log(point=curve_B, base_point=curve_A)
     geodesic = discrete_curves_space.metric.geodesic(initial_point=curve_A, initial_tangent_vec=initial_tangent_vec)
 
     # Compute intermediate shapes along the geodesic
@@ -63,8 +67,6 @@ def compute_geodesic_shapes_between_two_curves(curve_A, curve_B, num_steps=10):
     
     return np.array(geodesic_shapes)
 
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 def plot_curves_on_2d(curve_a, curve_b, geodesic_shapes, savepath):
     fig, ax = plt.subplots(figsize=(15, 5), dpi=300)

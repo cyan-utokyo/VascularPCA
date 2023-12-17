@@ -1,0 +1,6 @@
+Start at: 23-12-15-22-42-23
+PCA_N_COMPONENTS:16
+Data used: 87Alignment reference data (base_id):1,casename:./scaling/resamp_attr_ascii/vmtk64a\BG0014_Right_new_new.vtkprocrustes alignment done.- preprocessing_pca is not a SRVF PCA.
+SCALED to (absolute length) 1 before compute SRVF.
+according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF.
+using srvf_frechet as tangent_base.
