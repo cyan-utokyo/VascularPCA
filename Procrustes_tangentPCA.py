@@ -79,7 +79,6 @@ from scipy.stats import pearsonr
 import networkx as nx  # 导入NetworkX库
 from myvtk.MyRiemannCov import *
 from scipy.signal import find_peaks
-import geomstats.geometry.discrete_curves as dc
 from geomstats.learning.pca import TangentPCA
 from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
 from mpl_toolkits.mplot3d import Axes3D
@@ -122,6 +121,7 @@ Typevalues = []
 r3 = Euclidean(dim=3)
 srv_metric = SRVMetric(r3)
 discrete_curves_space = DiscreteCurves(ambient_manifold=r3, k_sampling_points=64)
+print (discrete_curves_space.metric)
 
 pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
 shapetype = pd.read_csv("./UVCS_class.csv", header=None)
@@ -236,8 +236,8 @@ preprocess_curves = preprocessing_pca.inverse_transform_from_loadings(preprocess
 
 Procrustes_curves = preprocess_curves
 
-log.write("Procrustes_curves is aligned again by endpoints.\n")
-Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
+# log.write("Procrustes_curves is aligned again by endpoints.\n")
+# Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 for i in range(len(Procrustes_curves)):
@@ -270,8 +270,102 @@ log.write("according to A robust tangent PCA via shape restoration for shape var
 #     log.write("using {} as tangent_base_id.\n".format(Files[tangent_base_id]))
 #     tangent_base = Procs_srvf_curves[tangent_base_id]
 
+
 tangent_base = compute_frechet_mean(Procs_srvf_curves)
 frechet_mean_shape = compute_frechet_mean(Procs_srvf_curves)
+
+srvf_curves=[]
+for i in range(len(Procs_srvf_curves)):
+    srvf_curves.append(calculate_srvf(Procs_srvf_curves[i]))
+frechet_mean_srvf = calculate_srvf(frechet_mean_shape)
+# 用奇异值分解来寻找使测地线距离最小的旋转
+# 用warping function来寻找使测地线距离最小的re-parameterization
+
+de_rotation_srvf = align_procrustes(srvf_curves, base_id=base_id)
+
+def compute_cost_matrix(curve1, curve2):
+    # Compute the cost matrix between two curves
+    n = curve1.shape[0]
+    m = curve2.shape[0]
+    cost_matrix = np.zeros((n, m))
+    
+    for i in range(n):
+        for j in range(m):
+            cost_matrix[i, j] = np.linalg.norm(curve1[i] - curve2[j])
+    return cost_matrix
+
+def find_optimal_reparametrization(cost_matrix):
+    n, m = cost_matrix.shape
+    dp_matrix = np.inf * np.ones((n, m))
+    dp_matrix[0, 0] = cost_matrix[0, 0]
+    
+    # Only allow moves to (i+1, j+1) from (i, j)
+    for i in range(1, n):
+        for j in range(1, m):
+            dp_matrix[i, j] = cost_matrix[i, j] + dp_matrix[i-1, j-1]
+    
+    # Backtracking
+    i, j = n-1, m-1
+    path = [(i, j)]
+    while i > 0 and j > 0:
+        # Move diagonally back up the matrix
+        i -= 1
+        j -= 1
+        path.append((i, j))
+    
+    path.reverse()
+    return path
+
+
+
+# Apply the function to the original curve using the path from dynamic programming
+
+reparam_curves = []
+n=0
+for n in range(len(de_rotation_srvf)):
+    curve1 = de_rotation_srvf[n]
+    curve2 = frechet_mean_srvf
+    cost_matrix = compute_cost_matrix(curve1, curve2)
+    optimal_path = find_optimal_reparametrization(cost_matrix)
+    print ("optimal_path:", optimal_path)
+
+    reparam_curve1 = np.zeros_like(curve1)
+    for i, j in optimal_path:
+        # reparam_curve1[j, :] = curve1[i, :]
+        reparam_curve1[j, :] = Procs_srvf_curves[n][i, :]
+    reparam_curves.append(reparam_curve1)
+reparam_curves = np.array(reparam_curves)
+
+fig = plt.figure(figsize=(13, 6),dpi=300)
+ax1 = fig.add_subplot(111)
+plt.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,1], label="frechet_mean_shape", marker="o")
+new_frechet_mean_shape = compute_frechet_mean(reparam_curves)
+plt.plot(new_frechet_mean_shape[:,0], new_frechet_mean_shape[:,1], label="new_frechet_mean_shape", marker="o")
+plt.legend()
+plt.savefig(bkup_dir+"frechet_mean_shape.png")
+plt.close(fig)
+
+
+Procs_srvf_curves = reparam_curves
+
+
+# fig = plt.figure(figsize=(13, 6),dpi=300)
+# ax1 = fig.add_subplot(131)
+# ax2 = fig.add_subplot(132)
+# ax3 = fig.add_subplot(133)
+# ax1.plot(curve1[:,0], curve1[:,1], label="curve1", marker="o")
+# ax1.plot(curve2[:,0], curve2[:,1], label="curve2", marker="o")
+# ax1.plot(reparam_curve1[:,0], reparam_curve1[:,1], label="reparam_curve1", marker="o")
+# ax2.plot(curve1[:,0], curve1[:,2], label="curve1", marker="o")
+# ax2.plot(curve2[:,0], curve2[:,2], label="curve2", marker="o")
+# ax2.plot(reparam_curve1[:,0], reparam_curve1[:,2], label="reparam_curve1", marker="o")
+# ax3.plot(curve1[:,1], curve1[:,2], label="curve1", marker="o")
+# ax3.plot(curve2[:,1], curve2[:,2], label="curve2", marker="o")
+# ax3.plot(reparam_curve1[:,1], reparam_curve1[:,2], label="reparam_curve1", marker="o")
+# ax1.legend()
+# plt.savefig(bkup_dir+"reparameterize_curve.png")
+# plt.close(fig)
+
 #########################################
 # 把srvf曲线做对数映射，得到切线空间的切向量
 tangent_vectors = []
@@ -290,19 +384,16 @@ tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPON
 # 拟合并变换数据到切线空间的主成分中
 tpca.fit(tangent_vectors)
 tangent_projected_data = tpca.transform(tangent_vectors)
+fig = plt.figure(figsize=(8, 5))
+ax = fig.add_subplot(111)
+ax.scatter(tangent_projected_data[:, 0], tangent_projected_data[:, 1])
+ax.set_xlabel("PC1")
+ax.set_ylabel("PC2")
+ax.set_title("Tangent PCA")
+plt.savefig(bkup_dir+"tangent_pca.png")
+plt.close(fig)
 
-################################
-# 比较srvf和tangent pca的相关性
-# pca_correlaton_matrix = np.corrcoef(tangent_projected_data.T, srvf_pca.train_res.T)[16:,:16]
-# fig = plt.figure(figsize=(13, 6),dpi=300)
-# ax = fig.add_subplot(111)
-# sns.heatmap(pca_correlaton_matrix, annot=False, fmt=".2f", cmap='seismic', ax=ax)
-# ax.set_title("tangent_VS_srvf_pca")
-# fig.savefig(bkup_dir+"pca_correlaton_matrix.png")
-# plt.close(fig)
-# 比较srvf和tangent pca的相关性
-################################
-
+# reverse_tangent_vectors = tpca.inverse_transform(tangent_projected_data)
 
 # 使用高斯方法拟合数据
 tangent_pca_gaussian = fit_gaussian(tangent_projected_data)
@@ -311,13 +402,14 @@ tangent_pca_gaussian = fit_gaussian(tangent_projected_data)
 sample_num = 500  # 定义您想要的样本数
 synthetic_features = np.array([g.rvs(sample_num) for g in tangent_pca_gaussian]).T
 
-reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
-reconstructed_synthetic_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+reconstructed_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+reconstructed_synthetic_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
 
 
 # 把主成分还原成曲线
 tangent_components = reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf)
-
+for i in range(len(tangent_components)):
+    tangent_components[i] = tangent_components[i]*64
 ###########################################################
 # plot 各个主成分
 def update_plot(angle):
@@ -420,7 +512,6 @@ sns.heatmap(correlation_matrix_curvature[:16,16:], annot=False, fmt=".2f", cmap=
 sns.heatmap(correlation_matrix_torsion[:16,16:], annot=False, fmt=".2f", cmap='seismic', ax=ax2)
 plt.savefig(bkup_dir+"correlation_matrix.png")
 plt.close(fig)
-
 
 average_of_means_torsions = np.mean([np.mean(np.abs(tors)) for tors in Torsions])
 average_of_std_torsions = np.mean([np.std(tors) for tors in Torsions])
@@ -784,7 +875,7 @@ for i in range(PCA_N_COMPONENTS):
     sigma_single_feature = np.zeros_like(tangent_projected_data)[:7]
     for j in range(7):
         sigma_single_feature[j,i] = (j-3) * sigma
-    sigma_single_reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, sigma_single_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+    sigma_single_reconstructed_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, sigma_single_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
     sigma_single_reconstructed_curves = np.array([align_endpoints(sigma_single_reconstructed_curves[j], p) for j in range(7)])
     fig = plt.figure(figsize=(10,2),dpi=300)
     ax1 = fig.add_subplot(121)
@@ -795,7 +886,7 @@ for i in range(PCA_N_COMPONENTS):
     ax41 = fig4.add_subplot(311)
     ax42 = fig4.add_subplot(312)
     ax43 = fig4.add_subplot(313)
-    single_reconstructed_curves = from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+    single_reconstructed_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
     # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
     # print ("Curvautres.shape:", Curvatures.shape)
@@ -918,60 +1009,6 @@ torsion_std_devs = [np.std(means) for means in torsion_means_per_loci]
 
 diff_curvature_loci = np.argsort(curvature_std_devs)
 diff_torsion_loci = np.argsort(torsion_std_devs)
-
-# print(f"Loci with the largest differences in curvature means: {top10_diff_curvature_loci}")
-# print(f"Loci with the largest differences in torsion means: {top10_diff_torsion_loci}")
-
-
-# fig1 = plt.figure(figsize=(3,12),dpi=300)
-# ax1 = fig1.add_subplot(111)
-# ax1.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
-# fig2 = plt.figure(figsize=(3,12),dpi=300)
-# ax2 = fig2.add_subplot(111)
-# ax2.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")  
-# fig3 = plt.figure(figsize=(3,12),dpi=300)
-# ax3 = fig3.add_subplot(111)
-# ax3.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,2], label="Mean shape", color="dimgray")
-
-# for label,key in zip(mapping.values(), mapping.keys()):
-#     data = reconstructed_curves[np.array(quad_param_group_mapped) == label]
-#     for curve in data:
-#         for loci in range(len(curve)-5):
-#             ax1.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-#                         alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
-#             ax2.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-#                         alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
-#             ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-#                         alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)), marker="x", s=20)
-#             ax3.scatter(curve[loci,0], curve[loci,2], color=colors[key], 
-#                         alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)), marker="+", s=20)
-# for loci in range(2, len(curve)-5):
-#     ax1.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
-#                 alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
-#     ax2.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='s',color="dimgray",
-#                 alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
-#     ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='o',color="dimgray",
-#                 alpha=np.exp(-15 * np.where(diff_curvature_loci == loci)[0]/len(diff_curvature_loci)))
-#     ax3.scatter(frechet_mean_shape[loci,0], frechet_mean_shape[loci,2], marker='s',color="dimgray",
-#                 alpha=np.exp(-15 * np.where(diff_torsion_loci == loci)[0]/len(diff_torsion_loci)))
-# # ax1.set_xlabel('Sampling Points')
-# # ax1.set_ylabel('X axis')
-# ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
-# plt.tight_layout()
-# fig1.savefig(bkup_dir+"X_axis_of_curvature_.png")
-# plt.close(fig1)
-# # ax2.set_xlabel('Sampling Points')
-# # ax2.set_ylabel('X axis')
-# ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
-# plt.tight_layout()
-# fig2.savefig(bkup_dir+"X_axis_of_torsion_.png")
-# plt.close(fig2)
-# # ax3.set_xlabel('Sampling Points')
-# # ax3.set_ylabel('X axis')
-# ax3.set_xticklabels(ax3.get_xticks(), rotation=45)
-# plt.tight_layout()
-# fig3.savefig(bkup_dir+"X_axis_of_curvature_and_torsion_.png")
-# plt.close(fig3)
 
 
 vtk_points = np.zeros((len(reconstructed_curves)+1, len(reconstructed_curves[0]), 3))
