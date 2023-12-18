@@ -101,7 +101,8 @@ def fit_gaussian(data):
 def from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None):
     principal_components = tpca.components_
     # Assuming principal_components has the shape (n_components, n_sampling_points * n_dimensions)
-    principal_components_reshaped = principal_components.reshape((PCA_N_COMPONENTS, 64, 3)) # 64是采样点数
+    point_num = len(tangent_base)
+    principal_components_reshaped = principal_components.reshape((PCA_N_COMPONENTS, point_num, 3)) # point_num是采样点数
     # Now use exp on each reshaped component
     curves_from_components = [
         discrete_curves_space.metric.exp(tangent_vec=component, base_point=tangent_base)
@@ -131,9 +132,10 @@ def from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data
 
 def reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf_func=None):
     principal_components = tpca.components_
+    point_num = len(tangent_base)
     # Assuming the shape of principal_components is (n_components, n_sampling_points * n_dimensions)
     principal_components_reshaped = principal_components.reshape(
-        (tpca.n_components, 64, 3)
+        (tpca.n_components, point_num, 3)
     )
 
     curves_from_components = []

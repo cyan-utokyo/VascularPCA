@@ -27,14 +27,18 @@ from geomstats.learning.frechet_mean import FrechetMean
 import numpy as np
 from scipy.interpolate import interp1d
 from sklearn.preprocessing import StandardScaler
-
+from geomstats.learning.pca import TangentPCA
+from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
 
 
 def compute_frechet_mean(curves):
     r2 = Euclidean(dim=3)
-    k_sampling_points = 64  # Assuming the sampling points match the size of your curves
+    # srv_metric = SRVMetric(r2)
+    k_sampling_points = curves.shape[1]  # Assuming the sampling points match the size of your curves
 
-    curves_r2 = DiscreteCurves(ambient_manifold=r2, k_sampling_points=k_sampling_points)
+    curves_r2 = DiscreteCurves(ambient_manifold=r2, 
+                               k_sampling_points=k_sampling_points,
+                               metric = SRVMetric(r2))
 
     # Compute the Fréchet mean
     frechet_mean = FrechetMean(metric=curves_r2.metric, max_iter=100)

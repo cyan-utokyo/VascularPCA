@@ -118,10 +118,9 @@ pre_Torsions = []
 Typevalues = [] 
 # window size
 # 创建离散曲线空间
-r3 = Euclidean(dim=3)
-srv_metric = SRVMetric(r3)
-discrete_curves_space = DiscreteCurves(ambient_manifold=r3, k_sampling_points=64)
-print (discrete_curves_space.metric)
+
+
+
 
 pre_files = glob.glob("./scaling/resamp_attr_ascii/vmtk64a/*.vtk")
 shapetype = pd.read_csv("./UVCS_class.csv", header=None)
@@ -140,6 +139,7 @@ for idx in range(len(pre_files)):
     pt, Curv, Tors, Radius, Abscissas, ptns, ftangent, fnormal, fbinormal = GetMyVtk(pre_files[idx], frenet=1)
     Files.append(pre_files[idx])
     pt = pt-np.mean(pt,axis=0)
+    # pt = interpolate_pt(pt, 640)
     # pt = pt - (pt[0]+[np.random.uniform(-0.0001,0.0001),np.random.uniform(-0.0001,0.0001),np.random.uniform(-0.0001,0.1)])
     # pt = pt/np.linalg.norm(pt[-1] - pt[0]) * 64
     unaligned_curves.append(pt[::-1])
@@ -150,6 +150,13 @@ unaligned_curves = np.array(unaligned_curves)
 # geometry_dir = mkdir(bkup_dir, "geometry")
 Typevalues = np.array(Typevalues)
 
+POINTS_NUM = pt.shape[0]
+print ("POINTS_NUM:", POINTS_NUM)
+
+r3 = Euclidean(dim=3)
+srv_metric = SRVMetric(r3)
+discrete_curves_space = DiscreteCurves(ambient_manifold=r3, k_sampling_points=POINTS_NUM)
+print (discrete_curves_space.metric)
 ########################################
 
 log.write("Data used: {}".format(len(Files)))
@@ -226,8 +233,176 @@ for i in range(len(Procrustes_curves)):
 fig.savefig(bkup_dir+"Procrustes_curves.png")
 plt.close(fig)
 
-# i=30 # U
-# j=46 # S
+###################################
+# dynamic time warping.
+
+def compute_cost_matrix(curve1, curve2):
+    # Compute the cost matrix between two curves
+    n = curve1.shape[0]
+    m = curve2.shape[0]
+    cost_matrix = np.zeros((n, m))
+    
+    for i in range(n):
+        for j in range(m):
+            cost_matrix[i, j] = np.linalg.norm(curve1[i] - curve2[j])
+    return cost_matrix
+
+def find_optimal_reparametrization(cost_matrix):
+    n, m = cost_matrix.shape
+    dp_matrix = np.inf * np.ones((n, m))
+    dp_matrix[0, 0] = cost_matrix[0, 0]
+    
+    for i in range(1, n):
+        for j in range(1, m):
+            choices = [dp_matrix[i-1, j], dp_matrix[i, j-1], dp_matrix[i-1, j-1]]
+            dp_matrix[i, j] = cost_matrix[i, j] + min(choices)
+    
+    # Backtracking
+    i, j = n-1, m-1
+    path = [(i, j)]
+    while i > 0 and j > 0:
+        step = np.argmin([dp_matrix[i-1, j], dp_matrix[i, j-1], dp_matrix[i-1, j-1]])
+        if step == 0:
+            i -= 1
+        elif step == 1:
+            j -= 1
+        else:
+            i -= 1
+            j -= 1
+        path.append((i, j))
+    
+    path.reverse()
+    return path
+
+def interpolate_pt(curve, num_points):
+    # 插值以增加曲线上的点
+    # curve 是一个 numpy 数组，形状为 [n, 3]
+    # num_points 是插值后曲线上的点的数量
+    t = np.linspace(0, 1, len(curve))
+    t_new = np.linspace(0, 1, num_points)
+    curve_interpolated = np.array([np.interp(t_new, t, dim) for dim in curve.T]).T
+    return curve_interpolated
+def reparameterize_curve(curve, warping_function):
+    # 使用 warping function 重排列曲线点
+    # 注意：这里假设 warping_function 已经考虑了插值后的点的数量
+    reparam_curve = curve[warping_function]
+    return reparam_curve
+
+# def extract_increasing_mappings(warping_function):
+#     # 初始化一个字典，用于存储每个n的最大m
+#     increasing_mappings = {}
+    
+#     # 反向遍历 warping function 以确保选择最大的m
+#     for m, n in reversed(warping_function):
+#         if n not in increasing_mappings:
+#             increasing_mappings[n] = m
+    
+#     # 将字典转换为n的排序列表，只包括唯一且最大的m
+#     sorted_n = sorted(increasing_mappings.keys())
+#     increasing_m_list = [increasing_mappings[n] for n in sorted_n]
+
+#     return increasing_m_list
+
+def extract_increasing_mappings(warping_function):
+    # 初始化一个字典，用于存储每个n的唯一且递增的m
+    strictly_increasing_mappings = {}
+    last_mapped_m = -1  # 保证m是从0开始且严格递增的
+    
+    # 遍历 warping function
+    for m, n in warping_function:
+        # 只记录每个n第一次出现的m，且m必须大于之前的m值
+        if n not in strictly_increasing_mappings and m > last_mapped_m:
+            strictly_increasing_mappings[n] = m
+            last_mapped_m = m
+    
+    # 将字典转换为n的排序列表，只包括唯一且递增的m
+    sorted_n = sorted(strictly_increasing_mappings.keys())
+    strictly_increasing_m_list = [strictly_increasing_mappings[n] for n in sorted_n]
+
+    return strictly_increasing_m_list
+
+
+# Apply the function to the original curve using the path from dynamic programming
+reparam_curves = []
+fig = plt.figure(figsize=(7, 6),dpi=300)
+ax1 = fig.add_subplot(311)
+ax2 = fig.add_subplot(312)
+ax3 = fig.add_subplot(313)
+optimal_path_dir = mkdir(bkup_dir, "optimal_path")
+for n in range(1, len(Procrustes_curves)):
+    curve1 = Procrustes_curves[n]
+    curve2 = Procrustes_curves[0]
+    # original_curve = Procs_srvf_curves[n]
+    curve1 = interpolate_pt(curve1, 640)
+    # curve2 = interpolate_pt(curve2, 400)
+    # original_curve = interpolate_pt(original_curve, 400)
+    cost_matrix = compute_cost_matrix(curve1, curve2)
+    optimal_path = np.array(find_optimal_reparametrization(cost_matrix))
+    # print ("optimal_path:", optimal_path)
+    # ax1.plot(optimal_path[:,0], optimal_path[:,1])
+    f = open(optimal_path_dir+"{:0=4}.csv".format(n), 'w', encoding='utf-8', newline='')
+    # reparam_curve1 = np.zeros_like(curve1)
+    # for i, j in optimal_path:
+    #     # reparam_curve1[j, :] = curve1[i, :]
+    #     f.write(str(i)+","+str(j)+"\n")
+    #     reparam_curve1[j, :] = original_curve[i, :]
+    # f.close()
+    unique_mapping = extract_increasing_mappings(optimal_path)
+    ax1.plot(unique_mapping)
+    for i in range(len(unique_mapping)):
+        f.write(str(i)+","+str(unique_mapping[i])+"\n")
+    f.close()
+    if len(set(unique_mapping)) == len(unique_mapping):
+        print ("unique_mapping has no ring.")
+        # continue
+    else:
+        print ("unique_mapping has rings.")
+    reparam_curve1 = curve1[unique_mapping]
+    ax2.plot(reparam_curve1[:,2],reparam_curve1[:,0],color = 'r',linewidth=1, alpha=0.5)
+    # ax2.plot(curve2[:,2],curve2[:,0], color = 'k',linewidth=3, alpha=1)
+    ax3.plot(curve1[:,2],curve1[:,0], color = 'b',linewidth=1, alpha=0.5)
+    # ax3.plot(curve2[:,2],curve2[:,0], color = 'k',linewidth=3, alpha=1)
+    reparam_curves.append(reparam_curve1)
+reparam_curves = np.array(reparam_curves)
+reparam_curves = align_procrustes(reparam_curves, base_id=0)
+frechet_original = compute_frechet_mean(Procrustes_curves)
+frechet_reparam = compute_frechet_mean(reparam_curves)
+# frechet_original = np.mean(Procrustes_curves, axis=0)
+# frechet_reparam = np.mean(reparam_curves, axis=0)
+ax2.plot(frechet_original[:,2],frechet_original[:,0], color = 'k',linewidth=3, alpha=1)
+ax3.plot(frechet_reparam[:,2],frechet_reparam[:,0], color = 'k',linewidth=3, alpha=1)
+ax1.set_xlabel("curve")
+ax1.set_ylabel("reference curve")
+ax1.set_title("reparameterize curve")
+plt.savefig(bkup_dir+"reparameterize_curve.png")
+plt.close(fig)
+
+
+
+fig = plt.figure(figsize=(13, 6),dpi=300)
+ax1 = fig.add_subplot(133)
+ax2 = fig.add_subplot(132)
+ax3 = fig.add_subplot(131)
+
+for i in range(len(reparam_curves)):
+    ax1.plot(reparam_curves[i][:,0], reparam_curves[i][:,1])
+    ax2.plot(reparam_curves[i][:,0], reparam_curves[i][:,2])
+    ax3.plot(reparam_curves[i][:,1], reparam_curves[i][:,2])
+ax1.plot(frechet_original[:,0],frechet_original[:,1], color = 'k',linestyle="--",linewidth=3, alpha=1)
+ax1.plot(frechet_reparam[:,1],frechet_reparam[:,1], color = 'k',linewidth=3, alpha=1)
+ax2.plot(frechet_original[:,0],frechet_original[:,2], color = 'k',linestyle="--",linewidth=3, alpha=1)
+ax2.plot(frechet_reparam[:,0],frechet_reparam[:,2], color = 'k',linewidth=3, alpha=1)
+ax3.plot(frechet_original[:,1],frechet_original[:,2], color = 'k',linestyle="--",linewidth=3, alpha=1)
+ax3.plot(frechet_reparam[:,1],frechet_reparam[:,2], color = 'k',linewidth=3, alpha=1)
+fig.savefig(bkup_dir+"reparam_curves.png")
+plt.close(fig)
+
+
+makeVtkFile(bkup_dir+"frechet_original.vtk", frechet_original, [], [])
+makeVtkFile(bkup_dir+"frechet_reparam.vtk", frechet_reparam, [], [])
+
+# dynamic time warping.
+###################################
 
 log.write("- preprocessing_pca is not a SRVF PCA, and it is conducted on Procrustes_cruves before aligned_endpoints.\n")
 preprocessing_pca = PCAHandler(Procrustes_curves.reshape(len(Procrustes_curves),-1), None, 20, PCA_STANDARDIZATION)
@@ -283,70 +458,18 @@ frechet_mean_srvf = calculate_srvf(frechet_mean_shape)
 
 de_rotation_srvf = align_procrustes(srvf_curves, base_id=base_id)
 
-def compute_cost_matrix(curve1, curve2):
-    # Compute the cost matrix between two curves
-    n = curve1.shape[0]
-    m = curve2.shape[0]
-    cost_matrix = np.zeros((n, m))
-    
-    for i in range(n):
-        for j in range(m):
-            cost_matrix[i, j] = np.linalg.norm(curve1[i] - curve2[j])
-    return cost_matrix
-
-def find_optimal_reparametrization(cost_matrix):
-    n, m = cost_matrix.shape
-    dp_matrix = np.inf * np.ones((n, m))
-    dp_matrix[0, 0] = cost_matrix[0, 0]
-    
-    # Only allow moves to (i+1, j+1) from (i, j)
-    for i in range(1, n):
-        for j in range(1, m):
-            dp_matrix[i, j] = cost_matrix[i, j] + dp_matrix[i-1, j-1]
-    
-    # Backtracking
-    i, j = n-1, m-1
-    path = [(i, j)]
-    while i > 0 and j > 0:
-        # Move diagonally back up the matrix
-        i -= 1
-        j -= 1
-        path.append((i, j))
-    
-    path.reverse()
-    return path
 
 
 
-# Apply the function to the original curve using the path from dynamic programming
-
-reparam_curves = []
-n=0
-for n in range(len(de_rotation_srvf)):
-    curve1 = de_rotation_srvf[n]
-    curve2 = frechet_mean_srvf
-    cost_matrix = compute_cost_matrix(curve1, curve2)
-    optimal_path = find_optimal_reparametrization(cost_matrix)
-    print ("optimal_path:", optimal_path)
-
-    reparam_curve1 = np.zeros_like(curve1)
-    for i, j in optimal_path:
-        # reparam_curve1[j, :] = curve1[i, :]
-        reparam_curve1[j, :] = Procs_srvf_curves[n][i, :]
-    reparam_curves.append(reparam_curve1)
-reparam_curves = np.array(reparam_curves)
-
-fig = plt.figure(figsize=(13, 6),dpi=300)
-ax1 = fig.add_subplot(111)
-plt.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,1], label="frechet_mean_shape", marker="o")
-new_frechet_mean_shape = compute_frechet_mean(reparam_curves)
-plt.plot(new_frechet_mean_shape[:,0], new_frechet_mean_shape[:,1], label="new_frechet_mean_shape", marker="o")
-plt.legend()
-plt.savefig(bkup_dir+"frechet_mean_shape.png")
-plt.close(fig)
-
-
-Procs_srvf_curves = reparam_curves
+# fig = plt.figure(figsize=(13, 6),dpi=300)
+# ax1 = fig.add_subplot(111)
+# plt.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,1], label="frechet_mean_shape", marker="o")
+# new_frechet_mean_shape = compute_frechet_mean(reparam_curves)
+# plt.plot(new_frechet_mean_shape[:,0], new_frechet_mean_shape[:,1], label="new_frechet_mean_shape", marker="o")
+# plt.legend()
+# plt.savefig(bkup_dir+"frechet_mean_shape.png")
+# plt.close(fig)
+# Procs_srvf_curves = reparam_curves
 
 
 # fig = plt.figure(figsize=(13, 6),dpi=300)
@@ -384,14 +507,6 @@ tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPON
 # 拟合并变换数据到切线空间的主成分中
 tpca.fit(tangent_vectors)
 tangent_projected_data = tpca.transform(tangent_vectors)
-fig = plt.figure(figsize=(8, 5))
-ax = fig.add_subplot(111)
-ax.scatter(tangent_projected_data[:, 0], tangent_projected_data[:, 1])
-ax.set_xlabel("PC1")
-ax.set_ylabel("PC2")
-ax.set_title("Tangent PCA")
-plt.savefig(bkup_dir+"tangent_pca.png")
-plt.close(fig)
 
 # reverse_tangent_vectors = tpca.inverse_transform(tangent_projected_data)
 
@@ -402,66 +517,23 @@ tangent_pca_gaussian = fit_gaussian(tangent_projected_data)
 sample_num = 500  # 定义您想要的样本数
 synthetic_features = np.array([g.rvs(sample_num) for g in tangent_pca_gaussian]).T
 
-reconstructed_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
-reconstructed_synthetic_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, tangent_projected_data, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+reconstructed_synthetic_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, synthetic_features, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
 
 
 # 把主成分还原成曲线
 tangent_components = reconstruct_components(tpca, discrete_curves_space, tangent_base, inverse_srvf)
 for i in range(len(tangent_components)):
-    tangent_components[i] = tangent_components[i]*64
+    tangent_components[i] = tangent_components[i]*POINTS_NUM
 ###########################################################
-# plot 各个主成分
-def update_plot(angle):
-    ax.view_init(elev=10., azim=angle)
-fig, ax = plt.subplots(figsize=(6, 5), dpi=300, subplot_kw={'projection': '3d'})
-sm = plt.cm.ScalarMappable(cmap=plt.get_cmap('tab20b'), norm=plt.Normalize(vmin=0, vmax=len(tangent_components)-1))
-sm.set_array([])  # Only needed for the colorbar
 
-for i, component in enumerate(tangent_components):
-    color = sm.to_rgba(i)
-    # component = align_endpoints(component, p)
-    ax.plot(component[:, 0], component[:, 1], component[:, 2], color=color)
-
-ax.set_xlabel("X axis")
-ax.set_ylabel("Y axis")
-ax.set_zlabel("Z axis")
-
-# Create a colorbar
-cbar = plt.colorbar(sm, ax=ax, pad=0.1, orientation='horizontal')
-cbar.set_label('Principal Components')
-
-angles = range(0, 360, 2)  # Angle range for the rotation
-images = []
-
-# Render each frame and append to images
-for angle in angles:
-    update_plot(angle)
-    plt.draw()
-    fig.canvas.draw()
-
-    # Convert the figure to a PIL Image and append to list
-    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
-    image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-    images.append(Image.fromarray(image))
-
-# Save to an animated GIF
-images[0].save(
-    bkup_dir + 'rotating_plot.gif',
-    save_all=True,
-    append_images=images[1:],
-    duration=100,
-    loop=0
-)
-plt.close(fig)
-# plot 各个主成分
 ###########################################################
 # Assuming tpca has an explained_variance_ratio_ attribute
 explained_variance_ratio = tpca.explained_variance_ratio_
 # Calculate the cumulative variance
 cumulative_variance = np.cumsum(explained_variance_ratio)
 # Plot the CCR curve
-plt.figure(figsize=(8, 5))
+plt.figure(figsize=(8, 3))
 plt.plot(range(1, len(cumulative_variance) + 1), cumulative_variance, marker='o', linestyle='-', color='b')
 plt.title('Cumulative Captured Ratio (CCR) of PCA')
 plt.xlabel('Number of Components')
@@ -481,14 +553,14 @@ count = 0
 for i in range(len(reconstructed_synthetic_curves)):
     Curvature_energy, Torsion_energy = compute_geometry_param_energy(synthetic_Curvatures[i], synthetic_Torsions[i])
     Tortuosity = compute_tortuosity(reconstructed_synthetic_curves[i])
-    # if 0.01<Curvature_energy < 0.08 and Torsion_energy < 0.22 and 1.6< Tortuosity < 2.7:
-    #     post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
-    #     post_synthetic_Curvatures.append(synthetic_Curvatures[i])
-    #     post_synthetic_Torsions.append(synthetic_Torsions[i])
-    #     post_synthetic_features.append(synthetic_features[i])
-    #     count += 1
-    # if count == 320:
-    #     break
+    if (0.01<Curvature_energy < 0.12) and (Torsion_energy < 0.2) and (1.6< Tortuosity < 2.7):
+        post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
+        post_synthetic_Curvatures.append(synthetic_Curvatures[i])
+        post_synthetic_Torsions.append(synthetic_Torsions[i])
+        post_synthetic_features.append(synthetic_features[i])
+        count += 1
+    if count == 320:
+        break
     post_reconstructed_synthetic_curves.append(reconstructed_synthetic_curves[i])
     post_synthetic_Curvatures.append(synthetic_Curvatures[i])
     post_synthetic_Torsions.append(synthetic_Torsions[i])
@@ -538,7 +610,6 @@ for i in range(len(Torsions)):
         param_group.append("LT")
         LT_group.append(i)
 
-
 synthetic_torsion_param_group = []
 synthetic_param_group = []
 synthetic_HT_group = []
@@ -568,6 +639,8 @@ print ("len(LT_curvatures):", len(LT_curvatures))
 print ("len(HT_curvatures):", len(HT_curvatures))
 average_of_LT_curvature = np.mean([np.mean(curv) for curv in LT_curvatures])
 average_of_HT_curvature = np.mean([np.mean(curv) for curv in HT_curvatures])
+# average_of_LT_curvature = np.mean([np.mean(curv) for curv in Curvatures])
+# average_of_HT_curvature = np.mean([np.mean(curv) for curv in Curvatures])
 print ("average_of_LT_curvature:", average_of_LT_curvature)
 print ("average_of_HT_curvature:", average_of_HT_curvature)
 quad_param_group = []
@@ -673,6 +746,8 @@ for label in param_group_unique_labels:
     synthetic_param_dict[label]['Tortuosity'] = np.array(synthetic_tortuosity)
 
 
+param_group_unique_labels = sorted(param_group_unique_labels)
+print ("param_group_unique_labels:", param_group_unique_labels)
 # 定义颜色映射
 colors = {
     label: plt.cm.CMRmap((i+1)/(len(param_group_unique_labels)+1)) for i, label in enumerate(param_group_unique_labels)
@@ -709,7 +784,7 @@ for i in range(len(Procrustes_curves)):
     energy = compute_geometry_param_energy(Curvatures[i], Torsions[i])
     ax.scatter(energy[0], energy[1], color=colors[quad_param_group[i]], alpha=0.9, s=25, marker="${}$".format(Typevalues[i]))
     # ax.annotate(Files[i].split("\\")[-1].split(".")[-2][:-7], (energy[0], energy[1]), fontsize=5)
-    print (quad_param_group[i], Typevalues[i])
+    # print (quad_param_group[i], Typevalues[i])
     shape_score = {}
     for label in param_group_unique_labels:
         energy_score = score_energy(energy, energy_centroids[label])
@@ -762,7 +837,7 @@ for label in param_group_unique_labels:
     ax1.scatter(curvatures, torsions, 
                color=colors[label], 
                label=label, 
-               alpha=0.5, 
+               alpha=0.9, 
                s = tortuosity*tortuosity*20) 
     fontsize = 5
     for i in range(len(curvatures)):
@@ -875,7 +950,7 @@ for i in range(PCA_N_COMPONENTS):
     sigma_single_feature = np.zeros_like(tangent_projected_data)[:7]
     for j in range(7):
         sigma_single_feature[j,i] = (j-3) * sigma
-    sigma_single_reconstructed_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, sigma_single_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+    sigma_single_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, sigma_single_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
     sigma_single_reconstructed_curves = np.array([align_endpoints(sigma_single_reconstructed_curves[j], p) for j in range(7)])
     fig = plt.figure(figsize=(10,2),dpi=300)
     ax1 = fig.add_subplot(121)
@@ -886,7 +961,7 @@ for i in range(PCA_N_COMPONENTS):
     ax41 = fig4.add_subplot(311)
     ax42 = fig4.add_subplot(312)
     ax43 = fig4.add_subplot(313)
-    single_reconstructed_curves = 64*from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+    single_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, single_component_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
     single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
     # print ("single_reconstructed_curvature.shape:", single_reconstructed_curvature.shape)
     # print ("Curvautres.shape:", Curvatures.shape)
@@ -1081,12 +1156,14 @@ fig = plt.figure(dpi=300)
 ax = fig.add_subplot(111)
 fig2 = plt.figure(dpi=300)
 ax2 = fig2.add_subplot(111)
+x_pc = 0
+y_pc = 1
 for label in param_group_unique_labels:
     print (label)
     print ("real data:", param_dict[label]['Torsion'].shape)
     print ("synthetic data:", synthetic_param_dict[label]['Torsion'].shape)
-    ax.scatter(synthetic_features[np.array(synthetic_quad_param_group) == label][:,0], 
-               synthetic_features[np.array(synthetic_quad_param_group) == label][:,1],
+    ax.scatter(synthetic_features[np.array(synthetic_quad_param_group) == label][:,x_pc], 
+               synthetic_features[np.array(synthetic_quad_param_group) == label][:,y_pc],
                color=colors[label], 
                label=label, 
                alpha=0.5,
@@ -1098,18 +1175,18 @@ for label in param_group_unique_labels:
     #            alpha=0.7, 
     #            marker="x",
     #            s=50) 
-    ax2.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,0], 
-               tangent_projected_data[np.array(quad_param_group) == label][:,1],
+    ax2.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,x_pc], 
+               tangent_projected_data[np.array(quad_param_group) == label][:,y_pc],
                color=colors[label], 
                label=label, 
                alpha=0.7,)
     for i in range(10):
         makeVtkFile(vtk_dir + label + "_synthetic_" + str(i) + ".vtk",reconstructed_synthetic_curves[np.array(synthetic_quad_param_group) == label][i], [],[])
         makeVtkFile(vtk_dir + label + "_real_" + str(i) + ".vtk",reconstructed_curves[np.array(quad_param_group) == label][i],[],[])
-ax.set_xlabel('PC1')
-ax.set_ylabel('PC2')
-ax2.set_xlabel('PC1')
-ax2.set_ylabel('PC2')
+ax.set_xlabel('PC{}'.format(x_pc+1))
+ax.set_ylabel('PC{}'.format(y_pc+1))
+ax2.set_xlabel('PC{}'.format(x_pc+1))
+ax2.set_ylabel('PC{}'.format(y_pc+1))
 ax.legend()
 ax2.legend()
 fig.savefig(bkup_dir + "pcaloadings_plot_both.png")
