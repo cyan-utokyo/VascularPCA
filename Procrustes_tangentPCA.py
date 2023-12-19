@@ -891,8 +891,8 @@ ax2.plot(synthetic_x_pred, synthetic_y_pred, color="k", alpha=0.4,label='Fit: y 
 for ax in [ax1,ax2]:
     ax.set_xlabel('Bending Energy')
     ax.set_ylabel('Twisting Energy')
-    ax.set_title('Energy Scatter Plot by Label')
-    ax.set_ylim(-0.2, 0.5)
+    # ax.set_title('Energy Scatter Plot by Label')
+    ax.set_ylim(0, 0.2)
     ax.grid(linestyle='dotted', alpha=0.5)
 ax1.legend()
 ax2.legend()
@@ -1016,6 +1016,70 @@ for i in range(PCA_N_COMPONENTS):
     plt.close(fig)
     plt.close(fig4)
 
+################################
+from matplotlib.gridspec import GridSpec
+fig = plt.figure(figsize=(10, 10), dpi=300)
+# 设置GridSpec布局
+gs = GridSpec(4, 4, figure=fig)
+ax1 = fig.add_subplot(gs[0, 0])
+ax2 = fig.add_subplot(gs[0, 1])
+ax3 = fig.add_subplot(gs[1, 0])
+ax4 = fig.add_subplot(gs[1, 1])
+ax5 = fig.add_subplot(gs[2, 0])
+ax6 = fig.add_subplot(gs[2, 1])
+ax7 = fig.add_subplot(gs[3, 0])
+ax8 = fig.add_subplot(gs[3, 1])
+ax9 = fig.add_subplot(gs[:, 2:])
+axes_list = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]
+example_idx = [0,1,4,-1]
+example_feature = tangent_projected_data[example_idx]
+example_reconstructed_curves = []
+example_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, 
+                                                                            example_feature, 
+                                                                            PCA_N_COMPONENTS, 
+                                                                            discrete_curves_space, 
+                                                                            inverse_srvf_func=None)
+example_reconstructed_curves = np.array([align_endpoints(example_reconstructed_curves[j], p) for j in range(len(example_reconstructed_curves))])
+single_reconstructed_curvature, single_reconstructed_torsion = compute_synthetic_curvature_and_torsion(single_reconstructed_curves)
+print ("example:", np.array(quad_param_group)[example_idx])
+print ("example:", np.array(quad_param_group_mapped)[example_idx])
+markers = ['o', '^', 's', 'd']
+for i in range(len(example_idx)):
+    ax9.plot(example_reconstructed_curves[i][:,0],example_reconstructed_curves[i][:,2], 
+             label="{}-{}".format(i+1, np.array(quad_param_group)[example_idx]),
+             marker=markers[i], 
+             color="dimgray")
+# ax9.legend()
+for i, ax in zip(range(8), axes_list):
+    print ("MoD:", i+1)
+    ax.set_title("MoD {}".format(i+1))
+
+    for j in range(len(example_idx)):
+        ax.axvline(x=example_feature[j][i], color='dimgray', linestyle='--', marker=markers[j])
+
+    for label,key in zip(mapping.values(), mapping.keys()):
+    # 筛选出特定标签的数据
+        # data = single_component_feature[:, i][np.array(quad_param_group_mapped) == label]
+        data = tangent_projected_data[np.array(quad_param_group_mapped) == label,i]
+        mean_label = np.mean(data)
+        std_label = np.std(data)
+        print ("label:", label, "key:", key, "mean_label:", mean_label, "std_label:", std_label)
+        # 创建用于绘制高斯分布的数据点
+        x_values = np.linspace(min(data), max(data), 1000)
+        y_values = norm.pdf(x_values, loc=mean_label, scale=std_label)
+        # 绘制高斯分布
+        ax.plot(x_values, y_values, label=f'{key} Gaussian', color=colors[key])
+        # ax_id = ax_id + 1
+# ax.legend()
+fig.tight_layout()
+fig.savefig(PC_gaussian_dir+f"example_PC_gaussians.png")
+fig.tight_layout()
+plt.close(fig)
+
+
+
+################################
+    
 
 def darken_color(color, factor=0.7):
     """使颜色变深"""
