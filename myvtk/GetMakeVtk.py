@@ -86,14 +86,13 @@ def makeVtkFile(savePath, coords, scalarAttributes, fieldAttributes):
 
     if len(scalarAttributes) > 0:
         v.write("POINT_DATA {}\n".format(len(coords)))
-    else: 
-        return
+        for i in range(len(scalarAttributes)):
+            v.write("SCALARS {} {}\n".format(scalarAttributes[i][0], scalarAttributes[i][1]))
+            v.write("LOOKUP_TABLE default\n")
+            for j in range(len(coords)):
+                    v.write("{}\n".format(scalarAttributes[i][2][j]))
 
-    for i in range(len(scalarAttributes)):
-        v.write("SCALARS {} {}\n".format(scalarAttributes[i][0], scalarAttributes[i][1]))
-        v.write("LOOKUP_TABLE default\n")
-        for j in range(len(coords)):
-                v.write("{}\n".format(scalarAttributes[i][2][j]))
+
 
     ####################################
     #         field Attributes         #

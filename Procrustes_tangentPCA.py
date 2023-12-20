@@ -87,9 +87,14 @@ from PIL import Image
 from myvtk.Myscores import *
 from myvtk.MytangentPCA import *
 warnings.filterwarnings("ignore")
+import matplotlib as mpl
 
+# mpl.rcParams['xtick.labelsize'] = 18
+# mpl.rcParams['ytick.labelsize'] = 18
+# mpl.rcParams['axes.labelsize'] = 18
 # sns.set_context("talk", font_scale=0.8)
 # sns.set_style("whitegrid")
+
 PCA_N_COMPONENTS = 16
 Multi_plot_rows = 4
 SCALETO1 = False
@@ -352,11 +357,11 @@ for n in range(1, len(Procrustes_curves)):
     for i in range(len(unique_mapping)):
         f.write(str(i)+","+str(unique_mapping[i])+"\n")
     f.close()
-    if len(set(unique_mapping)) == len(unique_mapping):
-        print ("unique_mapping has no ring.")
-        # continue
-    else:
-        print ("unique_mapping has rings.")
+    # if len(set(unique_mapping)) == len(unique_mapping):
+    #     print ("unique_mapping has no ring.")
+    #     # continue
+    # else:
+    #     print ("unique_mapping has rings.")
     reparam_curve1 = curve1[unique_mapping]
     ax2.plot(reparam_curve1[:,2],reparam_curve1[:,0],color = 'r',linewidth=1, alpha=0.5)
     # ax2.plot(curve2[:,2],curve2[:,0], color = 'k',linewidth=3, alpha=1)
@@ -398,8 +403,17 @@ fig.savefig(bkup_dir+"reparam_curves.png")
 plt.close(fig)
 
 
+frechet_curvature, frechet_torsion = compute_curvature_and_torsion(frechet_reparam)
+frechet_energy = compute_geometry_param_energy(frechet_curvature, frechet_torsion)
+frechet_tortuosity = compute_tortuosity(frechet_reparam)
+print ("frechet_energy:", frechet_energy, "frechet_tortuosity:", frechet_tortuosity)
+# fieldAttribute(list):
+#  ['Curvature', 'float',pandas.Series],
+#  ['Torsion', 'float',pandas.Series]]
+scalarAttribute = [['Curvature', 'float',pd.Series(frechet_curvature)],
+    ['Torsion', 'float',pd.Series(frechet_torsion)]]
 makeVtkFile(bkup_dir+"frechet_original.vtk", frechet_original, [], [])
-makeVtkFile(bkup_dir+"frechet_reparam.vtk", frechet_reparam, [], [])
+makeVtkFile(bkup_dir+"frechet_reparam.vtk", frechet_reparam, scalarAttribute, [])
 
 # dynamic time warping.
 ###################################
@@ -448,6 +462,7 @@ log.write("according to A robust tangent PCA via shape restoration for shape var
 
 tangent_base = compute_frechet_mean(Procs_srvf_curves)
 frechet_mean_shape = compute_frechet_mean(Procs_srvf_curves)
+
 
 srvf_curves=[]
 for i in range(len(Procs_srvf_curves)):
@@ -753,23 +768,6 @@ colors = {
     label: plt.cm.CMRmap((i+1)/(len(param_group_unique_labels)+1)) for i, label in enumerate(param_group_unique_labels)
 }
 
-i = 0
-fig = plt.figure(figsize=(8, 4), dpi=300)
-ax1 = fig.add_subplot(121)
-ax2 = fig.add_subplot(122)
-for lbl, data in param_dict.items():
-    # print (label, len(data['Torsion']), len(data['Curvature']), len(data['Energy']), len(data['Tortuosity']),)
-    print (lbl, np.array(data['Tortuosity']).shape, np.array(data['Energy']).shape, np.array(data['Siphon']).shape)
-    ax1.boxplot(data['Tortuosity'], positions=[i], widths=0.3, showfliers=False,boxprops=dict(color=colors[lbl]), medianprops=dict(color=colors[lbl]))
-    ax2.boxplot(data['Siphon'], positions=[i], widths=0.3, showfliers=False,boxprops=dict(color=colors[lbl]), medianprops=dict(color=colors[lbl]))
-    i += 1
-for ax in [ax1, ax2]:
-    ax.set_xticklabels(param_dict.keys())
-    ax.set_xticks(range(len(param_dict)))
-
-plt.savefig(bkup_dir+"statistics.png")
-plt.close(fig)
-
 # Calculate centroids and scores for each label
 energy_centroids = {}
 energy_scores = {label: [] for label in param_group_unique_labels}
@@ -888,9 +886,10 @@ ax1.fill_between(x_pred, conf_interval_lower, conf_interval_upper, color='silver
 # 比较合成形状
 ax2.plot(x_pred, y_pred, color="k", alpha=0.4, linestyle=":",label='Fit: y = {:.2f} + {:.2f}x'.format(intercept, slope))
 ax2.plot(synthetic_x_pred, synthetic_y_pred, color="k", alpha=0.4,label='Fit: y = {:.2f} + {:.2f}x'.format(synthetic_intercept, synthetic_slope))
+font_size = 14
 for ax in [ax1,ax2]:
-    ax.set_xlabel('Bending Energy')
-    ax.set_ylabel('Twisting Energy')
+    ax.set_xlabel('Bending Energy', fontsize=font_size)
+    ax.set_ylabel('Twisting Energy', fontsize=font_size)
     # ax.set_title('Energy Scatter Plot by Label')
     ax.set_ylim(0, 0.2)
     ax.grid(linestyle='dotted', alpha=0.5)
@@ -900,6 +899,9 @@ ax3.legend()
 ax3.set_xlabel('Curvature')
 ax3.set_ylabel('Torsion')
 ax3.set_zlabel('Tortuosity')
+ax1.tick_params(axis='both', labelsize=font_size)
+ax2.tick_params(axis='both', labelsize=font_size)
+ax3.tick_params(axis='both', labelsize=font_size)
 # fig3.show()
 fig1.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label.png")
 fig2.savefig(bkup_dir+"Energy_Scatter_Plot_by_Label=synthetic.png")
@@ -917,8 +919,9 @@ for i in range(PCA_N_COMPONENTS):
     ax = axes[i // Multi_plot_rows, i % Multi_plot_rows]
     # sns.violinplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, inner='quartile', palette=colors)  # inner='quartile' 在violin内部显示四分位数
     sns.boxplot(x='Type', y=f'PC{i+1}', data=df, ax=ax, palette=colors, width=0.25)  # inner='quartile' 在violin内部显示四分位数
-    ax.set_title(f'Principal Component {i+1}')
+    ax.set_title(f'MoD {i+1}')
     ax.set_ylabel('')  # 移除y轴标签，使得图更加简洁
+    ax.tick_params(axis='both', labelsize=14, rotation=45)
 fig.tight_layout()
 plt.savefig(bkup_dir+"tangentPCA_total_boxplot.png")
 plt.close()
@@ -1031,7 +1034,7 @@ ax7 = fig.add_subplot(gs[3, 0])
 ax8 = fig.add_subplot(gs[3, 1])
 ax9 = fig.add_subplot(gs[:, 2:])
 axes_list = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]
-example_idx = [0,1,4,-1]
+example_idx = [1,2,4,15]
 example_feature = tangent_projected_data[example_idx]
 example_reconstructed_curves = []
 example_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, 
@@ -1046,16 +1049,17 @@ print ("example:", np.array(quad_param_group_mapped)[example_idx])
 markers = ['o', '^', 's', 'd']
 for i in range(len(example_idx)):
     ax9.plot(example_reconstructed_curves[i][:,0],example_reconstructed_curves[i][:,2], 
-             label="{}-{}".format(i+1, np.array(quad_param_group)[example_idx]),
+             label="{}-{}".format(i+1, quad_param_group[example_idx[i]]),
              marker=markers[i], 
-             color="dimgray")
-# ax9.legend()
+             color=colors[quad_param_group[example_idx[i]]])
+ax9.legend()
 for i, ax in zip(range(8), axes_list):
     print ("MoD:", i+1)
     ax.set_title("MoD {}".format(i+1))
 
     for j in range(len(example_idx)):
-        ax.axvline(x=example_feature[j][i], color='dimgray', linestyle='--', marker=markers[j])
+        ax.axvline(x=example_feature[j][i], color=colors[quad_param_group[example_idx[j]]],
+                   linestyle='--', marker=markers[j])
 
     for label,key in zip(mapping.values(), mapping.keys()):
     # 筛选出特定标签的数据
@@ -1069,6 +1073,7 @@ for i, ax in zip(range(8), axes_list):
         y_values = norm.pdf(x_values, loc=mean_label, scale=std_label)
         # 绘制高斯分布
         ax.plot(x_values, y_values, label=f'{key} Gaussian', color=colors[key])
+        ax.tick_params(axis='both', labelsize=12)
         # ax_id = ax_id + 1
 # ax.legend()
 fig.tight_layout()
@@ -1098,9 +1103,30 @@ for label,key in zip(mapping.values(), mapping.keys()):
     data = reconstructed_curves[np.array(quad_param_group_mapped) == label]
     curvature = Curvatures[np.array(quad_param_group_mapped) == label]
     torsion = Torsions[np.array(quad_param_group_mapped) == label]
+    tortuosity = param_dict[key]['Tortuosity']
+    C_energy = param_dict[key]['Energy'][0]
+    T_energy = param_dict[key]['Energy'][1]
+    print ("label:", label, "key:", key)
+    print ("Max Curvature:", np.max(curvature.flatten()))
+    #print ("Min Curvature:", np.min(curvature.flatten()))
+    print ("Avg Curvature:", np.mean(curvature.flatten()))
+    print ("Max Torsion:", np.max(torsion.flatten()))
+    # print ("Min Torsion:", np.min(torsion.flatten()))
+    print ("Avg Torsion:", np.mean(torsion.flatten()))
+    print ("Max Tortuosity:", np.max(tortuosity))
+    print ("Min Tortuosity:", np.min(tortuosity))
+    print ("Avg Tortuosity:", np.mean(tortuosity))
+    print ("Max curvature Energy:", np.max(C_energy))
+    print ("Min curvature Energy:", np.min(C_energy))
+    print ("Avg curvature Energy:", np.mean(C_energy))
+    print ("Max torsion Energy:", np.max(T_energy))
+    print ("Min torsion Energy:", np.min(T_energy))
+    print ("Avg torsion Energy:", np.mean(T_energy))
+    print ("-"*20)
+
     # for curve in data:
     #     ax.scatter(range(len(curve)), curve[:,0], color=colors[key], alpha=0.5, marker="+", s=10)
-    print ("colorkey", colors[key])
+    # print ("colorkey", colors[key])
     # 初始化存储均值的列表
     curvature_means_per_loci = []
     torsion_means_per_loci = []
@@ -1117,7 +1143,9 @@ for label,key in zip(mapping.values(), mapping.keys()):
                         boxprops=boxprops, medianprops=medianprops)
 ax1.set_xlabel('Sampling Points')
 ax1.set_ylabel('Curvature')
+ax1.set_xticks(range(0, len(curvature[0]), 10))
 ax1.set_xticklabels(ax1.get_xticks(), rotation=45)
+ax2.set_xticks(range(0, len(torsion[0]), 10))
 ax2.set_xlabel('Sampling Points')
 ax2.set_ylabel('Torsion')
 ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
@@ -1215,48 +1243,46 @@ fig.tight_layout()
 plt.savefig(bkup_dir+"Loadings_of_Principal_Components.png")
 plt.close(fig)
 
-
-fig = plt.figure(dpi=300)
-ax = fig.add_subplot(111)
-fig2 = plt.figure(dpi=300)
-ax2 = fig2.add_subplot(111)
+from sklearn.linear_model import RANSACRegressor
+fig = plt.figure(dpi=300,figsize=(8, 4))
+ax = fig.add_subplot(121)
+ax2 = fig.add_subplot(122)
 x_pc = 0
 y_pc = 1
+s_pc = 2
 for label in param_group_unique_labels:
-    print (label)
-    print ("real data:", param_dict[label]['Torsion'].shape)
-    print ("synthetic data:", synthetic_param_dict[label]['Torsion'].shape)
-    ax.scatter(synthetic_features[np.array(synthetic_quad_param_group) == label][:,x_pc], 
-               synthetic_features[np.array(synthetic_quad_param_group) == label][:,y_pc],
-               color=colors[label], 
-               label=label, 
-               alpha=0.5,
-               s=synthetic_param_dict[label]['Tortuosity']*synthetic_param_dict[label]['Tortuosity']*20)
-    # ax.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,0], 
-    #            tangent_projected_data[np.array(quad_param_group) == label][:,1],
-    #            color=colors[label], 
-    #            label=label+ " real",
-    #            alpha=0.7, 
-    #            marker="x",
-    #            s=50) 
-    ax2.scatter(tangent_projected_data[np.array(quad_param_group) == label][:,x_pc], 
-               tangent_projected_data[np.array(quad_param_group) == label][:,y_pc],
+    x_data = tangent_projected_data[np.array(quad_param_group) == label][:,x_pc]
+    y_data = tangent_projected_data[np.array(quad_param_group) == label][:,y_pc]
+    s_data = tangent_projected_data[np.array(quad_param_group) == label][:,s_pc]-np.min(tangent_projected_data[np.array(quad_param_group) == label][:,s_pc])+0.1
+    ransac_xy = RANSACRegressor()
+    ransac_xy.fit(x_data.reshape(-1, 1), y_data)
+    line_x = np.arange(x_data.min(), x_data.max()).reshape(-1, 1)
+    line_y = ransac_xy.predict(line_x)
+    ransac_xz = RANSACRegressor()
+    ransac_xz.fit(x_data.reshape(-1, 1), s_data)
+    line_s = ransac_xz.predict(line_x)
+    ax.scatter(x_data, y_data, 
                color=colors[label], 
                label=label, 
                alpha=0.7,)
+    ax2.scatter(x_data, s_data,
+                color=colors[label],
+                label=label,
+                alpha=0.7,)
+    ax.plot(line_x, line_y, color=colors[label], alpha=0.7)
+    ax2.plot(line_x, line_s, color=colors[label], alpha=0.7)
     for i in range(10):
-        makeVtkFile(vtk_dir + label + "_synthetic_" + str(i) + ".vtk",reconstructed_synthetic_curves[np.array(synthetic_quad_param_group) == label][i], [],[])
+        # makeVtkFile(vtk_dir + label + "_synthetic_" + str(i) + ".vtk",reconstructed_synthetic_curves[np.array(synthetic_quad_param_group) == label][i], [],[])
         makeVtkFile(vtk_dir + label + "_real_" + str(i) + ".vtk",reconstructed_curves[np.array(quad_param_group) == label][i],[],[])
 ax.set_xlabel('PC{}'.format(x_pc+1))
 ax.set_ylabel('PC{}'.format(y_pc+1))
 ax2.set_xlabel('PC{}'.format(x_pc+1))
-ax2.set_ylabel('PC{}'.format(y_pc+1))
-ax.legend()
-ax2.legend()
+ax2.set_ylabel('PC{}'.format(s_pc+1))
+ax1.legend()
+fig.tight_layout()
 fig.savefig(bkup_dir + "pcaloadings_plot_both.png")
-fig2.savefig(bkup_dir + "pcaloadings_plot_real.png")
 plt.close(fig1)
-plt.close(fig2)
+
 
 
 end_time = datetime.now()
