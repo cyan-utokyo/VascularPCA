@@ -429,6 +429,7 @@ Procrustes_curves = preprocess_curves
 # Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
+np.save("Procrustes_curves.npy", Procrustes_curves)
 for i in range(len(Procrustes_curves)):
     # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/measure_length(Procrustes_curves[i]))
     # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/np.linalg.norm(Procrustes_curves[i][-1] - Procrustes_curves[i][0]))
@@ -522,7 +523,7 @@ tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPON
 # 拟合并变换数据到切线空间的主成分中
 tpca.fit(tangent_vectors)
 tangent_projected_data = tpca.transform(tangent_vectors)
-
+np.save("tangent_projected_data.npy", tangent_projected_data)
 # reverse_tangent_vectors = tpca.inverse_transform(tangent_projected_data)
 
 # 使用高斯方法拟合数据
@@ -945,6 +946,14 @@ vtk_dir = mkdir(bkup_dir , "vtk")
 PC_sigma_dir = mkdir(bkup_dir , "PC_sigma")
 PC_gaussian_dir = mkdir(bkup_dir , "PC_gaussian")
 PC_geometry_dir = mkdir(bkup_dir , "PC_geometry")
+fig5 = plt.figure(figsize=(7, 6), dpi=300)
+ax51 = fig5.add_subplot(131)
+ax52 = fig5.add_subplot(132)
+ax53 = fig5.add_subplot(133)
+# ax51.plot(frechet_mean_shape[:,0],color="k")
+# ax52.plot(frechet_mean_shape[:,1],color="k")
+# ax53.plot(frechet_mean_shape[:,2],color="k")
+MoD_cmap = plt.cm.get_cmap('jet', PCA_N_COMPONENTS)
 for i in range(PCA_N_COMPONENTS):
     single_component_feature = np.zeros_like(tangent_projected_data)
     single_component_feature[:,i] = tangent_projected_data[:,i]
@@ -990,6 +999,22 @@ for i in range(PCA_N_COMPONENTS):
         ax41.plot(sigma_single_reconstructed_curves[j][:,0], label="{}SIGMA".format(j-3), marker='o')
         ax42.plot(sigma_single_reconstructed_curves[j][:,1], label="{}SIGMA".format(j-3), marker='o')
         ax43.plot(sigma_single_reconstructed_curves[j][:,2], label="{}SIGMA".format(j-3), marker='o')
+        ax51.plot(sigma_single_reconstructed_curves[j][:,0], range(len(sigma_single_reconstructed_curves[j])), 
+                color=MoD_cmap(i/PCA_N_COMPONENTS),
+                alpha=0.8)
+        ax52.plot(sigma_single_reconstructed_curves[j][:,1], range(len(sigma_single_reconstructed_curves[j])),
+                color=MoD_cmap(i/PCA_N_COMPONENTS), 
+                alpha=0.8)
+        ax53.plot(sigma_single_reconstructed_curves[j][:,2], range(len(sigma_single_reconstructed_curves[j])),
+                  color=MoD_cmap(i/PCA_N_COMPONENTS), 
+                  alpha=0.8)
+    ax51.fill_betweenx(range(len(sigma_single_reconstructed_curves[0])), 
+                       sigma_single_reconstructed_curves[0][:,0], sigma_single_reconstructed_curves[-1][:,0], color=MoD_cmap(i/PCA_N_COMPONENTS), alpha=0.2)
+    ax52.fill_betweenx(range(len(sigma_single_reconstructed_curves[0])),
+                          sigma_single_reconstructed_curves[0][:,1], sigma_single_reconstructed_curves[-1][:,1], color=MoD_cmap(i/PCA_N_COMPONENTS), alpha=0.2)
+    ax53.fill_betweenx(range(len(sigma_single_reconstructed_curves[0])),
+                            sigma_single_reconstructed_curves[0][:,2], sigma_single_reconstructed_curves[-1][:,2], color=MoD_cmap(i/PCA_N_COMPONENTS), alpha=0.2)
+    
     for label,key in zip(mapping.values(), mapping.keys()):
     # 筛选出特定标签的数据
         data = single_component_feature[:, i][np.array(quad_param_group_mapped) == label]
@@ -1009,15 +1034,74 @@ for i in range(PCA_N_COMPONENTS):
     ax2.set_xlabel('Sampling Points')
     ax1.set_ylabel('Curvature')
     ax2.set_ylabel('Torsion')
-    fig.savefig(PC_geometry_dir+f"PC{i+1}.png")
-    fig3.savefig(PC_gaussian_dir+f"PC{i+1}_gaussian.png")
-    fig4.savefig(PC_sigma_dir+f"PC{i+1}_sigma.png")
     fig.tight_layout()
     fig3.tight_layout()
     fig4.tight_layout()
+    fig.savefig(PC_geometry_dir+f"PC{i+1}.png")
+    fig3.savefig(PC_gaussian_dir+f"PC{i+1}_gaussian.png")
+    fig4.savefig(PC_sigma_dir+f"PC{i+1}_sigma.png")
     plt.close(fig3)
     plt.close(fig)
     plt.close(fig4)
+ax52.set_yticklabels([])
+ax53.set_yticklabels([])
+ax51.grid(linestyle='dotted', alpha=0.9)
+ax52.grid(linestyle='dotted', alpha=0.9)
+ax53.grid(linestyle='dotted', alpha=0.9)
+fig5.tight_layout()
+fig5.savefig(PC_sigma_dir+f"PC_sigma_all.png")
+plt.close(fig5)
+
+
+
+
+
+
+for i in range(PCA_N_COMPONENTS):
+    single_component_feature = np.zeros_like(tangent_projected_data)
+    single_component_feature[:,i] = tangent_projected_data[:,i]
+    single_reconstructed_curves = []
+    sigma = np.std(single_component_feature[:,i])
+    sigma_single_feature = np.zeros_like(tangent_projected_data)[:7]
+    for j in range(7):
+        sigma_single_feature[j,i] = (j-3) * sigma
+    sigma_single_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, sigma_single_feature, PCA_N_COMPONENTS, discrete_curves_space, inverse_srvf_func=None)
+    sigma_single_reconstructed_curves = np.array([align_endpoints(sigma_single_reconstructed_curves[j], p) for j in range(7)])
+    block_points = vtk.vtkPoints()
+    for curve in sigma_single_reconstructed_curves:
+        for p in curve:
+            block_points.InsertNextPoint(p.tolist())  # 假设每个 point 是一个长度为3的列表或数组
+
+    # 创建 vtkCellArray 对象并添加线
+    block_lines = vtk.vtkCellArray()
+    p_id = 0
+    for curve in sigma_single_reconstructed_curves:
+        polyline = vtk.vtkPolyLine()
+        polyline.GetPointIds().SetNumberOfIds(len(curve))
+        for j in range(len(curve)):
+            polyline.GetPointIds().SetId(j, p_id)
+            p_id += 1
+        block_lines.InsertNextCell(polyline)
+    # 创建 vtkPolyData 对象
+    polyData = vtk.vtkPolyData()
+    polyData.SetPoints(block_points)
+    polyData.SetLines(block_lines)
+
+    # 创建 vtkDelaunay3D 过滤器来三角化点集
+    delaunay = vtk.vtkDelaunay3D()
+    delaunay.SetInputData(polyData)
+    delaunay.Update()  # 确保调用 Update 方法
+
+    # 创建文件写入器
+    writer = vtk.vtkUnstructuredGridWriter()
+    writer.SetFileName(vtk_dir+"curves_space_{}.vtk".format(i+1))
+    writer.SetInputData(delaunay.GetOutput())
+
+    # 写入文件
+    writer.Write()
+
+
+
 
 ################################
 from matplotlib.gridspec import GridSpec
