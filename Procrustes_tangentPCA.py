@@ -88,6 +88,7 @@ from myvtk.Myscores import *
 from myvtk.MytangentPCA import *
 warnings.filterwarnings("ignore")
 import matplotlib as mpl
+import dill as pickle
 
 # mpl.rcParams['xtick.labelsize'] = 18
 # mpl.rcParams['ytick.labelsize'] = 18
@@ -430,6 +431,12 @@ Procrustes_curves = preprocess_curves
 # SRVF计算
 Procs_srvf_curves = np.zeros_like(Procrustes_curves)
 np.save("Procrustes_curves.npy", Procrustes_curves)
+procrustes_curves_dir = mkdir(bkup_dir, "procrustes_curves")
+for i in range(len(Procrustes_curves)):
+    filename = Files[i].split("\\")[-1].split(".")[0][:-8]
+    makeVtkFile(procrustes_curves_dir+"{:0=4}_{}.vtk".format(i, filename), Procrustes_curves[i], [], [])
+
+
 for i in range(len(Procrustes_curves)):
     # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/measure_length(Procrustes_curves[i]))
     # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/np.linalg.norm(Procrustes_curves[i][-1] - Procrustes_curves[i][0]))
@@ -524,6 +531,8 @@ tpca = TangentPCA(metric=discrete_curves_space.metric, n_components=PCA_N_COMPON
 tpca.fit(tangent_vectors)
 tangent_projected_data = tpca.transform(tangent_vectors)
 np.save("tangent_projected_data.npy", tangent_projected_data)
+with open('tpca.pkl', 'wb') as f:
+    pickle.dump(tpca, f)
 # reverse_tangent_vectors = tpca.inverse_transform(tangent_projected_data)
 
 # 使用高斯方法拟合数据
@@ -1175,10 +1184,9 @@ def darken_color(color, factor=0.7):
     return tuple([factor * c for c in color[:3]] + [color[3]])
 
 reconstructed_curves = np.array([align_endpoints(curve, p) for curve in reconstructed_curves])
-fig1 = plt.figure(figsize=(12, 3),dpi=300)
-ax1 = fig1.add_subplot(111)
-fig2 = plt.figure(figsize=(12, 3),dpi=300)
-ax2 = fig2.add_subplot(111)
+fig1 = plt.figure(figsize=(6,12),dpi=300)
+ax1 = fig1.add_subplot(211)
+ax2 = fig2.add_subplot(212)
 # frechet_mean_shape = align_endpoints(frechet_mean_shape, p)
 # ax.plot(frechet_mean_shape[:,0], label="Mean shape", color="k")  
 curvature_means = {key: [] for key in mapping.keys()}
@@ -1234,11 +1242,9 @@ ax2.set_xlabel('Sampling Points')
 ax2.set_ylabel('Torsion')
 ax2.set_xticklabels(ax2.get_xticks(), rotation=45)
 fig1.tight_layout()
-fig2.tight_layout()
-fig1.savefig(bkup_dir+"X_axis_of_curvature.png")
+fig1.savefig(bkup_dir+"X_axis_of_curvature_and_torsion.png")
 plt.close(fig1)
-fig2.savefig(bkup_dir+"X_axis_of_torsion.png")
-plt.close(fig2)
+
 
 # 初始化存储均值的列表
 curvature_means_per_loci = [[] for _ in range(len(curvature[0]))]
@@ -1291,23 +1297,24 @@ save_vtk_file(vtk_points, vtk_groups, vtk_variance_curvature, vtk_variance_torsi
 fig = plt.figure(figsize=(8, 4),dpi=300)
 ax1 = fig.add_subplot(211)
 ax2 = fig.add_subplot(212)
+frechet_curvature, frechet_torsion = compute_curvature_and_torsion(frechet_reparam)
 for i in range(len(reconstructed_curves[0])):
-    curvature_loci = Curvatures[:,i]-np.mean(Curvatures[:,i])
-    torsion_loci = Torsions[:,i]-np.mean(Torsions[:,i])
+    # curvature_loci = Curvatures[:,i]-np.mean(Curvatures[:,i])
+    # torsion_loci = Torsions[:,i]-np.mean(Torsions[:,i])
+    curvature_loci = Curvatures[:,i]-frechet_curvature[i]
+    torsion_loci = Torsions[:,i]-frechet_torsion[i]
     ax1.boxplot(curvature_loci, positions=[i], widths=0.3, showfliers=False)
     ax2.boxplot(torsion_loci, positions=[i], widths=0.3, showfliers=False)
 # 假设reconstructed_curves[0]的长度是n
 n = len(reconstructed_curves[0])
-# 创建一个列表，包含每隔10个点的索引
-tick_positions = list(range(0, n, 10))  # 从0开始，到n结束，步长为10
-# 设置这些位置为刻度
+tick_positions = list(range(0, n+1, 8))  # 从0开始，到n结束，步长为10
+scaled_tick_positions = [round(pos / n, 2) for pos in tick_positions]  # 将刻度位置从0到64的范围映射到0到1.0
+
 for ax in [ax1, ax2]:
-    ax.set_xticks(tick_positions)
-    ax.set_xticks(tick_positions)
-    # 设置刻度标签并旋转45度
-    ax.set_xticklabels(tick_positions, rotation=45)
-    ax.set_xticklabels(tick_positions, rotation=45)
+    ax.set_xticks(tick_positions)  # 设置原始的刻度位置
+    ax.set_xticklabels(scaled_tick_positions, rotation=45)  # 显示映射后的刻度标签
     ax.grid(linestyle='dotted', alpha=0.3)
+
 
 fig.tight_layout()
 plt.savefig(bkup_dir+"influence_on_geometry.png")
@@ -1353,18 +1360,20 @@ for label in param_group_unique_labels:
                 color=colors[label],
                 label=label,
                 alpha=0.7,)
-    ax.plot(line_x, line_y, color=colors[label], alpha=0.7)
-    ax2.plot(line_x, line_s, color=colors[label], alpha=0.7)
+    ax.plot(line_x, line_y, color=colors[label], alpha=0.3)
+    ax2.plot(line_x, line_s, color=colors[label], alpha=0.3)
     for i in range(10):
         # makeVtkFile(vtk_dir + label + "_synthetic_" + str(i) + ".vtk",reconstructed_synthetic_curves[np.array(synthetic_quad_param_group) == label][i], [],[])
         makeVtkFile(vtk_dir + label + "_real_" + str(i) + ".vtk",reconstructed_curves[np.array(quad_param_group) == label][i],[],[])
-ax.set_xlabel('PC{}'.format(x_pc+1))
-ax.set_ylabel('PC{}'.format(y_pc+1))
-ax2.set_xlabel('PC{}'.format(x_pc+1))
-ax2.set_ylabel('PC{}'.format(s_pc+1))
-ax1.legend()
+ax.set_xlabel('MoD{}'.format(x_pc+1))
+ax.set_ylabel('MoD{}'.format(y_pc+1))
+ax2.set_xlabel('MoD{}'.format(x_pc+1))
+ax2.set_ylabel('MoD{}'.format(s_pc+1))
+ax2.legend()
+ax.grid(linestyle='dotted', alpha=0.5)
+ax2.grid(linestyle='dotted', alpha=0.5)
 fig.tight_layout()
-fig.savefig(bkup_dir + "pcaloadings_plot_both.png")
+fig.savefig(bkup_dir + "MoDloadings_plot_both.png")
 plt.close(fig1)
 
 
