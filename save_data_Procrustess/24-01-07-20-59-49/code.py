@@ -217,7 +217,7 @@ Procrustes_curves = copy.deepcopy(unaligned_curves)
 temp_mean_shapes = []
 # fig = plt.figure(figsize=(13, 6),dpi=300)
 # ax1 = fig.add_subplot(111)
-for j in range(10):
+for j in range(5):
     temp_mean_shape = compute_frechet_mean(Procrustes_curves)
     temp_mean_shapes.append(temp_mean_shape)
     #ax1.plot(temp_mean_shape[:,0], temp_mean_shape[:,2], label="{}".format(j), marker="o")
@@ -236,9 +236,8 @@ for j in range(10):
     # Apply the function to the original curve using the path from dynamic programming
     reparam_curves = []
     optimal_path_dir = mkdir(bkup_dir, "optimal_path")
-    for n in range(len(Procrustes_curves)):
+    for n in range(1, len(Procrustes_curves)):
         curve1 = Procrustes_curves[n]
-        # curve2 = temp_mean_shape
         curve2 = Procrustes_curves[0]
         # original_curve = Procs_srvf_curves[n]
         curve1 = interpolate_pt(curve1, 640)
@@ -274,10 +273,6 @@ for j in range(10):
     reparam_curves = align_procrustes(reparam_curves, base_id=0)
     frechet_reparam = compute_frechet_mean(reparam_curves)
     Procrustes_curves = reparam_curves
-
-print ("Procrustes_curves.shape after alignment:", Procrustes_curves.shape)
-# 可能有因素导致少一些曲线？
-
 
 fig = plt.figure(figsize=(13, 6),dpi=300)
 ax1 = fig.add_subplot(133)
@@ -367,6 +362,41 @@ srvf_curves=[]
 for i in range(len(Procs_srvf_curves)):
     srvf_curves.append(calculate_srvf(Procs_srvf_curves[i]))
 frechet_mean_srvf = calculate_srvf(frechet_mean_shape)
+# 用奇异值分解来寻找使测地线距离最小的旋转
+# 用warping function来寻找使测地线距离最小的re-parameterization
+
+# de_rotation_srvf = align_procrustes(srvf_curves, base_id=base_id)
+
+
+
+
+# fig = plt.figure(figsize=(13, 6),dpi=300)
+# ax1 = fig.add_subplot(111)
+# plt.plot(frechet_mean_shape[:,0], frechet_mean_shape[:,1], label="frechet_mean_shape", marker="o")
+# new_frechet_mean_shape = compute_frechet_mean(reparam_curves)
+# plt.plot(new_frechet_mean_shape[:,0], new_frechet_mean_shape[:,1], label="new_frechet_mean_shape", marker="o")
+# plt.legend()
+# plt.savefig(bkup_dir+"frechet_mean_shape.png")
+# plt.close(fig)
+# Procs_srvf_curves = reparam_curves
+
+
+# fig = plt.figure(figsize=(13, 6),dpi=300)
+# ax1 = fig.add_subplot(131)
+# ax2 = fig.add_subplot(132)
+# ax3 = fig.add_subplot(133)
+# ax1.plot(curve1[:,0], curve1[:,1], label="curve1", marker="o")
+# ax1.plot(curve2[:,0], curve2[:,1], label="curve2", marker="o")
+# ax1.plot(reparam_curve1[:,0], reparam_curve1[:,1], label="reparam_curve1", marker="o")
+# ax2.plot(curve1[:,0], curve1[:,2], label="curve1", marker="o")
+# ax2.plot(curve2[:,0], curve2[:,2], label="curve2", marker="o")
+# ax2.plot(reparam_curve1[:,0], reparam_curve1[:,2], label="reparam_curve1", marker="o")
+# ax3.plot(curve1[:,1], curve1[:,2], label="curve1", marker="o")
+# ax3.plot(curve2[:,1], curve2[:,2], label="curve2", marker="o")
+# ax3.plot(reparam_curve1[:,1], reparam_curve1[:,2], label="reparam_curve1", marker="o")
+# ax1.legend()
+# plt.savefig(bkup_dir+"reparameterize_curve.png")
+# plt.close(fig)
 
 #########################################
 # 把srvf曲线做对数映射，得到切线空间的切向量
@@ -983,19 +1013,7 @@ ax7 = fig.add_subplot(gs[3, 0])
 ax8 = fig.add_subplot(gs[3, 1])
 ax9 = fig.add_subplot(gs[:, 2:])
 axes_list = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]
-def find_first_occurrences(mapping, labels):
-    first_occurrences = {label: None for label in labels}
-    for index, value in enumerate(mapping):
-        if value in labels and first_occurrences[value] is None:
-            first_occurrences[value] = index
-        # 当所有标签都找到时，提前退出循环
-        if all(first_occurrences[label] is not None for label in labels):
-            break
-    return [first_occurrences[label] for label in labels]
-
-example_idx = find_first_occurrences(quad_param_group_mapped, [0,1,2,3])
-print ("example_idx:", example_idx)
-# example_idx = [2,6, 3, 0]
+example_idx = [0,1,3,4]
 example_feature = tangent_projected_data[example_idx]
 example_reconstructed_curves = []
 example_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, 
