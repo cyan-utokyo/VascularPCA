@@ -198,9 +198,9 @@ for i in range(len(unaligned_curves)):
     ax1.plot(unaligned_curves[i][:,0], unaligned_curves[i][:,1])
     ax2.plot(unaligned_curves[i][:,0], unaligned_curves[i][:,2])
     ax3.plot(unaligned_curves[i][:,1], unaligned_curves[i][:,2])
-    ax1.scatter(unaligned_curves[i][siphon,0], unaligned_curves[i][siphon,1])
-    ax2.scatter(unaligned_curves[i][siphon,0], unaligned_curves[i][siphon,2])
-    ax3.scatter(unaligned_curves[i][siphon,1], unaligned_curves[i][siphon,2])
+    # ax1.scatter(unaligned_curves[i][siphon,0], unaligned_curves[i][siphon,1])
+    # ax2.scatter(unaligned_curves[i][siphon,0], unaligned_curves[i][siphon,2])
+    # ax3.scatter(unaligned_curves[i][siphon,1], unaligned_curves[i][siphon,2])
 fig.savefig(bkup_dir+"unaligned_curves.png")
 plt.close(fig)
 
@@ -214,8 +214,14 @@ plt.close(fig)
 # a_curves = align_icp(unaligned_curves, base_id=base_id)
 #print ("First alignment done.")
 Procrustes_curves = copy.deepcopy(unaligned_curves)
-for i in range(10):
+temp_mean_shapes = []
+# fig = plt.figure(figsize=(13, 6),dpi=300)
+# ax1 = fig.add_subplot(111)
+for j in range(10):
     temp_mean_shape = compute_frechet_mean(Procrustes_curves)
+    temp_mean_shapes.append(temp_mean_shape)
+    #ax1.plot(temp_mean_shape[:,0], temp_mean_shape[:,2], label="{}".format(j), marker="o")
+
     Procrustes_curves = align_procrustes(Procrustes_curves, base_id=-2, external_curve=temp_mean_shape)
 
     parametrized_curves = np.zeros_like(Procrustes_curves)
@@ -224,83 +230,64 @@ for i in range(10):
         parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
     Procrustes_curves = np.array(parametrized_curves)
 
-###################################
-# dynamic time warping.
+    ###################################
+    # dynamic time warping.
 
-# Apply the function to the original curve using the path from dynamic programming
-reparam_curves = []
-fig = plt.figure(figsize=(7, 6),dpi=300)
-ax1 = fig.add_subplot(311)
-ax2 = fig.add_subplot(312)
-ax3 = fig.add_subplot(313)
-optimal_path_dir = mkdir(bkup_dir, "optimal_path")
-for n in range(1, len(Procrustes_curves)):
-    curve1 = Procrustes_curves[n]
-    curve2 = Procrustes_curves[0]
-    # original_curve = Procs_srvf_curves[n]
-    curve1 = interpolate_pt(curve1, 640)
-    # curve2 = interpolate_pt(curve2, 400)
-    # original_curve = interpolate_pt(original_curve, 400)
-    cost_matrix = compute_cost_matrix(curve1, curve2)
-    optimal_path = np.array(find_optimal_reparametrization(cost_matrix))
-    # print ("optimal_path:", optimal_path)
-    # ax1.plot(optimal_path[:,0], optimal_path[:,1])
-    f = open(optimal_path_dir+"{:0=4}.csv".format(n), 'w', encoding='utf-8', newline='')
-    # reparam_curve1 = np.zeros_like(curve1)
-    # for i, j in optimal_path:
-    #     # reparam_curve1[j, :] = curve1[i, :]
-    #     f.write(str(i)+","+str(j)+"\n")
-    #     reparam_curve1[j, :] = original_curve[i, :]
-    # f.close()
-    unique_mapping = extract_increasing_mappings(optimal_path)
-    ax1.plot(unique_mapping)
-    for i in range(len(unique_mapping)):
-        f.write(str(i)+","+str(unique_mapping[i])+"\n")
-    f.close()
-    # if len(set(unique_mapping)) == len(unique_mapping):
-    #     print ("unique_mapping has no ring.")
-    #     # continue
-    # else:
-    #     print ("unique_mapping has rings.")
-    reparam_curve1 = curve1[unique_mapping]
-    ax2.plot(reparam_curve1[:,2],reparam_curve1[:,0],color = 'r',linewidth=1, alpha=0.5)
-    # ax2.plot(curve2[:,2],curve2[:,0], color = 'k',linewidth=3, alpha=1)
-    ax3.plot(curve1[:,2],curve1[:,0], color = 'b',linewidth=1, alpha=0.5)
-    # ax3.plot(curve2[:,2],curve2[:,0], color = 'k',linewidth=3, alpha=1)
-    reparam_curves.append(reparam_curve1)
-reparam_curves = np.array(reparam_curves)
-reparam_curves = align_procrustes(reparam_curves, base_id=0)
-frechet_original = compute_frechet_mean(Procrustes_curves)
-frechet_reparam = compute_frechet_mean(reparam_curves)
-# frechet_original = np.mean(Procrustes_curves, axis=0)
-# frechet_reparam = np.mean(reparam_curves, axis=0)
-ax2.plot(frechet_original[:,2],frechet_original[:,0], color = 'k',linewidth=3, alpha=1)
-ax3.plot(frechet_reparam[:,2],frechet_reparam[:,0], color = 'k',linewidth=3, alpha=1)
-ax1.set_xlabel("curve")
-ax1.set_ylabel("reference curve")
-ax1.set_title("reparameterize curve")
-plt.savefig(bkup_dir+"reparameterize_curve.png")
-plt.close(fig)
-
-
+    # Apply the function to the original curve using the path from dynamic programming
+    reparam_curves = []
+    optimal_path_dir = mkdir(bkup_dir, "optimal_path")
+    for n in range(1, len(Procrustes_curves)):
+        curve1 = Procrustes_curves[n]
+        curve2 = Procrustes_curves[0]
+        # original_curve = Procs_srvf_curves[n]
+        curve1 = interpolate_pt(curve1, 640)
+        # curve2 = interpolate_pt(curve2, 400)
+        # original_curve = interpolate_pt(original_curve, 400)
+        cost_matrix = compute_cost_matrix(curve1, curve2)
+        optimal_path = np.array(find_optimal_reparametrization(cost_matrix))
+        # print ("optimal_path:", optimal_path)
+        # ax1.plot(optimal_path[:,0], optimal_path[:,1])
+        f = open(optimal_path_dir+"{:0=4}.csv".format(n), 'w', encoding='utf-8', newline='')
+        # reparam_curve1 = np.zeros_like(curve1)
+        # for i, j in optimal_path:
+        #     # reparam_curve1[j, :] = curve1[i, :]
+        #     f.write(str(i)+","+str(j)+"\n")
+        #     reparam_curve1[j, :] = original_curve[i, :]
+        # f.close()
+        unique_mapping = extract_increasing_mappings(optimal_path)
+        ax1.plot(unique_mapping)
+        for i in range(len(unique_mapping)):
+            f.write(str(i)+","+str(unique_mapping[i])+"\n")
+        f.close()
+        # if len(set(unique_mapping)) == len(unique_mapping):
+        #     print ("unique_mapping has no ring.")
+        #     # continue
+        # else:
+        #     print ("unique_mapping has rings.")
+        reparam_curve1 = curve1[unique_mapping]
+        if len(reparam_curve1) != 64:
+            reparam_curve1 = interpolate_pt(reparam_curve1, 64)
+        # print ("reparam_curve1.shape:", reparam_curve1.shape)
+        reparam_curves.append(reparam_curve1)
+    reparam_curves = np.array(reparam_curves)
+    reparam_curves = align_procrustes(reparam_curves, base_id=0)
+    frechet_reparam = compute_frechet_mean(reparam_curves)
+    Procrustes_curves = reparam_curves
 
 fig = plt.figure(figsize=(13, 6),dpi=300)
 ax1 = fig.add_subplot(133)
 ax2 = fig.add_subplot(132)
 ax3 = fig.add_subplot(131)
-
-for i in range(len(reparam_curves)):
-    ax1.plot(reparam_curves[i][:,0], reparam_curves[i][:,1])
-    ax2.plot(reparam_curves[i][:,0], reparam_curves[i][:,2])
-    ax3.plot(reparam_curves[i][:,1], reparam_curves[i][:,2])
-ax1.plot(frechet_original[:,0],frechet_original[:,1], color = 'k',linestyle="--",linewidth=3, alpha=1)
-ax1.plot(frechet_reparam[:,1],frechet_reparam[:,1], color = 'k',linewidth=3, alpha=1)
-ax2.plot(frechet_original[:,0],frechet_original[:,2], color = 'k',linestyle="--",linewidth=3, alpha=1)
-ax2.plot(frechet_reparam[:,0],frechet_reparam[:,2], color = 'k',linewidth=3, alpha=1)
-ax3.plot(frechet_original[:,1],frechet_original[:,2], color = 'k',linestyle="--",linewidth=3, alpha=1)
-ax3.plot(frechet_reparam[:,1],frechet_reparam[:,2], color = 'k',linewidth=3, alpha=1)
-fig.savefig(bkup_dir+"reparam_curves.png")
+for i in range(len(Procrustes_curves)):
+    siphon = siphon_idx[i]
+    ax1.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,1])
+    ax2.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,2])
+    ax3.plot(Procrustes_curves[i][:,1], Procrustes_curves[i][:,2])
+fig.savefig(bkup_dir+"Procrustes_curves_final.png")
 plt.close(fig)
+
+
+
 
 
 frechet_curvature, frechet_torsion = compute_curvature_and_torsion(frechet_reparam)
@@ -312,7 +299,7 @@ print ("frechet_energy:", frechet_energy, "frechet_tortuosity:", frechet_tortuos
 #  ['Torsion', 'float',pandas.Series]]
 scalarAttribute = [['Curvature', 'float',pd.Series(frechet_curvature)],
     ['Torsion', 'float',pd.Series(frechet_torsion)]]
-makeVtkFile(bkup_dir+"frechet_original.vtk", frechet_original, [], [])
+# makeVtkFile(bkup_dir+"frechet_original.vtk", frechet_original, [], [])
 makeVtkFile(bkup_dir+"frechet_reparam.vtk", frechet_reparam, scalarAttribute, [])
 
 # dynamic time warping.
@@ -800,7 +787,7 @@ for ax in [ax1,ax2]:
     ax.set_xlabel('Bending Energy', fontsize=font_size)
     ax.set_ylabel('Twisting Energy', fontsize=font_size)
     # ax.set_title('Energy Scatter Plot by Label')
-    ax.set_ylim(0, 0.2)
+    # ax.set_ylim(0, 0.2)
     ax.grid(linestyle='dotted', alpha=0.5)
 ax1.legend()
 ax2.legend()
@@ -1026,7 +1013,7 @@ ax7 = fig.add_subplot(gs[3, 0])
 ax8 = fig.add_subplot(gs[3, 1])
 ax9 = fig.add_subplot(gs[:, 2:])
 axes_list = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]
-example_idx = [1,2,4,15]
+example_idx = [0,1,3,4]
 example_feature = tangent_projected_data[example_idx]
 example_reconstructed_curves = []
 example_reconstructed_curves = POINTS_NUM*from_tangentPCA_feature_to_curves(tpca, tangent_base, 
