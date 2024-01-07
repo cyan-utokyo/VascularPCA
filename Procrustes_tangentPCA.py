@@ -89,6 +89,8 @@ from myvtk.MytangentPCA import *
 warnings.filterwarnings("ignore")
 import matplotlib as mpl
 import dill as pickle
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from myvtk.MyAlignment import *
 
 # mpl.rcParams['xtick.labelsize'] = 18
 # mpl.rcParams['ytick.labelsize'] = 18
@@ -211,122 +213,19 @@ plt.close(fig)
 
 # a_curves = align_icp(unaligned_curves, base_id=base_id)
 #print ("First alignment done.")
-Procrustes_curves = align_procrustes(unaligned_curves, base_id=base_id)
-log.write("procrustes alignment done.")
+Procrustes_curves = copy.deepcopy(unaligned_curves)
+for i in range(10):
+    temp_mean_shape = compute_frechet_mean(Procrustes_curves)
+    Procrustes_curves = align_procrustes(Procrustes_curves, base_id=-2, external_curve=temp_mean_shape)
 
-
-# for i in range(len(Procrustes_curves)):
-#     print ("length:", measure_length(Procrustes_curves[i]))
-parametrized_curves = np.zeros_like(Procrustes_curves)
-# aligned_curves = np.zeros_like(interpolated_curves)
-for i in range(len(Procrustes_curves)):
-    parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
-Procrustes_curves = np.array(parametrized_curves)
-# Procrustes_curves = np.array([align_endpoints(curve, p) for curve in Procrustes_curves])
-# frechet_mean_shape=compute_frechet_mean(Procrustes_curves)
-
-fig = plt.figure(figsize=(13, 6),dpi=300)
-ax1 = fig.add_subplot(133)
-ax2 = fig.add_subplot(132)
-ax3 = fig.add_subplot(131)
-for i in range(len(Procrustes_curves)):
-    ax1.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,1])
-    ax2.plot(Procrustes_curves[i][:,0], Procrustes_curves[i][:,2])
-    ax3.plot(Procrustes_curves[i][:,1], Procrustes_curves[i][:,2])
-    ax1.scatter(Procrustes_curves[i][siphon_idx[i],0], Procrustes_curves[i][siphon_idx[i],1])
-    ax2.scatter(Procrustes_curves[i][siphon_idx[i],0], Procrustes_curves[i][siphon_idx[i],2])
-    ax3.scatter(Procrustes_curves[i][siphon_idx[i],1], Procrustes_curves[i][siphon_idx[i],2])
-fig.savefig(bkup_dir+"Procrustes_curves.png")
-plt.close(fig)
+    parametrized_curves = np.zeros_like(Procrustes_curves)
+    # aligned_curves = np.zeros_like(interpolated_curves)
+    for i in range(len(Procrustes_curves)):
+        parametrized_curves[i] = arc_length_parametrize(Procrustes_curves[i])
+    Procrustes_curves = np.array(parametrized_curves)
 
 ###################################
 # dynamic time warping.
-
-def compute_cost_matrix(curve1, curve2):
-    # Compute the cost matrix between two curves
-    n = curve1.shape[0]
-    m = curve2.shape[0]
-    cost_matrix = np.zeros((n, m))
-    
-    for i in range(n):
-        for j in range(m):
-            cost_matrix[i, j] = np.linalg.norm(curve1[i] - curve2[j])
-    return cost_matrix
-
-def find_optimal_reparametrization(cost_matrix):
-    n, m = cost_matrix.shape
-    dp_matrix = np.inf * np.ones((n, m))
-    dp_matrix[0, 0] = cost_matrix[0, 0]
-    
-    for i in range(1, n):
-        for j in range(1, m):
-            choices = [dp_matrix[i-1, j], dp_matrix[i, j-1], dp_matrix[i-1, j-1]]
-            dp_matrix[i, j] = cost_matrix[i, j] + min(choices)
-    
-    # Backtracking
-    i, j = n-1, m-1
-    path = [(i, j)]
-    while i > 0 and j > 0:
-        step = np.argmin([dp_matrix[i-1, j], dp_matrix[i, j-1], dp_matrix[i-1, j-1]])
-        if step == 0:
-            i -= 1
-        elif step == 1:
-            j -= 1
-        else:
-            i -= 1
-            j -= 1
-        path.append((i, j))
-    
-    path.reverse()
-    return path
-
-def interpolate_pt(curve, num_points):
-    # 插值以增加曲线上的点
-    # curve 是一个 numpy 数组，形状为 [n, 3]
-    # num_points 是插值后曲线上的点的数量
-    t = np.linspace(0, 1, len(curve))
-    t_new = np.linspace(0, 1, num_points)
-    curve_interpolated = np.array([np.interp(t_new, t, dim) for dim in curve.T]).T
-    return curve_interpolated
-def reparameterize_curve(curve, warping_function):
-    # 使用 warping function 重排列曲线点
-    # 注意：这里假设 warping_function 已经考虑了插值后的点的数量
-    reparam_curve = curve[warping_function]
-    return reparam_curve
-
-# def extract_increasing_mappings(warping_function):
-#     # 初始化一个字典，用于存储每个n的最大m
-#     increasing_mappings = {}
-    
-#     # 反向遍历 warping function 以确保选择最大的m
-#     for m, n in reversed(warping_function):
-#         if n not in increasing_mappings:
-#             increasing_mappings[n] = m
-    
-#     # 将字典转换为n的排序列表，只包括唯一且最大的m
-#     sorted_n = sorted(increasing_mappings.keys())
-#     increasing_m_list = [increasing_mappings[n] for n in sorted_n]
-
-#     return increasing_m_list
-
-def extract_increasing_mappings(warping_function):
-    # 初始化一个字典，用于存储每个n的唯一且递增的m
-    strictly_increasing_mappings = {}
-    last_mapped_m = -1  # 保证m是从0开始且严格递增的
-    
-    # 遍历 warping function
-    for m, n in warping_function:
-        # 只记录每个n第一次出现的m，且m必须大于之前的m值
-        if n not in strictly_increasing_mappings and m > last_mapped_m:
-            strictly_increasing_mappings[n] = m
-            last_mapped_m = m
-    
-    # 将字典转换为n的排序列表，只包括唯一且递增的m
-    sorted_n = sorted(strictly_increasing_mappings.keys())
-    strictly_increasing_m_list = [strictly_increasing_mappings[n] for n in sorted_n]
-
-    return strictly_increasing_m_list
-
 
 # Apply the function to the original curve using the path from dynamic programming
 reparam_curves = []
@@ -479,7 +378,7 @@ frechet_mean_srvf = calculate_srvf(frechet_mean_shape)
 # 用奇异值分解来寻找使测地线距离最小的旋转
 # 用warping function来寻找使测地线距离最小的re-parameterization
 
-de_rotation_srvf = align_procrustes(srvf_curves, base_id=base_id)
+# de_rotation_srvf = align_procrustes(srvf_curves, base_id=base_id)
 
 
 
@@ -1375,7 +1274,6 @@ ax2.grid(linestyle='dotted', alpha=0.5)
 fig.tight_layout()
 fig.savefig(bkup_dir + "MoDloadings_plot_both.png")
 plt.close(fig1)
-
 
 
 end_time = datetime.now()

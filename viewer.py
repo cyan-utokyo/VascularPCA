@@ -15,16 +15,130 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from myvtk.geometry import compute_curvature_and_torsion
+from myvtk.centerline_preprocessing import compute_frechet_mean
 from myvtk.GetMakeVtk import measure_length
 from scipy.interpolate import interp1d
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 import dill as pickle
+
+import numpy as np
+from scipy.optimize import minimize
+from scipy.interpolate import interp1d
+from sklearn.decomposition import PCA, KernelPCA
+from scipy.interpolate import CubicSpline
+import matplotlib.pyplot as plt
+from scipy.stats import zscore
+import glob
+from myvtk.GetMakeVtk import *
+import pandas as pd
+from scipy.spatial.transform import Rotation as R
+from procrustes import orthogonal
+from myvtk.General import *
+from datetime import datetime
+import geomstats.geometry.pre_shape as pre_shape
+import geomstats.geometry.discrete_curves as dc
+from geomstats.geometry.euclidean import EuclideanMetric
+from geomstats.geometry.hypersphere import HypersphereMetric
+from scipy.spatial import distance
+from myvtk.centerline_preprocessing import *
+from scipy import interpolate
+import matplotlib
+import matplotlib.cm as cm
+from scipy.spatial.distance import euclidean
+from myvtk.Mypca import *
+import shutil
+import os
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.signal import savgol_filter
+import matplotlib.gridspec as gridspec
+import csv
+from sklearn.manifold import TSNE
+from scipy.interpolate import griddata
+from scipy.stats import multivariate_normal, kde
+import seaborn as sns
+import copy
+import joblib
+from myvtk.geometry import *
+from matplotlib.patches import Patch
+from matplotlib.colors import BoundaryNorm, ListedColormap, Normalize
+from minisom import MiniSom
+from sklearn.neighbors import KernelDensity
+from myvtk.synthetic import *
+import statsmodels.api as sm
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
+from myvtk.Mymetrics import *
+from sklearn.cluster import KMeans
+from matplotlib.lines import Line2D
+import warnings
+from sklearn.metrics.pairwise import rbf_kernel
+from scipy.optimize import minimize
+from myvtk.mygeodesic_plot import *
+import platform
+from dtw import *
+from sklearn.svm import SVC
+from sklearn.feature_selection import RFE
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.feature_selection import RFECV
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import roc_curve, auc
+from sklearn.preprocessing import StandardScaler
+from scipy.stats import chi2_contingency
+from collections import defaultdict
+from collections import Counter
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import classification_report
+from sklearn.metrics import roc_curve, auc
+from sklearn.preprocessing import label_binarize
+from sklearn.ensemble import RandomForestClassifier
+import matplotlib.colors as mcolors
+from scipy.ndimage import gaussian_filter
+from scipy.interpolate import griddata
+from scipy.spatial import Delaunay
+from collections import defaultdict
+from sklearn.preprocessing import StandardScaler
+from sklearn.covariance import EmpiricalCovariance
+from scipy.stats import pearsonr
+import networkx as nx  # 导入NetworkX库
+from myvtk.MyRiemannCov import *
+from scipy.signal import find_peaks
 from geomstats.learning.pca import TangentPCA
 from geomstats.geometry.discrete_curves import ElasticMetric, SRVMetric
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
+from PIL import Image
+from myvtk.Myscores import *
+from myvtk.MytangentPCA import *
+warnings.filterwarnings("ignore")
+import matplotlib as mpl
 
+POINTS_NUM =64
 tangent_projected_data = np.load("tangent_projected_data.npy")
 Procrustes_curves = np.load("Procrustes_curves.npy")
 tpca = pickle.load(open("tpca.pkl", "rb"))
+r3 = Euclidean(dim=3)
+srv_metric = SRVMetric(r3)
+discrete_curves_space = DiscreteCurves(ambient_manifold=r3, k_sampling_points=POINTS_NUM)
+Procs_srvf_curves = np.zeros_like(Procrustes_curves)
+for i in range(len(Procrustes_curves)):
+    # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/measure_length(Procrustes_curves[i]))
+    # Procs_srvf_curves[i] = calculate_srvf((Procrustes_curves[i])/np.linalg.norm(Procrustes_curves[i][-1] - Procrustes_curves[i][0]))
+    Procs_srvf_curves[i] =Procrustes_curves[i]/measure_length(Procrustes_curves[i])
+tangent_base = compute_frechet_mean(Procs_srvf_curves)
+frechet_mean_shape = compute_frechet_mean(Procs_srvf_curves)
+tangent_vectors = []
+for curve in Procs_srvf_curves:
+    tangent_vector = discrete_curves_space.to_tangent(curve, tangent_base)
+    tangent_vectors.append(tangent_vector)
+tangent_vectors = np.array(tangent_vectors)
+tpca.transform(tangent_vectors)
+
+def length_normalize(curve):
+    return curve/measure_length(curve)
+
+def tangent_mapping(curve,tangent_base):
+    tangent_vector = discrete_curves_space.to_tangent(curve, tangent_base)
+    return tangent_vector
 
 # 假设我们关注的是点的y坐标
 def extract_slider_values_from_vtk(file_name):
@@ -223,6 +337,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 提取点数据
         pts = vtk_to_numpy(self.original_poly_data.GetPoints().GetData())
+        tangent_pt = tangent_mapping(length_normalize(pts),tangent_base)
+        
         curvature, torsion = compute_curvature_and_torsion_vtk(pts)
         # 使用曲率和挠率数据更新右侧图表
         self.update_plots(curvature, torsion)
@@ -230,6 +346,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pts = pts
         self.curvature = curvature
         self.torsion = torsion
+        self.tangent_pt = tangent_pt
+        print ("self.tangent_pt:", self.tangent_pt)
         
 
         # Create a mapper and actor for the polyline
