@@ -224,9 +224,6 @@ for i in range(len(Procrustes_curves)):
 interpolated_procrustes_curves = np.array(interpolated_procrustes_curves)
 for j in range(10):
     temp_mean_shape = compute_frechet_mean(interpolated_procrustes_curves)
-    #  temp_mean_shape = np.array(temp_mean_shape)
-    temp_mean_shape = temp_mean_shape/measure_length(temp_mean_shape)*measure_length(interpolated_procrustes_curves[0])
-    print ("temp_mean_shape.shape:", temp_mean_shape.shape)
     temp_mean_shapes.append(temp_mean_shape)
     #ax1.plot(temp_mean_shape[:,0], temp_mean_shape[:,2], label="{}".format(j), marker="o")
 

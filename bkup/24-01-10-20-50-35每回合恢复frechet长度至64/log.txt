@@ -1,0 +1,5 @@
+Start at: 24-01-10-20-50-35
+PCA_N_COMPONENTS:16
+Data used: 87Alignment reference data (base_id):1,casename:./scaling/resamp_attr_ascii/vmtk64a\BG0014_Right_new_new.vtk- preprocessing_pca is not a SRVF PCA, and it is conducted on Procrustes_cruves before aligned_endpoints.
+SCALED to (absolute length) 1 and did not compute SRVF manually.
+according to A robust tangent PCA via shape restoration for shape variability analysis, tangent PCA is supposed to be conducted on SRVF. The convert is conducted inside Geomstats.
