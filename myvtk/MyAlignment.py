@@ -92,16 +92,16 @@ import dill as pickle
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
 
-def compute_cost_matrix(curve1, curve2):
-    # Compute the cost matrix between two curves
-    n = curve1.shape[0]
-    m = curve2.shape[0]
-    cost_matrix = np.zeros((n, m))
+# def compute_cost_matrix(curve1, curve2):
+#     # Compute the cost matrix between two curves
+#     n = curve1.shape[0]
+#     m = curve2.shape[0]
+#     cost_matrix = np.zeros((n, m))
     
-    for i in range(n):
-        for j in range(m):
-            cost_matrix[i, j] = np.linalg.norm(curve1[i] - curve2[j])
-    return cost_matrix
+#     for i in range(n):
+#         for j in range(m):
+#             cost_matrix[i, j] = np.linalg.norm(curve1[i] - curve2[j])
+#     return cost_matrix
 
 def find_optimal_reparametrization(cost_matrix):
     n, m = cost_matrix.shape
@@ -138,11 +138,13 @@ def interpolate_pt(curve, num_points):
     t_new = np.linspace(0, 1, num_points)
     curve_interpolated = np.array([np.interp(t_new, t, dim) for dim in curve.T]).T
     return curve_interpolated
-def reparameterize_curve(curve, warping_function):
-    # 使用 warping function 重排列曲线点
-    # 注意：这里假设 warping_function 已经考虑了插值后的点的数量
-    reparam_curve = curve[warping_function]
-    return reparam_curve
+
+# def reparameterize_curve(curve, warping_function):
+#     # 使用 warping function 重排列曲线点
+#     # 注意：这里假设 warping_function 已经考虑了插值后的点的数量
+#     reparam_curve = curve[warping_function]
+#     return reparam_curve
+
 def extract_increasing_mappings(warping_function):
     # 初始化一个字典，用于存储每个n的唯一且递增的m
     strictly_increasing_mappings = {}
@@ -160,3 +162,23 @@ def extract_increasing_mappings(warping_function):
     strictly_increasing_m_list = [strictly_increasing_mappings[n] for n in sorted_n]
 
     return strictly_increasing_m_list
+
+def compute_cost_matrix(func1, reference_curve, t_values):
+    # Compute the cost matrix between a parameterized curve and a reference curve
+    # t_values is a monotonic increasing sequence in the range (0, 1)
+    curve1 = func1(t_values)
+    n, m = len(t_values), len(reference_curve)
+    cost_matrix = np.zeros((n, m))
+
+    for i in range(n):
+        for j in range(m):
+            # 计算曲线1上的点与参考曲线上的每个点之间的距离
+            cost_matrix[i, j] = np.linalg.norm(curve1[i] - reference_curve[j])
+    return cost_matrix
+
+def reparameterize_curve(func, warping_path, num_points=100):
+    # Reparameterize a curve using the warping path from DTW
+    t_values = np.linspace(0, 1, num_points)
+    curve = func(t_values)
+    reparam_curve = np.array([curve[n] for n, _ in warping_path])
+    return reparam_curve
