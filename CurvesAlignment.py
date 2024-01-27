@@ -190,24 +190,17 @@ interpolated_procrustes_curves = []
 for i in range(len(Procrustes_curves)):
     interpolated_procrustes_curves.append(interpolate_pt(Procrustes_curves[i], interpolate_pt_num))
 interpolated_procrustes_curves = np.array(interpolated_procrustes_curves)
-for j in range(6):
+for j in range(2):
     reference_curve = compute_frechet_mean(interpolated_procrustes_curves)
     temp_mean_shapes.append(reference_curve)
     interpolated_procrustes_curves = align_procrustes(interpolated_procrustes_curves, base_id=-2, external_curve=reference_curve)
     curve_functions = [parameterize_curve(curve) for curve in interpolated_procrustes_curves]
 
-    ###################################
-    # dynamic time warping.
-    # Apply the function to the original curve using the path from dynamic programming
     reparam_curves = []
     optimal_path_dir = mkdir(bkup_dir, "optimal_path")
     for n in range(len(curve_functions)):
         func1 = curve_functions[n]
-        if j < 3:
-            func2 = curve_functions[base_id]  # 假设base_id是索引
-        else:
-            func2 = parameterize_curve(reference_curve)
-        cost_matrix = compute_cost_matrix(func1, func2)
+        cost_matrix = compute_cost_matrix(func1, reference_curve, t_value)
         optimal_path = find_optimal_reparametrization(cost_matrix)
         reparam_curve = reparameterize_curve(func1, optimal_path)
         reparam_curves.append(reparam_curve)
